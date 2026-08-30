@@ -12,7 +12,6 @@ namespace WildShift
             if (__result
                 || __instance == null
                 || __instance.Dead
-                || !__instance.Spawned
                 || __instance.Faction != Faction.OfPlayer
                 || __instance.RaceProps == null
                 || !__instance.RaceProps.Animal

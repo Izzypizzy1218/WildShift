@@ -1,31 +1,10 @@
 using RimWorld;
-using UnityEngine;
 using Verse;
 
 namespace WildShift
 {
     public class IncidentWorker_ShapeshifterJoin : IncidentWorker
     {
-        public override float ChanceFactorNow(IIncidentTarget target)
-        {
-            float factor = base.ChanceFactorNow(target);
-            Map map = target as Map;
-            if (map == null)
-            {
-                return factor;
-            }
-
-            if (HasPlayerShapeshifter(map))
-            {
-                return WildShiftMod.Settings != null && WildShiftMod.Settings.allowAdditionalJoiners
-                    ? factor * 0.05f
-                    : 0f;
-            }
-
-            float mtb = WildShiftMod.Settings != null ? WildShiftMod.Settings.joinMtbDaysWithoutShifter : 40f;
-            return factor * (40f / Mathf.Max(1f, mtb));
-        }
-
         protected override bool CanFireNowSub(IncidentParms parms)
         {
             if (!base.CanFireNowSub(parms))
@@ -85,18 +64,9 @@ namespace WildShift
             return true;
         }
 
-        private static bool HasPlayerShapeshifter(Map map)
+        public static bool HasPlayerShapeshifter(Map map)
         {
-            foreach (Pawn pawn in map.mapPawns.AllPawnsSpawned)
-            {
-                if (pawn.Faction == Faction.OfPlayer
-                    && (TransformUtility.IsShapeshifter(pawn) || TransformUtility.IsTransformedAnimal(pawn)))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return LoneBeastkinUtility.HasAnyPlayerShapeshifter();
         }
     }
 }

@@ -33,33 +33,37 @@ namespace WildShift
         }
     }
 
-    // VERIFY: Taming success in 1.6 is detected here by observing the animal's faction switch to Faction.OfPlayer.
-    [HarmonyPatch(typeof(Pawn), "SetFaction")]
+    [HarmonyPatch(typeof(InteractionWorker_RecruitAttempt), "Interacted")]
     public static class Patch_Taming
     {
-        public static void Postfix(Pawn __instance, Faction newFaction)
+        public static void Prefix(Pawn recipient, out bool __state)
         {
-            if (__instance == null || newFaction != Faction.OfPlayer || __instance.Dead)
+            __state = IsLatentWildShapeshifter(recipient)
+                && recipient.Faction != Faction.OfPlayer;
+        }
+
+        public static void Postfix(Pawn recipient, bool __state)
+        {
+            if (!__state || recipient == null || recipient.Faction != Faction.OfPlayer)
             {
                 return;
             }
 
-            if (!AnimalPool.IsEligible(__instance) || TransformUtility.IsTransformedAnimal(__instance))
-            {
-                return;
-            }
-
-            Hediff marker = __instance.health.hediffSet.GetFirstHediffOfDef(WildShiftDefOf.WildShift_FieldShapeshifterMarker);
-            if (marker == null)
-            {
-                return;
-            }
-
-            Pawn animal = __instance;
+            Pawn animal = recipient;
             LongEventHandler.ExecuteWhenFinished(delegate
             {
                 RevealTamedShapeshifter(animal);
             });
+        }
+
+        private static bool IsLatentWildShapeshifter(Pawn pawn)
+        {
+            return pawn != null
+                && !pawn.Dead
+                && AnimalPool.IsEligible(pawn)
+                && !TransformUtility.IsTransformedAnimal(pawn)
+                && pawn.health != null
+                && pawn.health.hediffSet.GetFirstHediffOfDef(WildShiftDefOf.WildShift_FieldShapeshifterMarker) != null;
         }
 
         private static void RevealTamedShapeshifter(Pawn animal)

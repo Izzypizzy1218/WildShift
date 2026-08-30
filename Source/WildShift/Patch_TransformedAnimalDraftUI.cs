@@ -129,25 +129,40 @@ namespace WildShift
     [HarmonyPatch(typeof(FloatMenuOptionProvider_DraftedAttack), "GetOptionsFor", new[] { typeof(Thing), typeof(FloatMenuContext) })]
     public static class Patch_TransformedAnimalSuppressAttackMenu
     {
-        public static bool Prefix(FloatMenuContext context, ref IEnumerable<FloatMenuOption> __result)
+        public static bool Prefix(ref FloatMenuContext context, ref IEnumerable<FloatMenuOption> __result)
         {
             if (context == null)
             {
                 return true;
             }
 
-            bool hasTransformedAnimal = false;
+            int transformedCount = 0;
+            List<Pawn> ordinaryPawns = null;
             foreach (Pawn pawn in context.ValidSelectedPawns)
             {
                 if (TransformUtility.IsTransformedAnimal(pawn))
                 {
-                    hasTransformedAnimal = true;
-                    break;
+                    transformedCount++;
+                }
+                else
+                {
+                    if (ordinaryPawns == null)
+                    {
+                        ordinaryPawns = new List<Pawn>();
+                    }
+
+                    ordinaryPawns.Add(pawn);
                 }
             }
 
-            if (!hasTransformedAnimal)
+            if (transformedCount == 0)
             {
+                return true;
+            }
+
+            if (ordinaryPawns != null && ordinaryPawns.Count > 0)
+            {
+                context = new FloatMenuContext(ordinaryPawns, context.clickPosition, context.map);
                 return true;
             }
 

@@ -38,7 +38,7 @@ namespace WildShift
                 return;
             }
 
-            PawnKindDef kind = AnimalPool.RandomEligibleKind();
+            PawnKindDef kind = LoneBeastkinUtility.GetStartingAnimalKind();
             if (kind == null)
             {
                 return;

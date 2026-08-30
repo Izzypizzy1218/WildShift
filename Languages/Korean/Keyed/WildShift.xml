@@ -9,26 +9,27 @@
   <WildShift_CommandDraftLabel>&#xC9D5;&#xC9D1;</WildShift_CommandDraftLabel>
   <WildShift_CommandUndraftLabel>&#xC9D5;&#xC9D1; &#xD574;&#xC81C;</WildShift_CommandUndraftLabel>
   <WildShift_CommandDraftDesc>&#xBCC0;&#xC2E0;&#xCCB4;&#xC758; &#xC9C1;&#xC811; &#xC81C;&#xC5B4;&#xB97C; &#xCF1C;&#xAC70;&#xB098; &#xB049;&#xB2C8;&#xB2E4;.</WildShift_CommandDraftDesc>
-  <WildShift_ShiftDisabledNoKind>No animal form has been assigned.</WildShift_ShiftDisabledNoKind>
-  <WildShift_ShiftDisabledTransformed>This pawn is already transformed.</WildShift_ShiftDisabledTransformed>
-  <WildShift_ShiftDisabledBadPawn>This pawn cannot shift right now.</WildShift_ShiftDisabledBadPawn>
-  <WildShift_ShiftDisabledCooldown>Shift cooldown: {0} hours remaining.</WildShift_ShiftDisabledCooldown>
-  <WildShift_LabelAssignedKind>{0} form</WildShift_LabelAssignedKind>
-  <WildShift_MessageTransformed>{0} shifted into {1}.</WildShift_MessageTransformed>
-  <WildShift_MessageReverted>{0} returned to human form.</WildShift_MessageReverted>
-  <WildShift_MessageTamedReveal>{0} was a shapeshifter and revealed a human body with a {1} form.</WildShift_MessageTamedReveal>
-  <WildShift_MessageNoEligibleAnimals>WildShift could not find any eligible animal forms.</WildShift_MessageNoEligibleAnimals>
-  <WildShift_LetterJoinLabel>A shapeshifter joins</WildShift_LetterJoinLabel>
-  <WildShift_LetterJoinText>{0} has arrived and revealed a dormant {1} form.</WildShift_LetterJoinText>
+  <WildShift_ShiftDisabledNoKind>지정된 동물 형상이 없습니다.</WildShift_ShiftDisabledNoKind>
+  <WildShift_ShiftDisabledTransformed>이미 변신한 상태입니다.</WildShift_ShiftDisabledTransformed>
+  <WildShift_ShiftDisabledBadPawn>지금은 변신할 수 없습니다.</WildShift_ShiftDisabledBadPawn>
+  <WildShift_ShiftDisabledCooldown>변신 재사용 대기시간: {0}시간 남음.</WildShift_ShiftDisabledCooldown>
+  <WildShift_LabelAssignedKind>{0} 형상</WildShift_LabelAssignedKind>
+  <WildShift_MessageTransformed>{0}이(가) {1}(으)로 변신했습니다.</WildShift_MessageTransformed>
+  <WildShift_MessageReverted>{0}이(가) 인간 형상으로 돌아왔습니다.</WildShift_MessageReverted>
+  <WildShift_MessageTamedReveal>{0}은(는) 변신자였습니다. 인간의 몸으로 돌아오며 {1} 형상을 드러냈습니다.</WildShift_MessageTamedReveal>
+  <WildShift_MessageNoEligibleAnimals>사용할 수 있는 동물 형상을 찾지 못했습니다.</WildShift_MessageNoEligibleAnimals>
+  <WildShift_LetterJoinLabel>변신자 합류</WildShift_LetterJoinLabel>
+  <WildShift_LetterJoinText>{0}이(가) 도착해 잠들어 있던 {1} 형상을 드러냈습니다.</WildShift_LetterJoinText>
   <WildShift_ScenPartSummary>&#xC2DC;&#xC791; &#xC815;&#xCC29;&#xBBFC; &#xD55C; &#xBA85;&#xC774; &#xC218;&#xC778;&#xC785;&#xB2C8;&#xB2E4;.</WildShift_ScenPartSummary>
-  <WildShift_SettingsShiftCooldown>Shift cooldown: {0} days</WildShift_SettingsShiftCooldown>
-  <WildShift_SettingsFieldChance>Latent wild shapeshifter chance: {0}%</WildShift_SettingsFieldChance>
-  <WildShift_SettingsDeathChance>Death chance while transformed: {0}%</WildShift_SettingsDeathChance>
-  <WildShift_SettingsJoinMtb>Join incident MTB when none exist: {0} days</WildShift_SettingsJoinMtb>
-  <WildShift_SettingsSpillover>Survival spillover damage factor: {0}%</WildShift_SettingsSpillover>
-  <WildShift_SettingsAllowInsects>Allow insectoid forms</WildShift_SettingsAllowInsects>
-  <WildShift_SettingsAllowInsectsDesc>Include insectoid races in the random animal pool.</WildShift_SettingsAllowInsectsDesc>
-  <WildShift_SettingsAllowExtraJoiners>Allow join incident after a shapeshifter exists</WildShift_SettingsAllowExtraJoiners>
-  <WildShift_SettingsAllowExtraJoinersDesc>When disabled, the join incident only appears before the colony has a shapeshifter.</WildShift_SettingsAllowExtraJoinersDesc>
-  <WildShift_SettingsReset>Reset WildShift settings</WildShift_SettingsReset>
+  <WildShift_ScenarioIntro>마지막 추적자가 눈보라 속으로 사라졌을 때, 당신은 처음으로 자신의 숨소리를 들었습니다.\n\n낡은 드롭 포드는 이름 없는 변경계에 처박혔고, 남은 것은 작은 보급품 몇 개와 몸속에서 으르렁거리는 또 다른 형상뿐입니다.\n\n사람으로 정착할 것인가, 짐승으로 살아남을 것인가. 오늘부터 그 대답은 당신이 직접 써야 합니다.</WildShift_ScenarioIntro>
+  <WildShift_SettingsShiftCooldown>변신 재사용 대기시간: {0}일</WildShift_SettingsShiftCooldown>
+  <WildShift_SettingsFieldChance>야생 잠재 변신자 확률: {0}%</WildShift_SettingsFieldChance>
+  <WildShift_SettingsDeathChance>변신체 사망 시 본체 사망 확률: {0}%</WildShift_SettingsDeathChance>
+  <WildShift_SettingsJoinMtb>변신자가 없을 때 합류 사건 평균 간격: {0}일</WildShift_SettingsJoinMtb>
+  <WildShift_SettingsSpillover>생존 시 본체에 전달되는 피해: {0}%</WildShift_SettingsSpillover>
+  <WildShift_SettingsAllowInsects>곤충형 변신 허용</WildShift_SettingsAllowInsects>
+  <WildShift_SettingsAllowInsectsDesc>무작위 동물 형상 후보에 곤충 종족을 포함합니다.</WildShift_SettingsAllowInsectsDesc>
+  <WildShift_SettingsAllowExtraJoiners>변신자가 있어도 추가 합류 허용</WildShift_SettingsAllowExtraJoiners>
+  <WildShift_SettingsAllowExtraJoinersDesc>비활성화하면 정착지에 변신자가 없을 때만 합류 사건이 발생합니다.</WildShift_SettingsAllowExtraJoinersDesc>
+  <WildShift_SettingsReset>WildShift 설정 초기화</WildShift_SettingsReset>
 </LanguageData>

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using RimWorld;
+using RimWorld.Planet;
 using Verse;
 using Verse.AI;
 
@@ -218,9 +219,25 @@ namespace WildShift
                         continue;
                     }
 
-                    animal.health.RemoveHediff(hediff);
+                    if (ShouldRemoveGeneratedHealthCondition(hediff))
+                    {
+                        animal.health.RemoveHediff(hediff);
+                    }
                 }
             }
+        }
+
+        private static bool ShouldRemoveGeneratedHealthCondition(Hediff hediff)
+        {
+            if (hediff is Hediff_Injury || hediff is Hediff_MissingPart)
+            {
+                return true;
+            }
+
+            HediffDef def = hediff.def;
+            return def != null
+                && def.isBad
+                && (def.chronic || def.isInfection || def.tendable || def.makesSickThought);
         }
 
         public static void EnsureTransformedAnimalControl(Pawn animal, bool transformedKnown = false)
@@ -244,7 +261,7 @@ namespace WildShift
             }
         }
 
-        public static Pawn RevertToHuman(Pawn animal)
+        public static Pawn RevertToHuman(Pawn animal, bool sendMessage = true)
         {
             if (animal == null)
             {
@@ -258,7 +275,7 @@ namespace WildShift
                 return null;
             }
 
-            Pawn human = comp.ReleaseStoredPawn();
+            Pawn human = comp.StoredPawn;
             if (human == null)
             {
                 Log.Error("[WildShift] Transformed pawn had no stored human to release.");
@@ -267,28 +284,42 @@ namespace WildShift
 
             Patch_GameEnder.InvalidateCache();
 
-            Map map = animal.Map;
-            IntVec3 cell = animal.Position;
+            Map map = animal.MapHeld;
+            IntVec3 cell = animal.PositionHeld;
             Rot4 rotation = animal.Rotation;
             Faction faction = animal.Faction;
             bool wasSelected = Find.Selector != null && Find.Selector.IsSelected(animal);
-
-            if (animal.Spawned)
-            {
-                animal.DeSpawn(DestroyMode.Vanish);
-            }
-
-            if (!animal.Destroyed)
-            {
-                animal.Destroy(DestroyMode.Vanish);
-            }
 
             if (faction != null && human.Faction != faction)
             {
                 human.SetFaction(faction);
             }
 
-            GenSpawn.Spawn(human, cell, map);
+            if (animal.Spawned)
+            {
+                human = comp.ReleaseStoredPawn();
+                if (human == null)
+                {
+                    return null;
+                }
+
+                animal.DeSpawn(DestroyMode.Vanish);
+                if (!animal.Destroyed)
+                {
+                    animal.Destroy(DestroyMode.Vanish);
+                }
+
+                GenSpawn.Spawn(human, cell, map);
+            }
+            else if (!TryReplaceInHoldingOwner(animal, human))
+            {
+                if (!TryReplaceWorldPawn(animal, comp, ref human))
+                {
+                    Log.Error("[WildShift] Could not replace an unspawned transformed animal in its holder or world-pawn registry.");
+                    return null;
+                }
+            }
+
             human.Rotation = rotation;
 
             if (human.jobs != null)
@@ -302,12 +333,63 @@ namespace WildShift
                 Find.Selector.Select(human);
             }
 
-            Messages.Message(
-                "WildShift_MessageReverted".Translate(human.LabelShortCap),
-                human,
-                MessageTypeDefOf.PositiveEvent,
-                false);
+            if (sendMessage)
+            {
+                Messages.Message(
+                    "WildShift_MessageReverted".Translate(human.LabelShortCap),
+                    human,
+                    MessageTypeDefOf.PositiveEvent,
+                    false);
+            }
+
             return human;
+        }
+
+        private static bool TryReplaceInHoldingOwner(Pawn animal, Pawn human)
+        {
+            IThingHolder parentHolder = animal.ParentHolder;
+            ThingOwner owner = parentHolder != null ? parentHolder.GetDirectlyHeldThings() : null;
+            if (owner == null || !owner.Contains(animal))
+            {
+                return false;
+            }
+
+            owner.Remove(animal);
+            if (!owner.TryAddOrTransfer(human, false))
+            {
+                owner.TryAdd(animal, false);
+                return false;
+            }
+
+            if (!animal.Destroyed)
+            {
+                animal.Destroy(DestroyMode.Vanish);
+            }
+
+            return true;
+        }
+
+        private static bool TryReplaceWorldPawn(Pawn animal, HediffComp_Transformed comp, ref Pawn human)
+        {
+            if (Find.WorldPawns == null || !WorldPawnsUtility.IsWorldPawn(animal))
+            {
+                return false;
+            }
+
+            human = comp.ReleaseStoredPawn();
+            if (human == null)
+            {
+                return false;
+            }
+
+            Find.WorldPawns.RemovePawn(animal);
+            Find.WorldPawns.PassToWorld(human, PawnDiscardDecideMode.KeepForever);
+            if (!animal.Destroyed)
+            {
+                animal.Destroy(DestroyMode.Vanish);
+            }
+
+            return true;
         }
 
         private static bool CanTransformToAnimal(Pawn human, PawnKindDef kind, out string reason)

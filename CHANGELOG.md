@@ -1,5 +1,16 @@
 # Changelog
 
+## v2026.08.30.7
+
+- Fixed permanent death so the stored human dies instead of remaining trapped inside a dead animal form.
+- Added safe reversion and game-over protection for caravans and travelling transporters.
+- Preserved ordinary colonist attack options during mixed human/transformed selections.
+- Limited generated-health cleanup to injuries, missing parts, and harmful generated health conditions.
+- Made the Lone Beastkin scenario part drive startup assignment instead of comparing the scenario's Korean name.
+- Changed the join setting to a real MTB check and removed the hidden 20-day minimum refire delay.
+- Restricted latent shapeshifter reveals to successful tame/recruit interactions instead of every player faction change.
+- Completed Korean keyed translations and moved the base scenario text to English with Korean DefInjected translations.
+
 ## v2026.08.30.6
 
 - Cached eligible animal kinds instead of repeatedly scanning all pawn kind definitions.

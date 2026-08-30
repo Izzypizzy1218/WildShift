@@ -8,8 +8,9 @@
     <targetTags>
       <li>Map_PlayerHome</li>
     </targetTags>
-    <baseChance>1</baseChance>
-    <minRefireDays>20</minRefireDays>
+    <!-- Triggered by WildShift's exact MTB game component, not storyteller weighting. -->
+    <baseChance>0</baseChance>
+    <minRefireDays>0</minRefireDays>
     <earliestDay>2</earliestDay>
     <pointsScaleable>false</pointsScaleable>
   </IncidentDef>

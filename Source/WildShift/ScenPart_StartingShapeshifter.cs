@@ -7,6 +7,19 @@ namespace WildShift
     {
         private PawnKindDef assignedKind;
 
+        public PawnKindDef AssignedKind
+        {
+            get
+            {
+                if (assignedKind == null || !AnimalPool.IsEligible(assignedKind))
+                {
+                    assignedKind = AnimalPool.RandomEligibleKind();
+                }
+
+                return assignedKind;
+            }
+        }
+
         public override void ExposeData()
         {
             base.ExposeData();
@@ -22,6 +35,12 @@ namespace WildShift
         public override string Summary(Scenario scen)
         {
             return "WildShift_ScenPartSummary".Translate();
+        }
+
+        public override void PostGameStart()
+        {
+            base.PostGameStart();
+            LoneBeastkinUtility.TryAssignStartingShapeshifter(AssignedKind);
         }
     }
 }

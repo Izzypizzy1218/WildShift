@@ -19,12 +19,19 @@ namespace WildShift
             Patch_GameEnder.InvalidateCache();
 
             float deathChance = WildShiftMod.Settings != null ? WildShiftMod.Settings.deathChance : 0.2f;
-            if (Rand.Chance(deathChance))
+            bool humanDies = Rand.Chance(deathChance);
+            Pawn human = TransformUtility.RevertToHuman(__instance, !humanDies);
+            if (human == null)
             {
                 return true;
             }
 
-            Pawn human = TransformUtility.RevertToHuman(__instance);
+            if (humanDies)
+            {
+                human.Kill(dinfo);
+                return false;
+            }
+
             ApplySpilloverDamage(human, dinfo);
             return false;
         }

@@ -42,31 +42,23 @@ namespace WildShift
 
         private static bool ScanForLivingTransformedColonist()
         {
-            if (Find.Maps == null)
+            List<Pawn> pawns = PawnsFinder.AllMapsCaravansAndTravellingTransporters_Alive_OfPlayerFaction;
+            for (int pawnIndex = 0; pawnIndex < pawns.Count; pawnIndex++)
             {
-                return false;
-            }
-
-            for (int mapIndex = 0; mapIndex < Find.Maps.Count; mapIndex++)
-            {
-                IReadOnlyList<Pawn> pawns = Find.Maps[mapIndex].mapPawns.AllPawnsSpawned;
-                for (int pawnIndex = 0; pawnIndex < pawns.Count; pawnIndex++)
+                Pawn animal = pawns[pawnIndex];
+                if (animal == null)
                 {
-                    Pawn animal = pawns[pawnIndex];
-                    if (animal == null || animal.Dead)
-                    {
-                        continue;
-                    }
+                    continue;
+                }
 
-                    HediffComp_Transformed comp = TransformUtility.TryGetTransformedComp(animal);
-                    Pawn human = comp != null ? comp.StoredPawn : null;
-                    if (human != null
-                        && !human.Dead
-                        && human.Faction == Faction.OfPlayer
-                        && human.IsFreeColonist)
-                    {
-                        return true;
-                    }
+                HediffComp_Transformed comp = TransformUtility.TryGetTransformedComp(animal);
+                Pawn human = comp != null ? comp.StoredPawn : null;
+                if (human != null
+                    && !human.Dead
+                    && human.Faction == Faction.OfPlayer
+                    && human.IsFreeColonist)
+                {
+                    return true;
                 }
             }
 
