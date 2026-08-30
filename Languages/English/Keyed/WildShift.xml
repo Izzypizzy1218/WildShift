@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+  <WildShift_CommandRevertLabel>Return to human</WildShift_CommandRevertLabel>
+  <WildShift_CommandRevertDesc>Restore the preserved human body and remove this animal form.</WildShift_CommandRevertDesc>
+  <WildShift_CommandShiftLabel>Shift</WildShift_CommandShiftLabel>
+  <WildShift_CommandShiftDesc>Shift into the assigned {0} form.</WildShift_CommandShiftDesc>
+  <WildShift_CommandAttackLabel>Melee attack</WildShift_CommandAttackLabel>
+  <WildShift_CommandAttackDesc>Choose a target for this animal form to attack in melee.</WildShift_CommandAttackDesc>
+  <WildShift_CommandDraftLabel>Draft</WildShift_CommandDraftLabel>
+  <WildShift_CommandUndraftLabel>Undraft</WildShift_CommandUndraftLabel>
+  <WildShift_CommandDraftDesc>Toggle direct control of this transformed animal.</WildShift_CommandDraftDesc>
+  <WildShift_ShiftDisabledNoKind>No animal form has been assigned.</WildShift_ShiftDisabledNoKind>
+  <WildShift_ShiftDisabledTransformed>This pawn is already transformed.</WildShift_ShiftDisabledTransformed>
+  <WildShift_ShiftDisabledBadPawn>This pawn cannot shift right now.</WildShift_ShiftDisabledBadPawn>
+  <WildShift_ShiftDisabledCooldown>Shift cooldown: {0} hours remaining.</WildShift_ShiftDisabledCooldown>
+  <WildShift_LabelAssignedKind>{0} form</WildShift_LabelAssignedKind>
+  <WildShift_MessageTransformed>{0} shifted into {1}.</WildShift_MessageTransformed>
+  <WildShift_MessageReverted>{0} returned to human form.</WildShift_MessageReverted>
+  <WildShift_MessageTamedReveal>{0} was a shapeshifter and revealed a human body with a {1} form.</WildShift_MessageTamedReveal>
+  <WildShift_MessageNoEligibleAnimals>WildShift could not find any eligible animal forms.</WildShift_MessageNoEligibleAnimals>
+  <WildShift_LetterJoinLabel>A shapeshifter joins</WildShift_LetterJoinLabel>
+  <WildShift_LetterJoinText>{0} has arrived and revealed a dormant {1} form.</WildShift_LetterJoinText>
+  <WildShift_ScenPartSummary>Start with one shapeshifter</WildShift_ScenPartSummary>
+  <WildShift_SettingsShiftCooldown>Shift cooldown: {0} days</WildShift_SettingsShiftCooldown>
+  <WildShift_SettingsFieldChance>Latent wild shapeshifter chance: {0}%</WildShift_SettingsFieldChance>
+  <WildShift_SettingsDeathChance>Death chance while transformed: {0}%</WildShift_SettingsDeathChance>
+  <WildShift_SettingsJoinMtb>Join incident MTB when none exist: {0} days</WildShift_SettingsJoinMtb>
+  <WildShift_SettingsSpillover>Survival spillover damage factor: {0}%</WildShift_SettingsSpillover>
+  <WildShift_SettingsAllowInsects>Allow insectoid forms</WildShift_SettingsAllowInsects>
+  <WildShift_SettingsAllowInsectsDesc>Include insectoid races in the random animal pool.</WildShift_SettingsAllowInsectsDesc>
+  <WildShift_SettingsAllowExtraJoiners>Allow join incident after a shapeshifter exists</WildShift_SettingsAllowExtraJoiners>
+  <WildShift_SettingsAllowExtraJoinersDesc>When disabled, the join incident only appears before the colony has a shapeshifter.</WildShift_SettingsAllowExtraJoinersDesc>
+  <WildShift_SettingsReset>Reset WildShift settings</WildShift_SettingsReset>
+</LanguageData>

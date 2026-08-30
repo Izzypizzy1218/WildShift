@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <ScenPartDef>
+    <defName>WildShift_StartingShapeshifter</defName>
+    <label>starting shapeshifter</label>
+    <description>One starting colonist begins as a shapeshifter with a random eligible animal form.</description>
+    <scenPartClass>WildShift.ScenPart_StartingShapeshifter</scenPartClass>
+    <summaryPriority>100</summaryPriority>
+  </ScenPartDef>
+</Defs>

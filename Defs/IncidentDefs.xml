@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <IncidentDef>
+    <defName>WildShift_ShapeshifterJoin</defName>
+    <label>shapeshifter joins</label>
+    <workerClass>WildShift.IncidentWorker_ShapeshifterJoin</workerClass>
+    <category>Misc</category>
+    <targetTags>
+      <li>Map_PlayerHome</li>
+    </targetTags>
+    <baseChance>1</baseChance>
+    <minRefireDays>20</minRefireDays>
+    <earliestDay>2</earliestDay>
+    <pointsScaleable>false</pointsScaleable>
+  </IncidentDef>
+</Defs>

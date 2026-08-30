@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+  <WildShift_CommandRevertLabel>&#xC778;&#xAC04;&#xC73C;&#xB85C; &#xB3CC;&#xC544;&#xAC00;&#xAE30;</WildShift_CommandRevertLabel>
+  <WildShift_CommandRevertDesc>&#xBCF4;&#xC874;&#xB41C; &#xC778;&#xAC04; &#xBAB8;&#xC744; &#xBCF5;&#xC6D0;&#xD558;&#xACE0; &#xD604;&#xC7AC; &#xB3D9;&#xBB3C; &#xD615;&#xC0C1;&#xC744; &#xC81C;&#xAC70;&#xD569;&#xB2C8;&#xB2E4;.</WildShift_CommandRevertDesc>
+  <WildShift_CommandShiftLabel>&#xBCC0;&#xC2E0;</WildShift_CommandShiftLabel>
+  <WildShift_CommandShiftDesc>&#xC9C0;&#xC815;&#xB41C; {0} &#xD615;&#xC0C1;&#xC73C;&#xB85C; &#xBCC0;&#xC2E0;&#xD569;&#xB2C8;&#xB2E4;.</WildShift_CommandShiftDesc>
+  <WildShift_CommandAttackLabel>&#xADFC;&#xC811; &#xACF5;&#xACA9;</WildShift_CommandAttackLabel>
+  <WildShift_CommandAttackDesc>&#xB3D9;&#xBB3C; &#xD615;&#xC0C1;&#xC73C;&#xB85C; &#xADFC;&#xC811; &#xACF5;&#xACA9;&#xD560; &#xB300;&#xC0C1;&#xC744; &#xC120;&#xD0DD;&#xD569;&#xB2C8;&#xB2E4;.</WildShift_CommandAttackDesc>
+  <WildShift_CommandDraftLabel>&#xC9D5;&#xC9D1;</WildShift_CommandDraftLabel>
+  <WildShift_CommandUndraftLabel>&#xC9D5;&#xC9D1; &#xD574;&#xC81C;</WildShift_CommandUndraftLabel>
+  <WildShift_CommandDraftDesc>&#xBCC0;&#xC2E0;&#xCCB4;&#xC758; &#xC9C1;&#xC811; &#xC81C;&#xC5B4;&#xB97C; &#xCF1C;&#xAC70;&#xB098; &#xB049;&#xB2C8;&#xB2E4;.</WildShift_CommandDraftDesc>
+  <WildShift_ShiftDisabledNoKind>No animal form has been assigned.</WildShift_ShiftDisabledNoKind>
+  <WildShift_ShiftDisabledTransformed>This pawn is already transformed.</WildShift_ShiftDisabledTransformed>
+  <WildShift_ShiftDisabledBadPawn>This pawn cannot shift right now.</WildShift_ShiftDisabledBadPawn>
+  <WildShift_ShiftDisabledCooldown>Shift cooldown: {0} hours remaining.</WildShift_ShiftDisabledCooldown>
+  <WildShift_LabelAssignedKind>{0} form</WildShift_LabelAssignedKind>
+  <WildShift_MessageTransformed>{0} shifted into {1}.</WildShift_MessageTransformed>
+  <WildShift_MessageReverted>{0} returned to human form.</WildShift_MessageReverted>
+  <WildShift_MessageTamedReveal>{0} was a shapeshifter and revealed a human body with a {1} form.</WildShift_MessageTamedReveal>
+  <WildShift_MessageNoEligibleAnimals>WildShift could not find any eligible animal forms.</WildShift_MessageNoEligibleAnimals>
+  <WildShift_LetterJoinLabel>A shapeshifter joins</WildShift_LetterJoinLabel>
+  <WildShift_LetterJoinText>{0} has arrived and revealed a dormant {1} form.</WildShift_LetterJoinText>
+  <WildShift_ScenPartSummary>&#xC2DC;&#xC791; &#xC815;&#xCC29;&#xBBFC; &#xD55C; &#xBA85;&#xC774; &#xC218;&#xC778;&#xC785;&#xB2C8;&#xB2E4;.</WildShift_ScenPartSummary>
+  <WildShift_SettingsShiftCooldown>Shift cooldown: {0} days</WildShift_SettingsShiftCooldown>
+  <WildShift_SettingsFieldChance>Latent wild shapeshifter chance: {0}%</WildShift_SettingsFieldChance>
+  <WildShift_SettingsDeathChance>Death chance while transformed: {0}%</WildShift_SettingsDeathChance>
+  <WildShift_SettingsJoinMtb>Join incident MTB when none exist: {0} days</WildShift_SettingsJoinMtb>
+  <WildShift_SettingsSpillover>Survival spillover damage factor: {0}%</WildShift_SettingsSpillover>
+  <WildShift_SettingsAllowInsects>Allow insectoid forms</WildShift_SettingsAllowInsects>
+  <WildShift_SettingsAllowInsectsDesc>Include insectoid races in the random animal pool.</WildShift_SettingsAllowInsectsDesc>
+  <WildShift_SettingsAllowExtraJoiners>Allow join incident after a shapeshifter exists</WildShift_SettingsAllowExtraJoiners>
+  <WildShift_SettingsAllowExtraJoinersDesc>When disabled, the join incident only appears before the colony has a shapeshifter.</WildShift_SettingsAllowExtraJoinersDesc>
+  <WildShift_SettingsReset>Reset WildShift settings</WildShift_SettingsReset>
+</LanguageData>

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <ScenarioDef ParentName="ScenarioBase">
+    <defName>WildShift_LoneBeastkin</defName>
+    <label>&#xACE0;&#xB3C5;&#xD55C; &#xC218;&#xC778;</label>
+    <description>&#xB2F9;&#xC2E0;&#xC740; &#xC0AC;&#xB78C;&#xC758; &#xBAB8;&#xACFC; &#xC57C;&#xC218;&#xC758; &#xD63C;&#xC744; &#xD568;&#xAED8; &#xC9CA;&#xC5B4;&#xC9C4; &#xCC44; &#xBCC0;&#xACBD;&#xACC4;&#xC5D0; &#xB5A8;&#xC5B4;&#xC84C;&#xC2B5;&#xB2C8;&#xB2E4;.\n\n&#xCAD3;&#xAE30;&#xB358; &#xBC24;&#xC740; &#xB05D;&#xB0AC;&#xC9C0;&#xB9CC;, &#xC0B4;&#xC544;&#xB0A8;&#xC544;&#xC57C; &#xD560; &#xB0AE;&#xC740; &#xC774;&#xC81C; &#xC2DC;&#xC791;&#xC785;&#xB2C8;&#xB2E4;. &#xBCC0;&#xC2E0;&#xC740; &#xB2F9;&#xC2E0;&#xC758; &#xAC00;&#xC7A5; &#xD070; &#xBB34;&#xAE30;&#xC774;&#xC790;, &#xC815;&#xCCB4;&#xB97C; &#xB4E4;&#xD0A4;&#xC9C0; &#xC54A;&#xAE30; &#xC704;&#xD55C; &#xB9C8;&#xC9C0;&#xB9C9; &#xD53C;&#xB09C;&#xCC98;&#xC785;&#xB2C8;&#xB2E4;.</description>
+    <scenario>
+      <summary>&#xC218;&#xC778;&#xC758; &#xD53C;&#xB97C; &#xD488;&#xC740; &#xB2E8; &#xD55C; &#xBA85;&#xC73C;&#xB85C; &#xC2DC;&#xC791;&#xD569;&#xB2C8;&#xB2E4;. &#xC870;&#xC2EC;&#xC2A4;&#xB7FD;&#xC9C0;&#xB9CC; &#xAC15;&#xB82C;&#xD55C; &#xC0DD;&#xC874; &#xC2DC;&#xB098;&#xB9AC;&#xC624;&#xC785;&#xB2C8;&#xB2E4;.</summary>
+      <parts>
+
+        <!-- Config pages -->
+        <li Class="ScenPart_ConfigPage_ConfigureStartingPawns">
+          <def>ConfigPage_ConfigureStartingPawns</def>
+          <pawnCount>1</pawnCount>
+          <pawnChoiceCount>8</pawnChoiceCount>
+        </li>
+
+        <!-- WildShift: assign one eligible animal form to the starting pawn. -->
+        <li Class="WildShift.ScenPart_StartingShapeshifter">
+          <def>WildShift_StartingShapeshifter</def>
+        </li>
+
+        <!-- Player starting stuff spawn method -->
+        <li Class="ScenPart_PlayerPawnsArriveMethod">
+          <def>PlayerPawnsArriveMethod</def>
+          <visible>false</visible>
+          <method>DropPods</method>
+        </li>
+
+        <!-- Starting supplies: leaner than Crashlanded, less cruel than Naked Brutality. -->
+        <li Class="ScenPart_StartingThing_Defined">
+          <def>StartingThing_Defined</def>
+          <thingDef>MealSurvivalPack</thingDef>
+          <count>12</count>
+        </li>
+        <li Class="ScenPart_StartingThing_Defined">
+          <def>StartingThing_Defined</def>
+          <thingDef>MedicineIndustrial</thingDef>
+          <count>8</count>
+        </li>
+        <li Class="ScenPart_StartingThing_Defined">
+          <def>StartingThing_Defined</def>
+          <thingDef>ComponentIndustrial</thingDef>
+          <count>8</count>
+        </li>
+        <li Class="ScenPart_StartingThing_Defined">
+          <def>StartingThing_Defined</def>
+          <thingDef>MeleeWeapon_Knife</thingDef>
+          <stuff>Steel</stuff>
+        </li>
+
+        <!-- Scatter some things near player start -->
+        <li Class="ScenPart_ScatterThingsNearPlayerStart">
+          <def>ScatterThingsNearPlayerStart</def>
+          <thingDef>Steel</thingDef>
+          <count>170</count>
+        </li>
+        <li Class="ScenPart_ScatterThingsNearPlayerStart">
+          <def>ScatterThingsNearPlayerStart</def>
+          <thingDef>WoodLog</thingDef>
+          <count>120</count>
+        </li>
+
+        <!-- Game start dialog -->
+        <li Class="ScenPart_GameStartDialog">
+          <def>GameStartDialog</def>
+          <text>&#xB9C8;&#xC9C0;&#xB9C9; &#xCD94;&#xC801;&#xC790;&#xAC00; &#xB208;&#xBCF4;&#xB77C; &#xC18D;&#xC73C;&#xB85C; &#xC0AC;&#xB77C;&#xC84C;&#xC744; &#xB54C;, &#xB2F9;&#xC2E0;&#xC740; &#xCC98;&#xC74C;&#xC73C;&#xB85C; &#xC790;&#xC2E0;&#xC758; &#xC228;&#xC18C;&#xB9AC;&#xB97C; &#xB4E4;&#xC5C8;&#xC2B5;&#xB2C8;&#xB2E4;.\n\n&#xB0A1;&#xC740; &#xB4DC;&#xB78D; &#xD3EC;&#xB4DC;&#xB294; &#xC774;&#xB984; &#xC5C6;&#xB294; &#xBCC0;&#xACBD;&#xACC4;&#xC5D0; &#xCC98;&#xBC15;&#xD614;&#xACE0;, &#xB0A8;&#xC740; &#xAC83;&#xC740; &#xC791;&#xC740; &#xBCF4;&#xAE09;&#xD488; &#xBA87; &#xAC1C;&#xC640; &#xBAB8;&#xC18D;&#xC5D0;&#xC11C; &#xC73C;&#xB974;&#xB801;&#xAC70;&#xB9AC;&#xB294; &#xB610; &#xB2E4;&#xB978; &#xD615;&#xC0C1;&#xBFD0;&#xC785;&#xB2C8;&#xB2E4;.\n\n&#xC0AC;&#xB78C;&#xC73C;&#xB85C; &#xC815;&#xCC29;&#xD560; &#xAC83;&#xC778;&#xAC00;, &#xC9D0;&#xC2B9;&#xC73C;&#xB85C; &#xC0B4;&#xC544;&#xB0A8;&#xC744; &#xAC83;&#xC778;&#xAC00;. &#xC624;&#xB298;&#xBD80;&#xD130; &#xADF8; &#xB300;&#xB2F5;&#xC740; &#xB2F9;&#xC2E0;&#xC774; &#xC9C1;&#xC811; &#xC368;&#xC57C; &#xD569;&#xB2C8;&#xB2E4;.</text>
+          <closeSound>GameStartSting</closeSound>
+        </li>
+
+      </parts>
+    </scenario>
+  </ScenarioDef>
+</Defs>

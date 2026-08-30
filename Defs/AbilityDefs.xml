@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <AbilityDef>
+    <defName>WildShift_Shift</defName>
+    <label>shift form</label>
+    <description>Shift into the pawn's assigned animal form.</description>
+    <targetRequired>false</targetRequired>
+    <cooldownTicksRange>
+      <min>60000</min>
+      <max>60000</max>
+    </cooldownTicksRange>
+    <verbProperties>
+      <verbClass>Verb_CastAbility</verbClass>
+      <violent>false</violent>
+    </verbProperties>
+    <comps>
+      <li Class="WildShift.CompProperties_AbilityShift" />
+    </comps>
+  </AbilityDef>
+</Defs>

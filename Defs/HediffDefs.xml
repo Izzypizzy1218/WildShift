@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <HediffDef>
+    <defName>WildShift_Shapeshifter</defName>
+    <label>shapeshifter</label>
+    <description>This pawn carries a stable animal form and can shift into it.</description>
+    <hediffClass>HediffWithComps</hediffClass>
+    <isBad>false</isBad>
+    <tendable>false</tendable>
+    <scenarioCanAdd>false</scenarioCanAdd>
+    <comps>
+      <li Class="WildShift.HediffCompProperties_Shapeshifter" />
+    </comps>
+  </HediffDef>
+
+  <HediffDef>
+    <defName>WildShift_Transformed</defName>
+    <label>transformed shapeshifter</label>
+    <description>The visible animal body of a shapeshifter. The original human body is stored inside this hediff.</description>
+    <hediffClass>HediffWithComps</hediffClass>
+    <isBad>false</isBad>
+    <tendable>false</tendable>
+    <scenarioCanAdd>false</scenarioCanAdd>
+    <comps>
+      <li Class="WildShift.HediffCompProperties_Transformed" />
+    </comps>
+  </HediffDef>
+
+  <HediffDef>
+    <defName>WildShift_FieldShapeshifterMarker</defName>
+    <label>latent shapeshifter</label>
+    <description>This wild animal is secretly a shapeshifter.</description>
+    <hediffClass>Hediff</hediffClass>
+    <isBad>false</isBad>
+    <tendable>false</tendable>
+    <scenarioCanAdd>false</scenarioCanAdd>
+  </HediffDef>
+</Defs>

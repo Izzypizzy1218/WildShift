@@ -1,0 +1,8 @@
+bin/
+obj/
+*.user
+*.suo
+*.csproj.user
+Assemblies/*.pdb
+Assemblies/*.mdb
+.tmp_frames/
