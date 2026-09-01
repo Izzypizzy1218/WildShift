@@ -167,6 +167,7 @@ namespace WildShift
             {
                 defaultLabel = "WildShift_CommandRevertLabel".Translate(),
                 defaultDesc = "WildShift_CommandRevertDesc".Translate(),
+                icon = WildShiftTextures.Transform,
                 action = delegate
                 {
                     LongEventHandler.ExecuteWhenFinished(delegate

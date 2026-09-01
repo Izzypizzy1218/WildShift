@@ -85,6 +85,7 @@ namespace WildShift
             {
                 defaultLabel = "WildShift_CommandShiftLabel".Translate(),
                 defaultDesc = "WildShift_CommandShiftDesc".Translate(kindLabel),
+                icon = WildShiftTextures.Transform,
                 action = delegate
                 {
                     TryShiftFromGizmo(pawn);

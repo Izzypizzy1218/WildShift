@@ -1,5 +1,9 @@
 # Changelog
 
+## v2026.09.01.2
+
+- Added the new reversible shapeshifting artwork to both the transform and return-to-human command buttons.
+
 ## v2026.09.01.1
 
 - Fixed the one-frame southward snap between melee attack stances for drafted transformed animals.
