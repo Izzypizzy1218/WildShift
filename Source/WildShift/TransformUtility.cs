@@ -53,33 +53,6 @@ namespace WildShift
             return TryGetTransformedComp(pawn) != null;
         }
 
-        public static void FaceMeleeTargetForAnimalForm(Pawn animal, Thing target)
-        {
-            if (animal == null
-                || animal.Dead
-                || !animal.Spawned
-                || target == null
-                || !target.Spawned
-                || target.Map != animal.Map)
-            {
-                return;
-            }
-
-            int horizontalOffset = target.Position.x - animal.Position.x;
-            if (horizontalOffset > 0)
-            {
-                animal.Rotation = Rot4.East;
-            }
-            else if (horizontalOffset < 0)
-            {
-                animal.Rotation = Rot4.West;
-            }
-            else if (animal.rotationTracker != null)
-            {
-                animal.rotationTracker.FaceCell(target.Position);
-            }
-        }
-
         public static bool TryOrderMeleeAttack(Pawn animal, LocalTargetInfo target)
         {
             if (animal == null

@@ -1,5 +1,11 @@
 # Changelog
 
+## v2026.09.01.1
+
+- Fixed the one-frame southward snap between melee attack stances for drafted transformed animals.
+- Restored RimWorld's native animal melee lunge so transformed attacks have the same visible impact motion as ordinary animals.
+- Kept transformed animals facing their active melee target during the drafted-idle frame without altering native attack cooldowns or verb selection.
+
 ## v2026.08.30.7
 
 - Fixed permanent death so the stored human dies instead of remaining trapped inside a dead animal form.
