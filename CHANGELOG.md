@@ -1,5 +1,9 @@
 # Changelog
 
+## v2026.09.02.7
+
+- Replaced the Lone Beastkin opening narration with the finalized shapeshifter origin story.
+
 ## v2026.09.02.6
 
 - Added a 1% chance for each humanlike starting-pawn candidate in every other scenario to be generated as a shapeshifter.

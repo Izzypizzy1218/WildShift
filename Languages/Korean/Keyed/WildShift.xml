@@ -21,7 +21,7 @@
   <WildShift_LetterJoinLabel>변신자 합류</WildShift_LetterJoinLabel>
   <WildShift_LetterJoinText>{0}이(가) 도착해 잠들어 있던 {1} 형상을 드러냈습니다.</WildShift_LetterJoinText>
   <WildShift_ScenPartSummary>Start with one shapeshifter</WildShift_ScenPartSummary>
-  <WildShift_ScenarioIntro>When the last pursuer vanished into the snowstorm, you heard your own breathing for the first time.\n\nA battered drop pod has stranded you on an unnamed rimworld. All that remains are a few supplies and another shape growling beneath your skin.\n\nWill you settle as a human, or survive as a beast? From today onward, the answer is yours to write.</WildShift_ScenarioIntro>
+  <WildShift_ScenarioIntro>All your life, you believed yourself to be human. Then another form sleeping beneath your skin opened its eyes. In one terrifying yet liberating moment, you ran on four legs beneath an unfamiliar sky and realized that the beast had always been a part of you.\n\nSome shapeshifters say they once lived as animals and only later learned to wear human skin. Others call this ability a bloodline, a forgotten experiment, or a curse. You know only one thing: neither form is a disguise. Both are you.\n\nNow a battered drop pod has cast you onto an unnamed rimworld. Will you settle as a human, survive as a beast, or become something that belongs to neither world?</WildShift_ScenarioIntro>
   <WildShift_SettingsShiftCooldown>변신 재사용 대기시간: {0}일</WildShift_SettingsShiftCooldown>
   <WildShift_SettingsFieldChance>야생 잠재 변신자 확률: {0}%</WildShift_SettingsFieldChance>
   <WildShift_SettingsDeathChance>변신체 사망 시 본체 사망 확률: {0}%</WildShift_SettingsDeathChance>
