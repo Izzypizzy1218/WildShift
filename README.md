@@ -13,6 +13,7 @@ WildShift is a RimWorld 1.6 mod about colonists who can transform into an assign
 - Prevent a false game over while a lone colonist is transformed.
 - Remove randomly generated diseases and injuries from temporary animal bodies.
 - Discover latent shapeshifters by taming eligible wild animals.
+- Every normal human colonist join has a 5% chance to reveal a shapeshifter instead of triggering a separate join event.
 - Includes the Lone Beastkin starting scenario and configurable mod settings.
 - English and Korean keyed translations are included.
 
@@ -35,6 +36,6 @@ The repository itself also uses RimWorld's standard mod folder layout and includ
 
 ## Current version
 
-`v0.9.0`
+`v0.9.1`
 
 See [CHANGELOG.md](CHANGELOG.md) for details.

@@ -18,18 +18,13 @@
   <WildShift_MessageReverted>{0}이(가) 인간 형상으로 돌아왔습니다.</WildShift_MessageReverted>
   <WildShift_MessageTamedReveal>{0}은(는) 변신자였습니다. 인간의 몸으로 돌아오며 {1} 형상을 드러냈습니다.</WildShift_MessageTamedReveal>
   <WildShift_MessageNoEligibleAnimals>사용할 수 있는 동물 형상을 찾지 못했습니다.</WildShift_MessageNoEligibleAnimals>
-  <WildShift_LetterJoinLabel>변신자 합류</WildShift_LetterJoinLabel>
-  <WildShift_LetterJoinText>{0}이(가) 도착해 잠들어 있던 {1} 형상을 드러냈습니다.</WildShift_LetterJoinText>
   <WildShift_ScenPartSummary>Start with one shapeshifter</WildShift_ScenPartSummary>
   <WildShift_ScenarioIntro>All your life, you believed yourself to be human. Then another form sleeping beneath your skin opened its eyes. In one terrifying yet liberating moment, you ran on four legs beneath an unfamiliar sky and realized that the beast had always been a part of you.\n\nSome shapeshifters say they once lived as animals and only later learned to wear human skin. Others call this ability a bloodline, a forgotten experiment, or a curse. You know only one thing: neither form is a disguise. Both are you.\n\nNow a battered drop pod has cast you onto an unnamed rimworld. Will you settle as a human, survive as a beast, or become something that belongs to neither world?</WildShift_ScenarioIntro>
   <WildShift_SettingsShiftCooldown>변신 재사용 대기시간: {0}일</WildShift_SettingsShiftCooldown>
   <WildShift_SettingsFieldChance>야생 잠재 변신자 확률: {0}%</WildShift_SettingsFieldChance>
   <WildShift_SettingsDeathChance>변신체 사망 시 본체 사망 확률: {0}%</WildShift_SettingsDeathChance>
-  <WildShift_SettingsJoinMtb>변신자가 없을 때 합류 사건 평균 간격: {0}일</WildShift_SettingsJoinMtb>
   <WildShift_SettingsSpillover>생존 시 본체에 전달되는 피해: {0}%</WildShift_SettingsSpillover>
   <WildShift_SettingsAllowInsects>곤충형 변신 허용</WildShift_SettingsAllowInsects>
   <WildShift_SettingsAllowInsectsDesc>Include insectoid races in the random animal pool.</WildShift_SettingsAllowInsectsDesc>
-  <WildShift_SettingsAllowExtraJoiners>변신자가 있어도 추가 합류 허용</WildShift_SettingsAllowExtraJoiners>
-  <WildShift_SettingsAllowExtraJoinersDesc>When disabled, the join incident only appears before the colony has a shapeshifter.</WildShift_SettingsAllowExtraJoinersDesc>
   <WildShift_SettingsReset>WildShift 설정 초기화</WildShift_SettingsReset>
 </LanguageData>

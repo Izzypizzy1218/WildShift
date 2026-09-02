@@ -22,11 +22,6 @@ namespace WildShift
         {
             base.GameComponentTick();
             HandleStartingShapeshifter();
-
-            if (Find.TickManager != null && Find.TickManager.TicksGame % 60 == 0)
-            {
-                CheckJoinIncidentMtb();
-            }
         }
 
         private void HandleStartingShapeshifter()
@@ -62,41 +57,6 @@ namespace WildShift
             }
         }
 
-        private static void CheckJoinIncidentMtb()
-        {
-            if (WildShiftMod.Settings == null || Find.Maps == null)
-            {
-                return;
-            }
-
-            float baseMtbDays = WildShiftMod.Settings.joinMtbDaysWithoutShifter;
-            for (int mapIndex = 0; mapIndex < Find.Maps.Count; mapIndex++)
-            {
-                Map map = Find.Maps[mapIndex];
-                if (map == null || !map.IsPlayerHome)
-                {
-                    continue;
-                }
-
-                bool alreadyHasShapeshifter = IncidentWorker_ShapeshifterJoin.HasPlayerShapeshifter(map);
-                if (alreadyHasShapeshifter && !WildShiftMod.Settings.allowAdditionalJoiners)
-                {
-                    continue;
-                }
-
-                float effectiveMtbDays = alreadyHasShapeshifter ? baseMtbDays * 20f : baseMtbDays;
-                if (!Rand.MTBEventOccurs(effectiveMtbDays, GenDate.TicksPerDay, 60f))
-                {
-                    continue;
-                }
-
-                IncidentParms parms = StorytellerUtility.DefaultParmsNow(IncidentCategoryDefOf.Misc, map);
-                if (WildShiftDefOf.WildShift_ShapeshifterJoin.Worker.TryExecute(parms))
-                {
-                    break;
-                }
-            }
-        }
     }
 
     public static class LoneBeastkinUtility

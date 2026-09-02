@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.9.1
+
+- Removed WildShift's separate 60-tick shapeshifter-join check and its dedicated join incident.
+- Added a 5% chance for each normal human colonist join to be a shapeshifter, covering storyteller wanderers, recruitment, and permanent quest joiners.
+
 ## v0.9.0
 
 - First Steam-ready release of WildShift.
