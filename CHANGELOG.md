@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.9.0
+
+- First Steam-ready release of WildShift.
+- Includes playable shapeshifters, reversible animal forms, drafted animal control, direct melee orders, starting-scenario support, random starting candidates, English lore, and Korean UI translations.
+
 ## v2026.09.02.8
 
 - Used the finalized shapeshifter origin story in the Lone Beastkin scenario-selection description.

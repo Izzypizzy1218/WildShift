@@ -2,7 +2,7 @@
 <ModMetaData>
   <name>WildShift</name>
   <author>Codex</author>
-  <modVersion>v2026.09.02.8</modVersion>
+  <modVersion>v0.9.0</modVersion>
   <packageId>wildshift.mod</packageId>
   <supportedVersions>
     <li>1.6</li>
