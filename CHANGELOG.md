@@ -1,5 +1,10 @@
 # Changelog
 
+## v2026.09.02.6
+
+- Added a 1% chance for each humanlike starting-pawn candidate in every other scenario to be generated as a shapeshifter.
+- Kept the random candidate's shapeshifter condition visible in character creation, so it can be selected before starting.
+
 ## v2026.09.02.5
 
 - Marked the designated Lone Beastkin starting pawn as a shapeshifter in the character-creation screen before the game starts.
