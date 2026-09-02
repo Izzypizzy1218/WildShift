@@ -4,8 +4,10 @@ WildShift is a RimWorld 1.6 mod about colonists who can transform into an assign
 
 ## Features
 
-- Transform a drafted shapeshifter into one eligible animal form.
+- Transform a shapeshifter into one eligible animal form before or after drafting.
+- Keep transformed animals visible and selectable in the colonist bar.
 - Draft and directly control the transformed animal.
+- Use the normal draft hotkey (`R`) for transformed animals.
 - Order a melee attack by right-clicking a target; no extra move/attack menu is shown.
 - Return to the stored human body with the revert command.
 - Prevent a false game over while a lone colonist is transformed.
@@ -33,6 +35,6 @@ The repository itself also uses RimWorld's standard mod folder layout and includ
 
 ## Current version
 
-`v2026.09.01.2`
+`v2026.09.02.1`
 
 See [CHANGELOG.md](CHANGELOG.md) for details.

@@ -4,27 +4,51 @@ using HarmonyLib;
 using RimWorld;
 using UnityEngine;
 using Verse;
+using Verse.Sound;
 
 namespace WildShift
 {
     [HarmonyPatch(typeof(Pawn_DraftController), "GetGizmos")]
     public static class Patch_TransformedAnimalDraftGizmos
     {
-        public static bool Prefix(Pawn ___pawn, ref IEnumerable<Gizmo> __result)
+        public static bool Prefix(Pawn_DraftController __instance, ref IEnumerable<Gizmo> __result)
         {
-            if (!TransformUtility.IsTransformedAnimal(___pawn))
+            Pawn pawn = __instance != null ? __instance.pawn : null;
+            if (!TransformUtility.IsTransformedAnimal(pawn))
             {
                 return true;
             }
 
-            __result = GetTransformedDraftGizmos(___pawn);
+            __result = GetTransformedDraftGizmos(pawn);
             return false;
+        }
+
+        public static void Postfix(Pawn_DraftController __instance, ref IEnumerable<Gizmo> __result)
+        {
+            Pawn pawn = __instance != null ? __instance.pawn : null;
+            if (TransformUtility.IsTransformedAnimal(pawn))
+            {
+                return;
+            }
+
+            HediffComp_Shapeshifter shapeshifter = TransformUtility.TryGetShapeshifterComp(pawn);
+            if (shapeshifter == null)
+            {
+                return;
+            }
+
+            Gizmo shiftGizmo = shapeshifter.CreateShiftGizmo();
+            if (shiftGizmo != null)
+            {
+                __result = InsertAfterDraftGizmo(__result, shiftGizmo);
+            }
         }
 
         private static IEnumerable<Gizmo> GetTransformedDraftGizmos(Pawn animal)
         {
-            yield return new Command_Toggle
+            Command_Toggle command = new Command_Toggle
             {
+                hotKey = KeyBindingDefOf.Command_ColonistDraft,
                 defaultLabel = animal.Drafted
                     ? "WildShift_CommandUndraftLabel".Translate()
                     : "WildShift_CommandDraftLabel".Translate(),
@@ -40,8 +64,43 @@ namespace WildShift
                     {
                         animal.drafter.Drafted = !animal.drafter.Drafted;
                     }
-                }
+                },
+                turnOnSound = SoundDefOf.DraftOn,
+                turnOffSound = SoundDefOf.DraftOff,
+                groupKeyIgnoreContent = 81729172,
+                tutorTag = animal.Drafted ? "Undraft" : "Draft"
             };
+
+            if (animal.Downed)
+            {
+                command.Disable("IsIncapped".Translate(animal.LabelShort, animal));
+            }
+
+            yield return command;
+        }
+
+        private static IEnumerable<Gizmo> InsertAfterDraftGizmo(
+            IEnumerable<Gizmo> original,
+            Gizmo shiftGizmo)
+        {
+            bool inserted = false;
+            if (original != null)
+            {
+                foreach (Gizmo gizmo in original)
+                {
+                    yield return gizmo;
+                    if (!inserted)
+                    {
+                        inserted = true;
+                        yield return shiftGizmo;
+                    }
+                }
+            }
+
+            if (!inserted)
+            {
+                yield return shiftGizmo;
+            }
         }
     }
 

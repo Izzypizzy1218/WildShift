@@ -1,5 +1,12 @@
 # Changelog
 
+## v2026.09.02.1
+
+- Kept transformed animals visible and selectable in the colonist bar on maps and in caravans.
+- Added the vanilla colonist draft hotkey (`R`) to transformed animals.
+- Made transformation available before drafting and placed its command immediately after the draft command.
+- Preserved colonist-bar display order across transformation and reversion.
+
 ## v2026.09.01.2
 
 - Added the new reversible shapeshifting artwork to both the transform and return-to-human command buttons.

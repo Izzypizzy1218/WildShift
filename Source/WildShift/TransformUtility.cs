@@ -42,10 +42,7 @@ namespace WildShift
 
         public static bool IsShapeshifter(Pawn pawn)
         {
-            return pawn != null
-                && pawn.health != null
-                && pawn.health.hediffSet != null
-                && pawn.health.hediffSet.GetFirstHediffOfDef(WildShiftDefOf.WildShift_Shapeshifter) != null;
+            return TryGetShapeshifterComp(pawn) != null;
         }
 
         public static bool IsTransformedAnimal(Pawn pawn)
@@ -81,6 +78,17 @@ namespace WildShift
 
             Hediff hediff = pawn.health.hediffSet.GetFirstHediffOfDef(WildShiftDefOf.WildShift_Transformed);
             return hediff != null ? hediff.TryGetComp<HediffComp_Transformed>() : null;
+        }
+
+        public static HediffComp_Shapeshifter TryGetShapeshifterComp(Pawn pawn)
+        {
+            if (pawn == null || pawn.health == null || pawn.health.hediffSet == null)
+            {
+                return null;
+            }
+
+            Hediff hediff = pawn.health.hediffSet.GetFirstHediffOfDef(WildShiftDefOf.WildShift_Shapeshifter);
+            return hediff != null ? hediff.TryGetComp<HediffComp_Shapeshifter>() : null;
         }
 
         public static bool TransformToAnimal(Pawn human, PawnKindDef kind)
@@ -148,6 +156,10 @@ namespace WildShift
             GenSpawn.Spawn(animal, cell, map);
             animal.Rotation = rotation;
             EnsureTransformedAnimalControl(animal, true);
+            if (human.playerSettings != null && animal.playerSettings != null)
+            {
+                animal.playerSettings.displayOrder = human.playerSettings.displayOrder;
+            }
             Patch_GameEnder.InvalidateCache();
 
             if (wasDrafted && animal.drafter != null)
@@ -159,6 +171,11 @@ namespace WildShift
             {
                 Find.Selector.Deselect(human);
                 Find.Selector.Select(animal);
+            }
+
+            if (Find.ColonistBar != null)
+            {
+                Find.ColonistBar.MarkColonistsDirty();
             }
 
             Messages.Message(
@@ -268,6 +285,11 @@ namespace WildShift
                 human.SetFaction(faction);
             }
 
+            if (animal.playerSettings != null && human.playerSettings != null)
+            {
+                human.playerSettings.displayOrder = animal.playerSettings.displayOrder;
+            }
+
             if (animal.Spawned)
             {
                 human = comp.ReleaseStoredPawn();
@@ -304,6 +326,11 @@ namespace WildShift
             {
                 Find.Selector.Deselect(animal);
                 Find.Selector.Select(human);
+            }
+
+            if (Find.ColonistBar != null)
+            {
+                Find.ColonistBar.MarkColonistsDirty();
             }
 
             if (sendMessage)

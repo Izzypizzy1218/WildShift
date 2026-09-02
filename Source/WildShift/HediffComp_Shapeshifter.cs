@@ -65,18 +65,29 @@ namespace WildShift
                 }
             }
 
+            // Pawn_DraftController.GetGizmos inserts this command immediately
+            // after the draft command. Keep this as a fallback for unusual
+            // player pawns that do not have a draft controller.
+            Pawn pawn = ParentPawn;
+            if (pawn != null && pawn.drafter == null)
+            {
+                Gizmo command = CreateShiftGizmo();
+                if (command != null)
+                {
+                    yield return command;
+                }
+            }
+        }
+
+        public Gizmo CreateShiftGizmo()
+        {
             Pawn pawn = ParentPawn;
             if (pawn == null || pawn.Faction != Faction.OfPlayer)
             {
-                yield break;
+                return null;
             }
 
             RemoveLegacyAbilities();
-
-            if (pawn.drafter == null || !pawn.drafter.Drafted)
-            {
-                yield break;
-            }
 
             string disabledReason;
             bool disabled = ShiftGizmoDisabled(pawn, out disabledReason);
@@ -97,7 +108,7 @@ namespace WildShift
                 command.Disable(disabledReason);
             }
 
-            yield return command;
+            return command;
         }
 
         public void EnsureAssignedKind()
