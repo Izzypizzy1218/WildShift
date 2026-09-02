@@ -1,5 +1,9 @@
 # Changelog
 
+## v2026.09.02.8
+
+- Used the finalized shapeshifter origin story in the Lone Beastkin scenario-selection description.
+
 ## v2026.09.02.7
 
 - Replaced the Lone Beastkin opening narration with the finalized shapeshifter origin story.

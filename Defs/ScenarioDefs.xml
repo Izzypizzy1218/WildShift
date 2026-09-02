@@ -3,7 +3,7 @@
   <ScenarioDef ParentName="ScenarioBase">
     <defName>WildShift_LoneBeastkin</defName>
     <label>Lone Beastkin</label>
-    <description>You have fallen onto the rimworld carrying both a human body and a beast's soul.\n\nThe hunted night is over, but the days you must survive begin now. Shifting is your greatest weapon and your last refuge for hiding your identity.</description>
+    <description>All your life, you believed yourself to be human. Then another form sleeping beneath your skin opened its eyes. In one terrifying yet liberating moment, you ran on four legs beneath an unfamiliar sky and realized that the beast had always been a part of you.\n\nSome shapeshifters say they once lived as animals and only later learned to wear human skin. Others call this ability a bloodline, a forgotten experiment, or a curse. You know only one thing: neither form is a disguise. Both are you.\n\nNow a battered drop pod has cast you onto an unnamed rimworld. Will you settle as a human, survive as a beast, or become something that belongs to neither world?</description>
     <scenario>
       <summary>Start alone with the blood of a beastkin. A cautious but intense survival scenario.</summary>
       <parts>
