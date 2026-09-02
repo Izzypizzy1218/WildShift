@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.9.2
+
+- Marked the command-texture cache for main-thread startup, removing RimWorld's missing `StaticConstructorOnStartup` warning.
+
 ## v0.9.1
 
 - Removed WildShift's separate 60-tick shapeshifter-join check and its dedicated join incident.

@@ -36,6 +36,6 @@ The repository itself also uses RimWorld's standard mod folder layout and includ
 
 ## Current version
 
-`v0.9.1`
+`v0.9.2`
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
