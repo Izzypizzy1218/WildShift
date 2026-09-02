@@ -1,5 +1,11 @@
 # Changelog
 
+## v2026.09.02.2
+
+- Expanded shapeshifter lore with their uncertain origins, preserved human bodies, and the rumored many-skinned shapeshifters.
+- Added separate lore descriptions for active beast-forms and latent wild shapeshifters.
+- Added complete Korean labels and descriptions for all WildShift health conditions.
+
 ## v2026.09.02.1
 
 - Kept transformed animals visible and selectable in the colonist bar on maps and in caravans.

@@ -3,7 +3,7 @@
   <HediffDef>
     <defName>WildShift_Shapeshifter</defName>
     <label>shapeshifter</label>
-    <description>This pawn carries a stable animal form and can shift into it.</description>
+    <description>Shapeshifters are people capable of assuming an animal form and later returning to their human body. Most are bound to a single stable beast-form, a second shape that becomes as familiar as their own skin.\n\nTheir origin remains uncertain. Some call it an inherited gift, others a curse, and a few insist it is the remnant of forgotten genetic engineering. Whatever the truth, a shapeshifter's human body is not lost during the change; it is preserved until they choose to return.\n\nStories also speak of exceptionally rare shapeshifters who are not bound to one beast. According to rumor, these "many-skinned" wanderers can learn or command the forms of any animal they encounter. No reliable proof has reached the rim, but the stories refuse to die.</description>
     <hediffClass>HediffWithComps</hediffClass>
     <isBad>false</isBad>
     <tendable>false</tendable>
@@ -16,7 +16,7 @@
   <HediffDef>
     <defName>WildShift_Transformed</defName>
     <label>transformed shapeshifter</label>
-    <description>The visible animal body of a shapeshifter. The original human body is stored inside this hediff.</description>
+    <description>This animal is the active beast-form of a shapeshifter. Its instincts, natural weapons, and physical limits belong to the chosen species, but the mind within remains human.\n\nThe original human body has not been destroyed. It is held in a preserved state for as long as this form endures and will return when the shapeshifter releases the transformation. Wounds and death suffered in the beast-form may still carry consequences, making the borrowed body powerful but never entirely safe.</description>
     <hediffClass>HediffWithComps</hediffClass>
     <isBad>false</isBad>
     <tendable>false</tendable>
@@ -29,7 +29,7 @@
   <HediffDef>
     <defName>WildShift_FieldShapeshifterMarker</defName>
     <label>latent shapeshifter</label>
-    <description>This wild animal is secretly a shapeshifter.</description>
+    <description>This animal's shape conceals a dormant human identity. Most observers would see only an ordinary beast; the truth is usually revealed only when the creature accepts a bond with human hands.\n\nWhether it was born human, beast, or somewhere between is impossible to know. If the hidden nature awakens, this animal form becomes the single stable shape carried by the person within.</description>
     <hediffClass>Hediff</hediffClass>
     <isBad>false</isBad>
     <tendable>false</tendable>
