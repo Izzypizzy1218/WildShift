@@ -1,5 +1,10 @@
 # Changelog
 
+## v2026.09.02.3
+
+- Standardized all descriptive text, tooltips, and scenario narrative in English, including when the game language is Korean.
+- Kept Korean translations for names, command labels, settings, and gameplay messages.
+
 ## v2026.09.02.2
 
 - Expanded shapeshifter lore with their uncertain origins, preserved human bodies, and the rumored many-skinned shapeshifters.

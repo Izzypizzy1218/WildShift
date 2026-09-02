@@ -1,11 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LanguageData>
   <WildShift_Shapeshifter.label>변신자</WildShift_Shapeshifter.label>
-  <WildShift_Shapeshifter.description>변신자는 동물의 형상을 취했다가 다시 인간의 모습으로 돌아올 수 있는 존재입니다. 대부분의 변신자는 오직 한 종류의 안정된 야수 형상과 결속되어 있으며, 그 두 번째 몸은 본래의 육체만큼이나 익숙하다고 합니다.\n\n이 능력의 기원은 명확하지 않습니다. 누군가는 대대로 이어진 축복이라 부르고, 누군가는 저주라 여기며, 또 다른 이들은 잊힌 유전자 공학의 흔적이라고 주장합니다. 진실이 무엇이든 변신하는 동안 인간의 육체가 사라지는 것은 아닙니다. 본래의 몸은 온전히 보존되며, 변신자가 돌아오기를 선택할 때 다시 모습을 드러냅니다.\n\n한편 아주 드물게 단 하나의 형상에 얽매이지 않는 변신자가 존재한다는 소문도 떠돕니다. ‘수많은 가죽을 지닌 자’라 불리는 이들은 마주한 모든 동물의 형상을 익히고 다룰 수 있다고 합니다. 변경계에서 이를 확실히 증명한 사람은 아직 없지만, 그 이야기는 좀처럼 사라지지 않습니다.</WildShift_Shapeshifter.description>
 
   <WildShift_Transformed.label>변신 중인 변신자</WildShift_Transformed.label>
-  <WildShift_Transformed.description>이 동물은 변신자가 현재 취하고 있는 야수 형상입니다. 본능과 천연 무기, 육체적 한계는 선택된 종을 따르지만 그 안의 정신은 여전히 인간입니다.\n\n본래의 인간 육체는 소멸하지 않았습니다. 변신이 유지되는 동안 온전히 보존되며, 변신자가 형상을 해제하면 다시 모습을 드러냅니다. 다만 야수 형상에서 입은 치명적인 피해는 본체에도 결과를 남길 수 있으므로, 이 두 번째 몸이 아무런 대가 없는 방패인 것은 아닙니다.</WildShift_Transformed.description>
 
   <WildShift_FieldShapeshifterMarker.label>잠재된 변신자</WildShift_FieldShapeshifterMarker.label>
-  <WildShift_FieldShapeshifterMarker.description>이 동물의 형상 안에는 아직 깨어나지 않은 인간의 정체가 숨어 있습니다. 대부분의 사람에게는 그저 평범한 야수로 보이며, 인간의 손길을 받아들여 유대를 맺었을 때에야 진실이 드러납니다.\n\n태어날 때 인간이었는지, 짐승이었는지, 혹은 그 사이의 무언가였는지는 알 수 없습니다. 숨겨진 본성이 깨어나면 이 동물의 모습은 그 안에 있던 사람이 지닌 단 하나의 안정된 야수 형상이 됩니다.</WildShift_FieldShapeshifterMarker.description>
 </LanguageData>
