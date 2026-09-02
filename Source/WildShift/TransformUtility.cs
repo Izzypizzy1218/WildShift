@@ -280,7 +280,10 @@ namespace WildShift
             Faction faction = animal.Faction;
             bool wasSelected = Find.Selector != null && Find.Selector.IsSelected(animal);
 
-            if (faction != null && human.Faction != faction)
+            // A released animal has no faction. The stored human must follow
+            // that state too, otherwise killing a released form can restore a
+            // player colonist from an animal that was no longer in the colony.
+            if (human.Faction != faction)
             {
                 human.SetFaction(faction);
             }

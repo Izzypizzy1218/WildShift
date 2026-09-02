@@ -15,7 +15,7 @@
 
   <HediffDef>
     <defName>WildShift_Transformed</defName>
-    <label>transformed shapeshifter</label>
+    <label>shapeshifter</label>
     <description>This animal is the active beast-form of a shapeshifter. Its instincts, natural weapons, and physical limits belong to the chosen species, but the mind within remains human.\n\nThe original human body has not been destroyed. It is held in a preserved state for as long as this form endures and will return when the shapeshifter releases the transformation. Wounds and death suffered in the beast-form may still carry consequences, making the borrowed body powerful but never entirely safe.</description>
     <hediffClass>HediffWithComps</hediffClass>
     <isBad>false</isBad>

@@ -1,5 +1,12 @@
 # Changelog
 
+## v2026.09.02.4
+
+- Made slaughtering a transformed animal kill the stored human with no survival roll.
+- Kept the stored human's faction synchronized when a transformed animal is released to the wild.
+- Made drafted transformed animals use the standard drafted-pawn order flow instead of animal wandering AI.
+- Renamed the visible transformed health condition to `shapeshifter`.
+
 ## v2026.09.02.3
 
 - Standardized all descriptive text, tooltips, and scenario narrative in English, including when the game language is Korean.

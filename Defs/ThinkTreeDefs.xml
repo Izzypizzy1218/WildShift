@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <ThinkTreeDef>
+    <defName>WildShift_TransformedDrafted</defName>
+    <thinkRoot Class="ThinkNode_Priority">
+      <subNodes>
+        <li Class="ThinkNode_Subtree">
+          <treeDef>Downed</treeDef>
+        </li>
+        <li Class="ThinkNode_Subtree">
+          <treeDef>BurningResponse</treeDef>
+        </li>
+        <li Class="ThinkNode_Subtree">
+          <treeDef>MentalStateCritical</treeDef>
+        </li>
+        <li Class="JobGiver_ReactToCloseMeleeThreat" />
+        <li Class="ThinkNode_Subtree">
+          <treeDef>MentalStateNonCritical</treeDef>
+        </li>
+        <li Class="ThinkNode_QueuedJob" />
+        <li Class="JobGiver_MoveToStandable" />
+        <li Class="JobGiver_Orders" />
+      </subNodes>
+    </thinkRoot>
+  </ThinkTreeDef>
+</Defs>

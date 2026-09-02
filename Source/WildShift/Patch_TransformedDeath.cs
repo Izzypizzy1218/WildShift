@@ -11,15 +11,28 @@ namespace WildShift
         // VERIFY: RimWorld 1.6 Pawn.Kill still has a DamageInfo? parameter named "dinfo".
         public static bool Prefix(Pawn __instance, DamageInfo? dinfo)
         {
-            if (!TransformUtility.IsTransformedAnimal(__instance))
+            HediffComp_Transformed transformed = TransformUtility.TryGetTransformedComp(__instance);
+            if (transformed == null)
             {
                 return true;
             }
 
+            // ExecutionUtility can ask to kill its victim again after lethal
+            // damage. The first pass has already reverted and vanished this
+            // animal, so do not run Pawn.Kill on the obsolete shell a second
+            // time.
+            if (!transformed.HasStoredPawn && __instance.Destroyed)
+            {
+                return false;
+            }
+
             Patch_GameEnder.InvalidateCache();
 
+            // Slaughter uses ExecutionCut. It is an intentional execution, not
+            // ordinary combat damage, so the stored human must die as well.
+            bool executedBySlaughter = dinfo.HasValue && dinfo.Value.Def == DamageDefOf.ExecutionCut;
             float deathChance = WildShiftMod.Settings != null ? WildShiftMod.Settings.deathChance : 0.2f;
-            bool humanDies = Rand.Chance(deathChance);
+            bool humanDies = executedBySlaughter || Rand.Chance(deathChance);
             Pawn human = TransformUtility.RevertToHuman(__instance, !humanDies);
             if (human == null)
             {

@@ -11,6 +11,7 @@ namespace WildShift
         public static HediffDef WildShift_FieldShapeshifterMarker;
         public static AbilityDef WildShift_Shift;
         public static IncidentDef WildShift_ShapeshifterJoin;
+        public static ThinkTreeDef WildShift_TransformedDrafted;
 
         static WildShiftDefOf()
         {
