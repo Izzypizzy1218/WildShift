@@ -101,6 +101,52 @@ namespace WildShift
 
     public static class LoneBeastkinUtility
     {
+        public static void EnsurePreviewStartingShapeshifter()
+        {
+            ScenPart_StartingShapeshifter part = TryGetStartingPart();
+            if (part == null || Find.GameInitData == null)
+            {
+                return;
+            }
+
+            List<Pawn> candidates = Find.GameInitData.startingAndOptionalPawns;
+            if (candidates == null || candidates.Count == 0 || Find.GameInitData.startingPawnCount <= 0)
+            {
+                return;
+            }
+
+            // The first pawn in the selected-starting-pawn section is the
+            // designated shapeshifter. Keeping the marker on this exact slot
+            // makes it visible before the player presses Start and lets it
+            // follow the player's drag-and-drop selection.
+            Pawn designated = candidates[0];
+            if (designated == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                Pawn pawn = candidates[i];
+                if (pawn == null || pawn == designated)
+                {
+                    continue;
+                }
+
+                Hediff hediff = pawn.health.hediffSet.GetFirstHediffOfDef(WildShiftDefOf.WildShift_Shapeshifter);
+                if (hediff != null)
+                {
+                    pawn.health.RemoveHediff(hediff);
+                }
+            }
+
+            HediffComp_Shapeshifter comp = TransformUtility.TryGetShapeshifterComp(designated);
+            if (comp == null || comp.assignedKind != part.AssignedKind)
+            {
+                TransformUtility.AddOrGetShapeshifter(designated, part.AssignedKind);
+            }
+        }
+
         public static bool IsActiveScenario()
         {
             return TryGetStartingPart() != null;

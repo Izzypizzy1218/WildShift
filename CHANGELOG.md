@@ -1,5 +1,10 @@
 # Changelog
 
+## v2026.09.02.5
+
+- Marked the designated Lone Beastkin starting pawn as a shapeshifter in the character-creation screen before the game starts.
+- Kept the preview marker aligned with the first selected starting-pawn slot when candidates are reordered or rerolled.
+
 ## v2026.09.02.4
 
 - Made slaughtering a transformed animal kill the stored human with no survival roll.
