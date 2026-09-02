@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.9.3
+
+- Prevented latent-animal generation from querying the player faction before it exists during world generation.
+
 ## v0.9.2
 
 - Marked the command-texture cache for main-thread startup, removing RimWorld's missing `StaticConstructorOnStartup` warning.

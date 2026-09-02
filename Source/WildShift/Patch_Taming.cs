@@ -10,12 +10,17 @@ namespace WildShift
     {
         public static void Postfix(ref Pawn __result)
         {
-            if (__result == null || __result.Faction == Faction.OfPlayer)
+            if (__result == null || !AnimalPool.IsEligible(__result))
             {
                 return;
             }
 
-            if (!AnimalPool.IsEligible(__result))
+            // Faction leaders are generated while the world is still being
+            // created, before the player faction exists. Do not ask the static
+            // Faction.OfPlayer accessor until the faction manager has one.
+            FactionManager factionManager = Find.FactionManager;
+            Faction playerFaction = factionManager != null ? factionManager.OfPlayer : null;
+            if (playerFaction == null || __result.Faction == playerFaction)
             {
                 return;
             }
