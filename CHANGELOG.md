@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0
+
+- Official 1.0 release of WildShift.
+- Includes the complete reversible shapeshifting system, drafted transformed-animal control, natural shapeshifter discovery, stability safeguards, and the final performance pass.
+
 ## v0.9.4
 
 - Reduced repeated health checks by filtering ordinary human pawns before transformed-animal checks in the game-over, colonist-bar, and drafted-think-tree patches.
