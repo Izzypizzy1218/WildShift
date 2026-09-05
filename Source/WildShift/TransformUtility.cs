@@ -11,16 +11,21 @@ namespace WildShift
     {
         public static HediffComp_Shapeshifter AddOrGetShapeshifter(Pawn pawn, PawnKindDef assignedKind)
         {
+            return AddOrGetShapeshifter(pawn, assignedKind, false);
+        }
+
+        public static HediffComp_Shapeshifter AddOrGetShapeshifter(Pawn pawn, PawnKindDef assignedKind, bool useRacialAffinity)
+        {
             if (pawn == null)
             {
                 return null;
             }
 
             Hediff hediff = pawn.health.hediffSet.GetFirstHediffOfDef(WildShiftDefOf.WildShift_Shapeshifter);
+            bool isNew = hediff == null;
             if (hediff == null)
             {
                 hediff = HediffMaker.MakeHediff(WildShiftDefOf.WildShift_Shapeshifter, pawn);
-                pawn.health.AddHediff(hediff);
             }
 
             HediffComp_Shapeshifter comp = hediff.TryGetComp<HediffComp_Shapeshifter>();
@@ -30,9 +35,21 @@ namespace WildShift
                 return null;
             }
 
-            if (assignedKind != null)
+            // Initialize before AddHediff invokes CompPostPostAdd, avoiding a
+            // discarded random roll. Automatic assignment never replaces an
+            // existing pawn's form; taming can still supply an explicit form.
+            if (isNew && useRacialAffinity)
+            {
+                comp.assignedKind = RacialAnimalForms.Choose(pawn, assignedKind);
+            }
+            else if (!useRacialAffinity && assignedKind != null)
             {
                 comp.assignedKind = assignedKind;
+            }
+
+            if (isNew)
+            {
+                pawn.health.AddHediff(hediff);
             }
 
             comp.EnsureAssignedKind();
@@ -411,7 +428,7 @@ namespace WildShift
                 return false;
             }
 
-            if (kind == null || !AnimalPool.IsEligible(kind))
+            if (kind == null || !RacialAnimalForms.IsAllowed(human, kind))
             {
                 reason = "WildShift_ShiftDisabledNoKind".Translate();
                 return false;

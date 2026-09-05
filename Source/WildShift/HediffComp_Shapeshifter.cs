@@ -113,12 +113,12 @@ namespace WildShift
 
         public void EnsureAssignedKind()
         {
-            if (assignedKind != null && AnimalPool.IsEligible(assignedKind))
+            if (assignedKind != null && RacialAnimalForms.IsAllowed(ParentPawn, assignedKind))
             {
                 return;
             }
 
-            assignedKind = AnimalPool.RandomEligibleKind();
+            assignedKind = RacialAnimalForms.Choose(ParentPawn);
             if (assignedKind == null)
             {
                 Log.Warning("[WildShift] No eligible animal kind could be assigned to a shapeshifter.");

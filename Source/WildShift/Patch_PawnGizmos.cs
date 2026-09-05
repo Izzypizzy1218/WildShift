@@ -44,7 +44,7 @@ namespace WildShift
                 return;
             }
 
-            TransformUtility.AddOrGetShapeshifter(__instance, kind);
+            TransformUtility.AddOrGetShapeshifter(__instance, kind, true);
             recoveryCheckCompleted = true;
             Log.Message("[WildShift] Restored missing Lone Beastkin shapeshifter state.");
         }

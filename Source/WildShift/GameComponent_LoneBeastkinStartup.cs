@@ -101,9 +101,9 @@ namespace WildShift
             }
 
             HediffComp_Shapeshifter comp = TransformUtility.TryGetShapeshifterComp(designated);
-            if (comp == null || comp.assignedKind != part.AssignedKind)
+            if (comp == null)
             {
-                TransformUtility.AddOrGetShapeshifter(designated, part.AssignedKind);
+                TransformUtility.AddOrGetShapeshifter(designated, part.AssignedKind, true);
             }
         }
 
@@ -150,7 +150,7 @@ namespace WildShift
                 return false;
             }
 
-            TransformUtility.AddOrGetShapeshifter(pawnToMark, kind);
+            TransformUtility.AddOrGetShapeshifter(pawnToMark, kind, true);
             Log.Message("[WildShift] Marked " + pawnToMark.LabelShortCap + " as the Lone Beastkin starter.");
             return true;
         }

@@ -26,11 +26,7 @@ namespace WildShift
                 return;
             }
 
-            PawnKindDef animalKind = AnimalPool.RandomEligibleKind();
-            if (animalKind != null)
-            {
-                TransformUtility.AddOrGetShapeshifter(pawn, animalKind);
-            }
+            TransformUtility.AddOrGetShapeshifter(pawn, null, true);
         }
     }
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.1
+
+- Added a 50% racial animal-form preference for Ratkin, Kiiro, Nyaron, Kurin HAR, Miho, Revia, Rabbie, Yuran, Bori, and Sheepawn shapeshifters.
+- Recognize supported Biotech xenotypes, including arctic and desert Miho variants, without a dependency on race-mod assemblies.
+- Allow matching racial animals to bypass ordinary animal-pool restrictions during assignment and transformation. The general pool and wild-animal discovery rules are unchanged.
+- Preserve existing valid assigned forms and explicit taming forms; avoid duplicate assignment rolls during hediff initialization and repeated scenario-preview redraws.
+- Keep starting-candidate (1%) and normal-join (5%) shapeshifter chances unchanged. No additional tick polling.
+- Added isolated selection, assignment, persistence-reference, and transformation-guard regression tests. Full in-game testing with each race mod remains necessary.
+
 ## v1.0
 
 - Official 1.0 release of WildShift.
