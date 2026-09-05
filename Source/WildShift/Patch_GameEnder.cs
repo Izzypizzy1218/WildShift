@@ -46,7 +46,12 @@ namespace WildShift
             for (int pawnIndex = 0; pawnIndex < pawns.Count; pawnIndex++)
             {
                 Pawn animal = pawns[pawnIndex];
-                if (animal == null)
+                // A transformed form is always an animal. Avoid scanning the
+                // health tracker of every ordinary human colonist whenever
+                // RimWorld checks its game-over state.
+                if (animal == null
+                    || animal.RaceProps == null
+                    || !animal.RaceProps.Animal)
                 {
                     continue;
                 }

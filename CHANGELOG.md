@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.9.4
+
+- Reduced repeated health checks by filtering ordinary human pawns before transformed-animal checks in the game-over, colonist-bar, and drafted-think-tree patches.
+
 ## v0.9.3
 
 - Prevented latent-animal generation from querying the player faction before it exists during world generation.

@@ -12,6 +12,8 @@ namespace WildShift
             Pawn animal = __instance != null ? __instance.pawn : null;
             if (animal != null
                 && animal.Drafted
+                && animal.RaceProps != null
+                && animal.RaceProps.Animal
                 && TransformUtility.IsTransformedAnimal(animal)
                 && WildShiftDefOf.WildShift_TransformedDrafted != null)
             {

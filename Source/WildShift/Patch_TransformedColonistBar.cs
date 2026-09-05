@@ -101,6 +101,8 @@ namespace WildShift
             if (pawn == null
                 || pawn.Dead
                 || pawn.Faction != Faction.OfPlayer
+                || pawn.RaceProps == null
+                || !pawn.RaceProps.Animal
                 || !TransformUtility.IsTransformedAnimal(pawn))
             {
                 return false;
