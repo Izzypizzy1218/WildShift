@@ -17,6 +17,7 @@ WildShift is a RimWorld 1.6 mod about colonists who can transform into an assign
 - Supported animal-eared races and xenotypes have a 20% preference roll for a matching animal when first assigned a shapeshifter form. The other branch uses the normal pool; existing forms are not rerolled.
 - New animal forms match the original pawn's gender. Genderless animal species remain genderless.
 - Includes the Lone Beastkin starting scenario and configurable mod settings.
+- Moving a scenario-designated starting candidate out of the first slot and back rerolls its animal form. Redraws alone do not reroll; preexisting non-scenario shapeshifters are preserved.
 - English and Korean keyed translations are included.
 
 ## Requirements
@@ -57,7 +58,7 @@ The repository itself also uses RimWorld's standard mod folder layout and includ
 
 ## Current version
 
-`v1.1.2`
+`v1.1.3`
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
 

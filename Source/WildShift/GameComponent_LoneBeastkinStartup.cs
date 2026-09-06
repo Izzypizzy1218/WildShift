@@ -96,7 +96,7 @@ namespace WildShift
                 part.PreviewForms.Deactivate(pawn);
             }
 
-            part.PreviewForms.Activate(designated, part.AssignedKind);
+            part.PreviewForms.Activate(designated);
         }
 
         public static bool IsActiveScenario()

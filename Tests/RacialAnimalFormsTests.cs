@@ -76,8 +76,9 @@ namespace Verse
     }
     public static class Extensions
     {
+        public static int PoolCalls, PoolIndex;
         public static T RandomElement<T>(this List<T> list) { return list[0]; }
-        public static T RandomElementWithFallback<T>(this List<T> list) { return list.Count == 0 ? default(T) : list[0]; }
+        public static T RandomElementWithFallback<T>(this List<T> list) { PoolCalls++; return list.Count == 0 ? default(T) : list[PoolIndex]; }
         public static string Translate(this string s, params object[] args) { return s; }
         public static bool NullOrEmpty(this string s) { return string.IsNullOrEmpty(s); }
     }
@@ -217,18 +218,37 @@ namespace WildShift.Tests
             Rand.Force = true; Rand.ForceIndex = 0;
             StartingFormPreviewCache cache = new StartingFormPreviewCache();
             Pawn candidate = Person("Ratkin");
-            cache.Activate(candidate, normal);
+            cache.Activate(candidate);
             Hediff preview = candidate.health.hediffSet.Value;
             int callsAfterPreview = Rand.Calls;
             cache.Deactivate(candidate);
             Check(candidate.health.hediffSet.Value == null, "scenario marker removed from inactive candidate");
             Rand.ForceIndex = 1;
-            cache.Activate(candidate, normal);
-            Check(candidate.health.hediffSet.Value == preview && preview.Comp.assignedKind == rat, "same candidate gets same hediff and form after reordering");
-            for (int i = 0; i < 100; i++) cache.Activate(candidate, normal);
-            Check(Rand.Calls == callsAfterPreview, "preview reactivation and redraw never reroll");
+            cache.Activate(candidate);
+            Check(candidate.health.hediffSet.Value != preview && candidate.health.hediffSet.Value.Comp.assignedKind == hamster, "same candidate rerolls racial form after reordering");
+            Check(Rand.Calls == callsAfterPreview + 1, "reactivation performs one preference roll");
+            int callsAfterReactivation = Rand.Calls;
+            for (int i = 0; i < 100; i++) cache.Activate(candidate);
+            Check(Rand.Calls == callsAfterReactivation, "redraw never rerolls");
             cache.Deactivate(legacy);
             Check(legacy.health.hediffSet.Value != null, "unrelated preexisting shapeshifter is not stripped");
+            Pawn ordinaryCandidate = Person("Human");
+            Kind("Cougar", true);
+            Extensions.PoolIndex = 0;
+            cache.Activate(ordinaryCandidate);
+            PawnKindDef oldForm = ordinaryCandidate.health.hediffSet.Value.Comp.assignedKind;
+            int oldPoolCalls = Extensions.PoolCalls;
+            cache.Deactivate(ordinaryCandidate);
+            Extensions.PoolIndex = 1;
+            cache.Activate(ordinaryCandidate);
+            Check(Extensions.PoolCalls == oldPoolCalls + 1 && ordinaryCandidate.health.hediffSet.Value.Comp.assignedKind != oldForm, "ordinary human rerolls pool rather than fixed scenario fallback");
+            oldPoolCalls = Extensions.PoolCalls;
+            for (int i = 0; i < 100; i++) cache.Activate(ordinaryCandidate);
+            Check(Extensions.PoolCalls == oldPoolCalls, "ordinary preview redraw does not access random pool");
+            cache.Deactivate(ordinaryCandidate);
+            cache.Activate(ordinaryCandidate);
+            Check(Extensions.PoolCalls == oldPoolCalls + 1, "repeated slot changes continue rerolling without stale cache entries");
+            Extensions.PoolIndex = 0;
             Rand.Force = null; Rand.ForceIndex = null; int rats = 0, hamsters = 0, cats = 0;
             for (int i = 0; i < 10000; i++)
             {

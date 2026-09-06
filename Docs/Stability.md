@@ -1,4 +1,4 @@
-# v1.1.2 stability pass
+# Stability pass (updated for v1.1.3)
 
 ## Scope
 
@@ -8,7 +8,7 @@ If lethal-damage reversion fails, the death patch attempts to retain the human a
 
 Colonist-bar scans run only when its vanilla entry cache was dirty. No new tick callback is introduced. Successful animal-only direct melee clicks remain menu-free; mixed human/animal selections use the unchanged vanilla attack context. The obsolete menu-removal patch has been deleted, so unsuccessful direct orders can also fall back normally.
 
-The Lone Beastkin scenario remembers the scenario-created hediff for each candidate in a weak-key cache. Reordering a candidate back into the designated slot restores its existing form instead of rerolling it. Preexisting shapeshifters not created by that preview are never removed by it. Preview-only cache state is not serialized; the active pawn hediff continues to use the existing save format.
+As of v1.1.3, the Lone Beastkin scenario tracks only active scenario-created markers in a weak-key cache. Leaving the designated first slot discards that preview form; returning to the slot rolls a fresh animal, including the normal-pool branch. The same animal can be selected again by chance. Redraws do not reroll. Preexisting shapeshifters not created by that preview are never removed by it. Preview-only cache state is not serialized; the active pawn hediff continues to use the existing save format.
 
 ## Automated verification
 
@@ -19,7 +19,7 @@ pwsh -NoProfile -File Tests/Run-LogicTests.ps1
 pwsh -NoProfile -File Tests/Run-StabilityTests.ps1
 ```
 
-- Logic suite: 85 assertions, including real assignment/gender/preview logic with engine stubs.
+- Logic suite: 89 assertions, including real assignment/gender/preview logic with engine stubs.
 - Stability suite: 31 assertions using real transfer helpers, reversion methods, death patch, direct-click patch, and colonist-bar patch. Storage, world registry, rendering, and other engine services are fault-injecting stubs.
 - Injected cases: preflight rejection, storage failure, spawn failure before/after registration, container insertion failure before/after registration, world transfer failure, retry, occupied-shell deletion refusal, reentry, and slaughter recovery.
 - UI checks: mixed selections are left unchanged; successful direct attacks consume the click; failed direct orders allow fallback; 1,000 clean-cache calls perform zero pawn-list scans; dirty recache inserts one entry without duplication.
@@ -30,7 +30,7 @@ pwsh -NoProfile -File Tests/Run-StabilityTests.ps1
 1. Back up a save. Transform/revert repeatedly, save while transformed, reload, and revert. Confirm one original human, correct faction, health, gender, and assigned form.
 2. Check the portrait in a solo-colonist map and a caravan, including map changes and portrait reordering.
 3. Select a drafted human and transformed animal together; order an attack. Separately confirm animal-only right-click attacks still show the direct melee feedback marker without an extra menu.
-4. Reorder a Lone Beastkin candidate away from the first selected slot and back. Its animal form should stay the same. Check preexisting shapeshifter candidates remain marked.
+4. Reorder a Lone Beastkin candidate away from the first selected slot and back. Its animal form should be rerolled (random repeats are possible). Check redraws do not reroll and preexisting shapeshifter candidates remain marked.
 5. Test reversion from a transport holder and a caravan. Confirm the original human replaces the animal without duplication.
 6. Test lethal combat and slaughter on a disposable save. Combat uses the configured death chance; slaughter kills the human. Downing alone still does not automatically revert.
 7. Review Player.log for transfer/rollback errors, especially with mods that alter spawn, faction, container, or death callbacks.

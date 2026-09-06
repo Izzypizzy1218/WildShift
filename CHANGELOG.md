@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.1.3
+
+- Changed the Lone Beastkin preview behavior by request: moving a scenario-designated candidate out of the first starting slot and back now assigns a fresh random animal instead of restoring its previous form.
+- Reroll both the normal pool and the racial-preference branch; do not reuse the scenario's fixed fallback animal. Random selection may produce the same animal again.
+- Redraws alone do not reroll, and preexisting shapeshifters not created by the scenario preview remain unchanged. In-game assignments and all v1.1.2 transfer/attack/cache safeguards are unchanged.
+- Passed 89 logic assertions and 31 stability assertions with engine stubs, plus compilation against installed RimWorld/Harmony assemblies. Live character-creation validation remains required.
+
 ## v1.1.2
 
 - Only scan maps/caravans for transformed colonist-bar entries when vanilla rebuilds its dirty cache, rather than on every Entries access.
