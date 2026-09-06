@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using RimWorld;
 using Verse;
 
@@ -30,6 +31,7 @@ namespace Verse
     {
         public HediffSet hediffSet = new HediffSet();
         public void AddHediff(Hediff h) { hediffSet.Value = h; h.Comp.CompPostPostAdd(null); }
+        public void RemoveHediff(Hediff h) { if (hediffSet.Value == h) hediffSet.Value = null; }
     }
     public class HediffSet { public Hediff Value; public Hediff GetFirstHediffOfDef(object d) { return Value; } }
     public class Hediff
@@ -212,6 +214,21 @@ namespace WildShift.Tests
             PawnGenerationRequest humanRequest = AnimalFormGender.CreateHumanRequest(ratkin);
             Check(humanRequest.FixedGender == null, "genderless taming origin allows ordinary human gender generation");
             Check(humanRequest.KindDef == PawnKindDefOf.Colonist && humanRequest.Faction == Faction.OfPlayer && humanRequest.ForceGenerateNewPawn, "fresh tamed human generation");
+            Rand.Force = true; Rand.ForceIndex = 0;
+            StartingFormPreviewCache cache = new StartingFormPreviewCache();
+            Pawn candidate = Person("Ratkin");
+            cache.Activate(candidate, normal);
+            Hediff preview = candidate.health.hediffSet.Value;
+            int callsAfterPreview = Rand.Calls;
+            cache.Deactivate(candidate);
+            Check(candidate.health.hediffSet.Value == null, "scenario marker removed from inactive candidate");
+            Rand.ForceIndex = 1;
+            cache.Activate(candidate, normal);
+            Check(candidate.health.hediffSet.Value == preview && preview.Comp.assignedKind == rat, "same candidate gets same hediff and form after reordering");
+            for (int i = 0; i < 100; i++) cache.Activate(candidate, normal);
+            Check(Rand.Calls == callsAfterPreview, "preview reactivation and redraw never reroll");
+            cache.Deactivate(legacy);
+            Check(legacy.health.hediffSet.Value != null, "unrelated preexisting shapeshifter is not stripped");
             Rand.Force = null; Rand.ForceIndex = null; int rats = 0, hamsters = 0, cats = 0;
             for (int i = 0; i < 10000; i++)
             {

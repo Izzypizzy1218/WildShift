@@ -185,55 +185,7 @@ namespace WildShift
         }
     }
 
-    [HarmonyPatch(typeof(FloatMenuOptionProvider_DraftedAttack), "GetOptionsFor", new[] { typeof(Thing), typeof(FloatMenuContext) })]
-    public static class Patch_TransformedAnimalSuppressAttackMenu
-    {
-        public static bool Prefix(ref FloatMenuContext context, ref IEnumerable<FloatMenuOption> __result)
-        {
-            if (context == null)
-            {
-                return true;
-            }
-
-            int transformedCount = 0;
-            List<Pawn> ordinaryPawns = null;
-            foreach (Pawn pawn in context.ValidSelectedPawns)
-            {
-                if (TransformUtility.IsTransformedAnimal(pawn))
-                {
-                    transformedCount++;
-                }
-                else
-                {
-                    if (ordinaryPawns == null)
-                    {
-                        ordinaryPawns = new List<Pawn>();
-                    }
-
-                    ordinaryPawns.Add(pawn);
-                }
-            }
-
-            if (transformedCount == 0)
-            {
-                return true;
-            }
-
-            if (ordinaryPawns != null && ordinaryPawns.Count > 0)
-            {
-                context = new FloatMenuContext(ordinaryPawns, context.clickPosition, context.map);
-                return true;
-            }
-
-            // Direct right click above owns transformed-animal attacks. Suppress
-            // the old menu option so "Move here / Attack" is never presented.
-            __result = EmptyFloatMenuOptions.Instance;
-            return false;
-        }
-
-        private static class EmptyFloatMenuOptions
-        {
-            public static readonly IEnumerable<FloatMenuOption> Instance = new FloatMenuOption[0];
-        }
-    }
+    // Successful direct attacks already consume HandleMapClicks above. Do not
+    // suppress the vanilla attack provider: mixed selections and unsuccessful
+    // direct orders must retain its full context and fallback options.
 }

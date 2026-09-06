@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.1.2
+
+- Only scan maps/caravans for transformed colonist-bar entries when vanilla rebuilds its dirty cache, rather than on every Entries access.
+- Remove the redundant attack-menu suppression patch. Successful animal-only direct attacks still consume the click; mixed selections and failed direct orders retain vanilla's full selection context and fallback options.
+- Preserve scenario-preview form assignments when candidates move out of and back into the designated starting slot. Do not remove preexisting non-scenario shapeshifter markers; use weak references for discarded candidates.
+- Prepare the destination body before removing the source. Commit reversion only after human placement succeeds, roll back failed map/container transfers, and refuse to discard an occupied animal form.
+- Guard against reentrant reversion/death handling. When lethal-damage reversion cannot place the human, attempt emergency world-pawn retention before removing the animal; slaughter still kills the recovered human. If recovery also fails, preserve the occupied form instead of deleting its stored human.
+- Passed 85 assignment/gender/preview assertions and 31 stability assertions using engine stubs, plus compilation against installed RimWorld/Harmony assemblies. Actual in-game callbacks, combat, and save/load still require testing.
+- No new tick polling. Animal prosthetics, equipment preservation, reproduction, and generic traversal of the hidden human holder are unchanged.
+
 ## v1.1.1
 
 - Reduced the racial animal-form preference from 50% to 20%.

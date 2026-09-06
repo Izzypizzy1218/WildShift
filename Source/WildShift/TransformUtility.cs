@@ -169,8 +169,15 @@ namespace WildShift
                 return false;
             }
 
-            comp.Store(human);
-            GenSpawn.Spawn(animal, cell, map);
+            // Prepare the destination before removing the original pawn. Pawns
+            // can occupy the same cell; no frame/tick elapses during this swap.
+            if (!FormTransferUtility.TrySpawn(animal, cell, map) || !comp.TryStore(human))
+            {
+                FormTransferUtility.DestroyEmptyForm(animal);
+                Patch_GameEnder.InvalidateCache();
+                if (Find.ColonistBar != null) Find.ColonistBar.MarkColonistsDirty();
+                return false;
+            }
             animal.Rotation = rotation;
             EnsureTransformedAnimalControl(animal, true);
             if (human.playerSettings != null && animal.playerSettings != null)
@@ -270,6 +277,21 @@ namespace WildShift
 
         public static Pawn RevertToHuman(Pawn animal, bool sendMessage = true)
         {
+            if (!FormTransferUtility.TryBeginReturn(animal)) return null;
+            try
+            {
+                return RevertToHumanCore(animal, sendMessage);
+            }
+            finally
+            {
+                FormTransferUtility.EndReturn(animal);
+                Patch_GameEnder.InvalidateCache();
+                if (Find.ColonistBar != null) Find.ColonistBar.MarkColonistsDirty();
+            }
+        }
+
+        private static Pawn RevertToHumanCore(Pawn animal, bool sendMessage)
+        {
             if (animal == null)
             {
                 return null;
@@ -318,13 +340,13 @@ namespace WildShift
                     return null;
                 }
 
-                animal.DeSpawn(DestroyMode.Vanish);
-                if (!animal.Destroyed)
+                if (!FormTransferUtility.TrySpawn(human, cell, map))
                 {
-                    animal.Destroy(DestroyMode.Vanish);
+                    // Keep the animal alive and on-map until its human body
+                    // has a destination. Failed placement restores its storage.
+                    if (!comp.TryStore(human)) FormTransferUtility.PreserveDetachedPawn(human);
+                    return null;
                 }
-
-                GenSpawn.Spawn(human, cell, map);
             }
             else if (!TryReplaceInHoldingOwner(animal, human))
             {
@@ -335,6 +357,7 @@ namespace WildShift
                 }
             }
 
+            FormTransferUtility.DestroyEmptyForm(animal);
             human.Rotation = rotation;
 
             if (human.jobs != null)
@@ -374,19 +397,20 @@ namespace WildShift
                 return false;
             }
 
-            owner.Remove(animal);
-            if (!owner.TryAddOrTransfer(human, false))
+            try
             {
-                owner.TryAdd(animal, false);
-                return false;
+                owner.Remove(animal);
+                if (owner.TryAddOrTransfer(human, false)) return true;
             }
-
-            if (!animal.Destroyed)
+            catch (Exception ex)
             {
-                animal.Destroy(DestroyMode.Vanish);
+                Log.Error("[WildShift] Container transfer failed; restoring the animal: " + ex);
             }
-
-            return true;
+            if (owner.Contains(human)) return true;
+            HediffComp_Transformed comp = TryGetTransformedComp(animal);
+            if (comp != null && !comp.HasStoredPawn && !comp.TryStore(human)) FormTransferUtility.PreserveDetachedPawn(human);
+            if (!FormTransferUtility.TryRestoreOwner(animal, owner)) FormTransferUtility.PreserveDetachedPawn(animal);
+            return false;
         }
 
         private static bool TryReplaceWorldPawn(Pawn animal, HediffComp_Transformed comp, ref Pawn human)
@@ -396,20 +420,9 @@ namespace WildShift
                 return false;
             }
 
-            human = comp.ReleaseStoredPawn();
-            if (human == null)
-            {
-                return false;
-            }
-
-            Find.WorldPawns.RemovePawn(animal);
-            Find.WorldPawns.PassToWorld(human, PawnDiscardDecideMode.KeepForever);
-            if (!animal.Destroyed)
-            {
-                animal.Destroy(DestroyMode.Vanish);
-            }
-
-            return true;
+            human = FormTransferUtility.TryReleaseToWorld(comp);
+            // Keep the original world pawn registered until its human is safe.
+            return human != null;
         }
 
         private static bool CanTransformToAnimal(Pawn human, PawnKindDef kind, out string reason)

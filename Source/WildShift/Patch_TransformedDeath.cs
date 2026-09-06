@@ -11,6 +11,7 @@ namespace WildShift
         // VERIFY: RimWorld 1.6 Pawn.Kill still has a DamageInfo? parameter named "dinfo".
         public static bool Prefix(Pawn __instance, DamageInfo? dinfo)
         {
+            if (FormTransferUtility.IsReturning(__instance)) return false;
             HediffComp_Transformed transformed = TransformUtility.TryGetTransformedComp(__instance);
             if (transformed == null)
             {
@@ -36,7 +37,11 @@ namespace WildShift
             Pawn human = TransformUtility.RevertToHuman(__instance, !humanDies);
             if (human == null)
             {
-                return true;
+                // Do not strand a living human in a dead animal if another
+                // mod rejects placement. Emergency world storage preserves it.
+                human = FormTransferUtility.TryReleaseToWorld(transformed, true);
+                if (human == null) return !transformed.HasStoredPawn;
+                FormTransferUtility.DestroyEmptyForm(__instance);
             }
 
             if (humanDies)

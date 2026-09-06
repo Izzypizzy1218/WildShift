@@ -49,34 +49,24 @@ namespace WildShift
 
         public void Store(Pawn human)
         {
-            if (human == null)
-            {
-                Log.Error("[WildShift] Tried to store a null human pawn.");
-                return;
-            }
+            TryStore(human);
+        }
 
+        public bool TryStore(Pawn human)
+        {
             if (storedPawns == null)
             {
                 storedPawns = new ThingOwner<Pawn>(this, false, LookMode.Deep);
             }
 
-            if (storedPawns.Count > 0)
+            if (!FormTransferUtility.TryStore(human, storedPawns))
             {
-                Log.Error("[WildShift] Tried to store more than one human pawn in a transformed body.");
-                return;
-            }
-
-            if (human.Spawned)
-            {
-                human.DeSpawn(DestroyMode.Vanish);
-            }
-
-            if (!storedPawns.TryAdd(human, false))
-            {
-                Log.Error("[WildShift] Failed to move the human pawn into the transformed body's ThingOwner.");
+                Log.Error("[WildShift] Human storage was not committed; transformation cancelled.");
+                return false;
             }
 
             generatedHealthSanitized = true;
+            return true;
         }
 
         public Pawn ReleaseStoredPawn()

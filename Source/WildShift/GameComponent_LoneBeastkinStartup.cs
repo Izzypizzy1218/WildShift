@@ -93,18 +93,10 @@ namespace WildShift
                     continue;
                 }
 
-                Hediff hediff = pawn.health.hediffSet.GetFirstHediffOfDef(WildShiftDefOf.WildShift_Shapeshifter);
-                if (hediff != null)
-                {
-                    pawn.health.RemoveHediff(hediff);
-                }
+                part.PreviewForms.Deactivate(pawn);
             }
 
-            HediffComp_Shapeshifter comp = TransformUtility.TryGetShapeshifterComp(designated);
-            if (comp == null)
-            {
-                TransformUtility.AddOrGetShapeshifter(designated, part.AssignedKind, true);
-            }
+            part.PreviewForms.Activate(designated, part.AssignedKind);
         }
 
         public static bool IsActiveScenario()

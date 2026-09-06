@@ -6,6 +6,7 @@ namespace WildShift
     public class ScenPart_StartingShapeshifter : ScenPart
     {
         private PawnKindDef assignedKind;
+        public readonly StartingFormPreviewCache PreviewForms = new StartingFormPreviewCache();
 
         public PawnKindDef AssignedKind
         {

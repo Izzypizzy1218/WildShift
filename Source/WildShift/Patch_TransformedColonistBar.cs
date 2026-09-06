@@ -14,15 +14,22 @@ namespace WildShift
         private static readonly List<Map> Maps = new List<Map>();
         private static readonly List<Caravan> Caravans = new List<Caravan>();
 
+        public static void Prefix(bool ___entriesDirty, out bool __state)
+        {
+            __state = ___entriesDirty;
+        }
+
         public static void Postfix(
             ColonistBar __instance,
+            bool __state,
             List<ColonistBar.Entry> ___cachedEntries,
             List<Vector2> ___cachedDrawLocs,
             List<int> ___cachedReorderableGroups,
             ColonistBarDrawLocsFinder ___drawLocsFinder,
             ref float ___cachedScale)
         {
-            if (__instance == null
+            if (!__state
+                || __instance == null
                 || ___cachedEntries == null
                 || !Find.PlaySettings.showColonistBar)
             {
