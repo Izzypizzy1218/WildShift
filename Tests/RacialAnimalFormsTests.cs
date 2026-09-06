@@ -10,10 +10,17 @@ namespace Verse
     public class Def { public string defName; public string LabelCap { get { return defName; } } }
     public class ThingDef : Def { public RaceProperties race; }
     public class PawnKindDef : Def { public ThingDef race; }
-    public class RaceProperties { public bool Animal, Humanlike, IsMechanoid, predator; public float baseBodySize; public object FleshType; }
+    public class RaceProperties { public bool Animal, Humanlike, IsMechanoid, predator; public bool hasGenders = true; public float baseBodySize; public object FleshType; }
+    public enum Gender { None, Male, Female }
+    public struct PawnGenerationRequest
+    {
+        public PawnKindDef KindDef; public object Faction; public bool ForceGenerateNewPawn; public Gender? FixedGender;
+        public PawnGenerationRequest(PawnKindDef kind, object faction, bool forceGenerateNewPawn, Gender? fixedGender)
+        { KindDef = kind; Faction = faction; ForceGenerateNewPawn = forceGenerateNewPawn; FixedGender = fixedGender; }
+    }
     public class Pawn
     {
-        public ThingDef def; public PawnKindDef kindDef; public Genes genes;
+        public ThingDef def; public PawnKindDef kindDef; public Genes genes; public Gender gender;
         public RaceProperties RaceProps { get { return def.race; } }
         public Health health = new Health(); public Abilities abilities; public object drafter;
         public object Faction; public bool Dead, Spawned = true; public object Map = new object();
@@ -61,8 +68,9 @@ namespace Verse
     }
     public static class Rand
     {
-        public static bool? Force; public static int Calls; private static Random random = new Random(947);
+        public static bool? Force; public static int? ForceIndex = 0; public static int Calls; private static Random random = new Random(947);
         public static bool Chance(float chance) { Calls++; return Force ?? random.NextDouble() < chance; }
+        public static int Range(int min, int max) { return ForceIndex ?? random.Next(min, max); }
     }
     public static class Extensions
     {
@@ -89,6 +97,7 @@ namespace Verse
 }
 namespace RimWorld
 {
+    public static class PawnKindDefOf { public static PawnKindDef Colonist = new PawnKindDef { defName = "Colonist" }; }
     public static class FleshTypeDefOf { public static object Insectoid = new object(); }
     public static class Faction { public static object OfPlayer = new object(); }
     public static class MessageTypeDefOf { public static object RejectInput; }
@@ -156,7 +165,7 @@ namespace WildShift.Tests
             Check(RacialAnimalForms.Choose(ratkin) == normal && !RacialAnimalForms.IsAllowed(ratkin, rat), "reject mechanoid replacement");
             rat.race.race.IsMechanoid = false;
             Rand.Force = false;
-            Check(RacialAnimalForms.Choose(ratkin) == normal, "other half normal pool");
+            Check(RacialAnimalForms.Choose(ratkin) == normal, "other eighty percent normal pool");
             Rand.Force = true; Rand.Calls = 0;
             HediffComp_Shapeshifter comp = TransformUtility.AddOrGetShapeshifter(ratkin, normal, true);
             Check(comp.assignedKind == rat && Rand.Calls == 1, "single initial roll including AddHediff callbacks");
@@ -175,10 +184,44 @@ namespace WildShift.Tests
             Check(legacy.health.hediffSet.Value.Comp.assignedKind == normal, "existing normal form preserved");
             Pawn tamed = Person("Human");
             Check(TransformUtility.AddOrGetShapeshifter(tamed, normal).assignedKind == normal && Rand.Calls == 1, "explicit taming form preserved without affinity roll");
-            Rand.Force = null; int preferred = 0;
-            for (int i = 0; i < 10000; i++) if (RacialAnimalForms.Choose(Person("Ratkin")) == rat) preferred++;
-            Check(preferred > 4700 && preferred < 5300, "rough fifty percent distribution");
-            return "PASS: " + assertions + " assertions; " + preferred + "/10000 racial forms. Engine stubs only; in-game race-mod testing still required.";
+            Rand.ForceIndex = 1;
+            Check(RacialAnimalForms.Choose(ratkin) == normal, "missing hamster slot falls back instead of becoming rat");
+            PawnKindDef hamster = Kind("Ratkin_KingHamster", false);
+            Check(RacialAnimalForms.Choose(ratkin) == hamster, "hamster mapping");
+            Check(RacialAnimalForms.Choose(Person("Human", "RK_XenoType_Ratkin")) == hamster, "hamster xenotype mapping");
+            Check(RacialAnimalForms.IsAllowed(ratkin, hamster), "hamster racial exception allowed");
+            Check(!RacialAnimalForms.IsAllowed(Person("Human"), hamster), "hamster exception scoped");
+            comp.assignedKind = hamster; comp.EnsureAssignedKind();
+            Check(comp.assignedKind == hamster, "assigned hamster survives validation");
+            foreach (Gender gender in new[] { Gender.Male, Gender.Female, Gender.None })
+            {
+                ratkin.gender = gender; ratkin.Faction = Faction.OfPlayer;
+                PawnGenerationRequest request = AnimalFormGender.CreateRequest(ratkin, rat);
+                Check(request.FixedGender == gender, "gender passed at generation: " + gender);
+                Check(request.KindDef == rat && request.Faction == ratkin.Faction && request.ForceGenerateNewPawn, "fresh form with correct kind and faction");
+            }
+            ratkin.gender = Gender.Female; rat.race.race.hasGenders = false;
+            Check(AnimalFormGender.CreateRequest(ratkin, rat).FixedGender == Gender.None, "genderless species remain genderless");
+            rat.race.race.hasGenders = true;
+            foreach (Gender gender in new[] { Gender.Male, Gender.Female })
+            {
+                ratkin.gender = gender;
+                Check(AnimalFormGender.CreateHumanRequest(ratkin).FixedGender == gender, "taming reveal preserves sex: " + gender);
+            }
+            ratkin.gender = Gender.None;
+            PawnGenerationRequest humanRequest = AnimalFormGender.CreateHumanRequest(ratkin);
+            Check(humanRequest.FixedGender == null, "genderless taming origin allows ordinary human gender generation");
+            Check(humanRequest.KindDef == PawnKindDefOf.Colonist && humanRequest.Faction == Faction.OfPlayer && humanRequest.ForceGenerateNewPawn, "fresh tamed human generation");
+            Rand.Force = null; Rand.ForceIndex = null; int rats = 0, hamsters = 0, cats = 0;
+            for (int i = 0; i < 10000; i++)
+            {
+                PawnKindDef chosen = RacialAnimalForms.Choose(ratkin);
+                if (chosen == rat) rats++; else if (chosen == hamster) hamsters++;
+                if (RacialAnimalForms.Choose(Person("Kiiro_Race")).defName == "Cat") cats++;
+            }
+            Check(rats > 850 && rats < 1150 && hamsters > 850 && hamsters < 1150, "rough ten percent each Ratkin branch");
+            Check(cats > 1800 && cats < 2200, "rough twenty percent other races");
+            return "PASS: " + assertions + " assertions; per 10000: rat=" + rats + ", hamster=" + hamsters + ", Kiiro cat=" + cats + ". Engine stubs only; in-game testing still required.";
         }
     }
 }

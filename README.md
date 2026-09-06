@@ -14,7 +14,8 @@ WildShift is a RimWorld 1.6 mod about colonists who can transform into an assign
 - Remove randomly generated diseases and injuries from temporary animal bodies.
 - Discover latent shapeshifters by taming eligible wild animals.
 - Every normal human colonist join has a 5% chance to reveal a shapeshifter instead of triggering a separate join event.
-- Supported animal-eared races and xenotypes have a 50% preference roll for a matching animal when first assigned a shapeshifter form. The other branch uses the normal pool; existing forms are not rerolled.
+- Supported animal-eared races and xenotypes have a 20% preference roll for a matching animal when first assigned a shapeshifter form. The other branch uses the normal pool; existing forms are not rerolled.
+- New animal forms match the original pawn's gender. Genderless animal species remain genderless.
 - Includes the Lone Beastkin starting scenario and configurable mod settings.
 - English and Korean keyed translations are included.
 
@@ -27,7 +28,7 @@ WildShift is a RimWorld 1.6 mod about colonists who can transform into an assign
 
 | Race | Preferred animal |
 | --- | --- |
-| Ratkin / NewRatkinPlus | Rat |
+| Ratkin / NewRatkinPlus | Rat (10%) or Hamstrox (10%) |
 | Kiiro, Nyaron | Cat |
 | Kurin HAR | Red or arctic fox |
 | Miho | Red fox; arctic and desert xenotypes use arctic and fennec foxes |
@@ -36,7 +37,9 @@ WildShift is a RimWorld 1.6 mod about colonists who can transform into an assign
 | Bori | Husky or Labrador retriever |
 | Sheepawn (Bori) | Sheep |
 
-The preference is rolled **after** a pawn becomes a shapeshifter; it does not change the 1% starting-candidate or 5% colonist-join chances. Matching racial forms bypass the ordinary size/predator/blacklist filters only for the matching pawn. Uninstalled race mods require no configuration or extra dependencies. Missing animal definitions fall back to the normal pool. Animals revealed by taming keep their original form.
+The preference is rolled **after** a pawn becomes a shapeshifter; it does not change the 1% starting-candidate or 5% colonist-join chances. Matching racial forms bypass the ordinary size/predator/blacklist filters only for the matching pawn. Uninstalled race mods require no configuration or extra dependencies. A missing animal's probability slot falls back to the normal pool instead of being reassigned to another preferred animal. Animals revealed by taming keep their original form.
+
+Ratkin's hamster is NewRatkinPlus's Hamstrox (`Ratkin_KingHamster`). It may also occur in the ordinary animal pool, so its final frequency can exceed the dedicated 10% branch. Existing animal bodies are not changed mid-transformation: revert and transform again to apply gender matching.
 
 These mappings identify exact race or xenotype Def names, not cosmetic ears on arbitrary custom xenotypes. Existing shapeshifters keep their assigned forms. See [integration notes and test scope](Docs/RacialAffinity.md).
 
@@ -54,6 +57,6 @@ The repository itself also uses RimWorld's standard mod folder layout and includ
 
 ## Current version
 
-`v1.1`
+`v1.1.1`
 
 See [CHANGELOG.md](CHANGELOG.md) for details.

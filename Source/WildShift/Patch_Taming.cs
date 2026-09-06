@@ -85,7 +85,7 @@ namespace WildShift
             string animalLabel = animal.LabelShortCap;
             bool wasSelected = Find.Selector != null && Find.Selector.IsSelected(animal);
 
-            Pawn human = PawnGenerator.GeneratePawn(PawnKindDefOf.Colonist, Faction.OfPlayer);
+            Pawn human = PawnGenerator.GeneratePawn(AnimalFormGender.CreateHumanRequest(animal));
             TransformUtility.AddOrGetShapeshifter(human, animalKind);
 
             animal.DeSpawn(DestroyMode.Vanish);

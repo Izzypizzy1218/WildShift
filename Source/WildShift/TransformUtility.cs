@@ -132,7 +132,7 @@ namespace WildShift
             Pawn animal;
             try
             {
-                animal = PawnGenerator.GeneratePawn(kind, faction);
+                animal = PawnGenerator.GeneratePawn(AnimalFormGender.CreateRequest(human, kind));
             }
             catch (Exception ex)
             {

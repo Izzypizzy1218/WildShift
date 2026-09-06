@@ -7,11 +7,11 @@ namespace WildShift
     // package-name substring matching. No HAR or race-mod assembly is required.
     public static class RacialAnimalForms
     {
-        public const float PreferenceChance = 0.5f;
+        public const float PreferenceChance = 0.2f;
 
         private static readonly Dictionary<string, string[]> RaceForms = new Dictionary<string, string[]>
         {
-            { "Ratkin", new[] { "Rat" } },
+            { "Ratkin", new[] { "Rat", "Ratkin_KingHamster" } },
             { "Kiiro_Race", new[] { "Cat" } },
             { "Alien_Nyaron", new[] { "Cat" } },
             { "Kurin_Race", new[] { "Fox_Red", "Fox_Arctic" } },
@@ -25,7 +25,7 @@ namespace WildShift
 
         private static readonly Dictionary<string, string[]> XenotypeForms = new Dictionary<string, string[]>
         {
-            { "RK_XenoType_Ratkin", new[] { "Rat" } },
+            { "RK_XenoType_Ratkin", new[] { "Rat", "Ratkin_KingHamster" } },
             { "YuranXenotype", new[] { "Hare", "Snowhare" } },
             { "Xeno_CelestialMiho", new[] { "Fox_Red" } },
             { "Xeno_CelestialMiho_Arctic", new[] { "Fox_Arctic" } },
@@ -41,19 +41,12 @@ namespace WildShift
             string[] names = GetPreferredNames(pawn);
             if (names != null && Rand.Chance(PreferenceChance))
             {
-                List<PawnKindDef> available = new List<PawnKindDef>();
-                for (int i = 0; i < names.Length; i++)
+                // Keep each slot's share even if an optional animal is missing:
+                // Ratkin rolls 10% rat + 10% Hamstrox, not 20% rat without Hamstrox.
+                PawnKindDef kind = DefDatabase<PawnKindDef>.GetNamedSilentFail(names[Rand.Range(0, names.Length)]);
+                if (IsSafeAnimal(kind))
                 {
-                    PawnKindDef kind = DefDatabase<PawnKindDef>.GetNamedSilentFail(names[i]);
-                    if (IsSafeAnimal(kind))
-                    {
-                        available.Add(kind);
-                    }
-                }
-
-                if (available.Count > 0)
-                {
-                    return available.RandomElement();
+                    return kind;
                 }
             }
 

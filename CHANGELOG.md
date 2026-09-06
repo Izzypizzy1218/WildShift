@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.1.1
+
+- Reduced the racial animal-form preference from 50% to 20%.
+- Split the Ratkin race/xenotype preference into 10% rat and 10% Hamstrox (`Ratkin_KingHamster`); missing target slots fall back to the normal pool rather than increasing another preferred animal's share.
+- Generate a fresh animal form with the original pawn's gender specified before generation. Genderless species remain genderless. Existing transformed bodies use the new behavior after reverting and transforming again.
+- Taming reveals preserve the animal's gender in the new human body; genderless origins allow normal human gender generation.
+- Preserve already assigned forms and the existing starting/join probabilities. Prosthetic, armor, and reproduction behavior is unchanged.
+- Passed 81 isolated logic assertions and compilation against installed RimWorld/Harmony assemblies. Live in-game validation remains required.
+
 ## v1.1
 
 - Added a 50% racial animal-form preference for Ratkin, Kiiro, Nyaron, Kurin HAR, Miho, Revia, Rabbie, Yuran, Bori, and Sheepawn shapeshifters.
