@@ -63,6 +63,7 @@ namespace WildShift
             Settings.Normalize();
             harmony = new Harmony("wildshift.mod");
             harmony.PatchAll();
+            AnimalModCompatibility.Install(harmony);
         }
 
         public override string SettingsCategory()

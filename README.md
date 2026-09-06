@@ -46,6 +46,14 @@ These mappings identify exact race or xenotype Def names, not cosmetic ears on a
 
 ## Installation
 
+### Optional animal packs
+
+Vanilla Animals Expanded, Megafauna, Alpha Animals, and Dinosauria feed eligible predator/large-animal definitions into the existing automatic form pool. No animal-pack DLL is bundled or required. Subscribe to the desired packs and their dependencies separately; this mod does not install or enable them for you.
+
+The optional VEF compatibility hook prevents fixed-female animal components from overwriting a WildShift form's generation-time gender; ordinary animals retain their native behavior. See [integration scope and setup](Docs/AnimalModIntegration.md) and the [source-level candidate list](Docs/AnimalModForms.md). Special abilities and full runtime compatibility are not universally guaranteed.
+
+### Install WildShift
+
 1. Download the latest release ZIP.
 2. Extract the `WildShift` mod folder into RimWorld's `Mods` directory.
 3. Enable Harmony before WildShift in the mod list.
@@ -58,7 +66,7 @@ The repository itself also uses RimWorld's standard mod folder layout and includ
 
 ## Current version
 
-`v1.1.3`
+`v1.1.4`
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
 

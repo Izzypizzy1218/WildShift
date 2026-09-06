@@ -2,7 +2,7 @@
 <ModMetaData>
   <name>WildShift</name>
   <author>Codex</author>
-  <modVersion>v1.1.3</modVersion>
+  <modVersion>v1.1.4</modVersion>
   <packageId>wildshift.mod</packageId>
   <supportedVersions>
     <li>1.6</li>
@@ -16,6 +16,11 @@
   </modDependencies>
   <loadAfter>
     <li>brrainz.harmony</li>
+    <li>OskarPotocki.VanillaFactionsExpanded.Core</li>
+    <li>VanillaExpanded.VanillaAnimalsExpanded</li>
+    <li>Spino.Megafauna</li>
+    <li>sarg.alphaanimals</li>
+    <li>spincrus.dinosauria</li>
   </loadAfter>
   <description>
     Pawns marked as shapeshifters can swap into one assigned animal form and later return to their preserved human body.

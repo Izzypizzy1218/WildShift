@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $source = Get-Content "$PSScriptRoot/StabilityTests.cs" -Raw
 # Compile production implementations against fault-injecting engine stubs.
-foreach ($name in @('FormTransferUtility', 'Patch_TransformedColonistBar', 'Patch_TransformedDeath')) {
+foreach ($name in @('FormTransferUtility', 'Patch_TransformedColonistBar', 'Patch_TransformedDeath', 'AnimalModCompatibility')) {
     $source += "`n" + ((Get-Content "$root/Source/WildShift/$name.cs" -Raw) -replace '(?m)^using [^;]+;\r?\n', '')
 }
 $transform = Get-Content "$root/Source/WildShift/TransformUtility.cs" -Raw

@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.4
+
+- Reviewed the 1.6 definition sets of Vanilla Animals Expanded, Megafauna, Alpha Animals, and Dinosauria against the existing automatic animal-form eligibility logic. Added a reproducible source-level inspector and candidate list; no blanket whitelist or new mandatory dependency.
+- Added optional load-order hints for the four packs and Vanilla Expanded Framework.
+- Prevent VEF's fixed-gender component from overwriting the original pawn's gender on WildShift forms. This addresses Alpha Animals' blizzarisk, dunealisk, and feralisk clutch-mother forms. Ordinary animals are unchanged; the hook is absent when VEF is absent.
+- Keep all pool restrictions, racial preference chances, starting/join chances, and existing assignments. Enemy transformation AI, reproduction, prosthetics, and armor behavior are unchanged.
+- Passed 89 logic and 39 stability assertions with engine stubs and compiled against installed RimWorld/Harmony. Reviewed 260 source PawnKind records (plus VAE's no-Odyssey layout); this is not a live gameplay or full special-ability compatibility certification.
+
 ## v1.1.3
 
 - Changed the Lone Beastkin preview behavior by request: moving a scenario-designated candidate out of the first starting slot and back now assigns a fresh random animal instead of restoring its previous form.

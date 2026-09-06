@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using HarmonyLib;
 using RimWorld;
 using RimWorld.Planet;
@@ -8,7 +9,18 @@ using UnityEngine;
 using Verse;
 
 // These stubs model ownership and injected failures, not RimWorld rendering/AI.
-namespace HarmonyLib { public class HarmonyPatch : Attribute { public HarmonyPatch(Type t, string s) {} } }
+namespace HarmonyLib
+{
+    public class HarmonyPatch : Attribute { public HarmonyPatch(Type t, string s) {} }
+    public class HarmonyMethod { public HarmonyMethod(Type t,string s) {} }
+    public class Harmony { public int patches; public MethodInfo lastTarget; public void Patch(MethodInfo target,HarmonyMethod prefix) { patches++; lastTarget=target; } }
+    public static class AccessTools
+    {
+        public static Type optionalType;
+        public static Type TypeByName(string name) { return optionalType; }
+        public static MethodInfo DeclaredMethod(Type t,string name,Type[] args) { return t.GetMethod(name,BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly,null,args,null); }
+    }
+}
 namespace UnityEngine
 {
     public struct Vector2 {}
@@ -23,6 +35,7 @@ namespace Verse
     public struct Rot4 {}
     public interface IThingHolder { ThingOwner GetDirectlyHeldThings(); }
     public class Thing { public bool Destroyed, Spawned; public Map Map; public IntVec3 Position; }
+    public class ThingComp { public Thing parent; }
     public class RaceProperties { public bool Animal = true; }
     public class Jobs { public void StopAll(bool b) {} }
     public class Pawn : Thing
@@ -172,6 +185,7 @@ namespace WildShift.Tests
 {
     public static class StabilityTests
     {
+        public class FakeFixedGender { public void CompTick() {} }
         private static int assertions;
         private static void Check(bool b,string message) { assertions++; if(!b) throw new Exception(message); }
         private static Pawn Form(out Pawn human, Map map = null)
@@ -256,6 +270,22 @@ namespace WildShift.Tests
             Check(map.mapPawns.reads==1 && entries.Count==1 && entries[0].pawn==animal && bar.drawer.calls==1,"dirty cache adds transformed portrait once");
             Patch_TransformedColonistBar.Postfix(bar,state,entries,locs,groups,finder,ref scale);
             Check(entries.Count==1 && bar.drawer.calls==1,"existing portrait not duplicated");
+
+            var harmony=new Harmony(); AccessTools.optionalType=null;
+            AnimalModCompatibility.Install(harmony);
+            Check(harmony.patches==0,"no VEF dependency when absent");
+            AccessTools.optionalType=typeof(Pawn);
+            AnimalModCompatibility.Install(harmony);
+            Check(harmony.patches==0,"missing optional method is skipped");
+            AccessTools.optionalType=typeof(FakeFixedGender);
+            AnimalModCompatibility.Install(harmony);
+            Check(harmony.patches==1 && harmony.lastTarget.DeclaringType==typeof(FakeFixedGender),"only declared VEF method is patched");
+            Check(AnimalModCompatibility.FixedGenderPrefix(null),"null optional component untouched");
+            Check(AnimalModCompatibility.FixedGenderPrefix(new ThingComp { parent=human }),"ordinary human untouched");
+            Check(AnimalModCompatibility.FixedGenderPrefix(new ThingComp { parent=new Pawn() }),"ordinary animal keeps native fixed gender");
+            Check(!AnimalModCompatibility.FixedGenderPrefix(new ThingComp { parent=animal }),"transformed animal keeps generation-time sex");
+            animal.Faction=new Faction();
+            Check(!AnimalModCompatibility.FixedGenderPrefix(new ThingComp { parent=animal }),"gender guard is not restricted to player faction");
             return "PASS: "+assertions+" stability assertions (fault-injecting engine stubs; not an in-game test).";
         }
     }

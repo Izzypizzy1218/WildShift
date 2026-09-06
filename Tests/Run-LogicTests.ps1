@@ -1,3 +1,4 @@
+param([switch]$CompileOnly)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 # Compile the production selection/validation code against small engine stubs.
@@ -17,4 +18,4 @@ foreach ($name in @('AnimalPool', 'RacialAnimalForms', 'AnimalFormGender', 'Hedi
     $source += "`n" + ((Get-Content "$root/Source/WildShift/$name.cs" -Raw) -replace '(?m)^using [^;]+;\r?\n', '')
 }
 Add-Type -TypeDefinition $source
-[WildShift.Tests.RacialAnimalFormsTests]::Run()
+if (-not $CompileOnly) { [WildShift.Tests.RacialAnimalFormsTests]::Run() }
