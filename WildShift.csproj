@@ -1,49 +1,41 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <RimWorldManaged Condition=" '$(RimWorldManaged)' == '' ">C:\Program Files (x86)\Steam\steamapps\common\RimWorld\RimWorldWin64_Data\Managed</RimWorldManaged>
-    <HarmonyAssemblies Condition=" '$(HarmonyAssemblies)' == '' ">C:\Program Files (x86)\Steam\steamapps\workshop\content\294100\2009463077\Current\Assemblies</HarmonyAssemblies>
-    <ProjectGuid>{6C6E3943-9AF0-40E4-A213-F19F21901E7A}</ProjectGuid>
+    <RimWorldVersion Condition="'$(RimWorldVersion)' == ''">1.7</RimWorldVersion>
+    <TargetFramework Condition="'$(RimWorldVersion)' == '1.7'">net10.0</TargetFramework>
+    <TargetFramework Condition="'$(RimWorldVersion)' == '1.6'">net472</TargetFramework>
+    <RimWorldDir Condition="'$(RimWorldDir)' == ''">$(MSBuildProgramFiles32)\Steam\steamapps\common\RimWorld</RimWorldDir>
+    <RimWorldManaged Condition="'$(RimWorldManaged)' == '' and '$(RimWorldVersion)' == '1.7'">$(RimWorldDir)</RimWorldManaged>
+    <RimWorldManaged Condition="'$(RimWorldManaged)' == '' and '$(RimWorldVersion)' == '1.6'">$(RimWorldDir)\RimWorldWin64_Data\Managed</RimWorldManaged>
+    <HarmonyAssemblies Condition="'$(HarmonyAssemblies)' == ''">$(MSBuildProgramFiles32)\Steam\steamapps\workshop\content\294100\2009463077\$(RimWorldVersion)\Assemblies</HarmonyAssemblies>
     <OutputType>Library</OutputType>
     <RootNamespace>WildShift</RootNamespace>
     <AssemblyName>WildShift</AssemblyName>
-    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <Version>1.3.0-beta.1</Version>
     <LangVersion>7.3</LangVersion>
-    <OutputPath>Assemblies\</OutputPath>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <OutputPath>$(RimWorldVersion)\Assemblies\</OutputPath>
+    <DefineConstants Condition="'$(RimWorldVersion)' == '1.7'">$(DefineConstants);RIMWORLD_1_7</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <!-- Adjust these properties if RimWorld or Harmony are installed somewhere else. References only; do not redistribute them. -->
-    <Reference Include="Assembly-CSharp">
-      <HintPath>$(RimWorldManaged)\Assembly-CSharp.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.CoreModule">
-      <HintPath>$(RimWorldManaged)\UnityEngine.CoreModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.IMGUIModule">
-      <HintPath>$(RimWorldManaged)\UnityEngine.IMGUIModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="Unity.Mathematics">
-      <HintPath>$(RimWorldManaged)\Unity.Mathematics.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="netstandard">
-      <HintPath>$(RimWorldManaged)\netstandard.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="0Harmony">
-      <HintPath>$(HarmonyAssemblies)\0Harmony.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-  </ItemGroup>
-  <ItemGroup>
+    <Reference Include="Assembly-CSharp" HintPath="$(RimWorldManaged)\Assembly-CSharp.dll" Private="false" />
+    <Reference Include="0Harmony" HintPath="$(HarmonyAssemblies)\0Harmony.dll" Private="false" />
     <Compile Include="Source\WildShift\*.cs" />
   </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <ItemGroup Condition="'$(RimWorldVersion)' == '1.7'">
+    <Reference Include="UnityStubs" HintPath="$(RimWorldManaged)\UnityStubs.dll" Private="false" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(RimWorldVersion)' == '1.6'">
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(RimWorldManaged)\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.IMGUIModule" HintPath="$(RimWorldManaged)\UnityEngine.IMGUIModule.dll" Private="false" />
+    <Reference Include="Unity.Mathematics" HintPath="$(RimWorldManaged)\Unity.Mathematics.dll" Private="false" />
+    <Reference Include="netstandard" HintPath="$(RimWorldManaged)\netstandard.dll" Private="false" />
+  </ItemGroup>
+  <Target Name="ValidateGameReferences" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(RimWorldVersion)' != '1.6' and '$(RimWorldVersion)' != '1.7'" Text="RimWorldVersion must be 1.6 or 1.7." />
+    <Error Condition="!Exists('$(RimWorldManaged)\Assembly-CSharp.dll')" Text="Game assembly missing. Set RimWorldManaged to the selected version's reference directory." />
+    <Error Condition="!Exists('$(HarmonyAssemblies)\0Harmony.dll')" Text="Matching Harmony assembly missing. Set HarmonyAssemblies for the selected game version." />
+  </Target>
 </Project>

@@ -153,14 +153,39 @@ namespace WildShift
             return null;
         }
 
-        public static void DestroyEmptyForm(Pawn animal)
+        public static bool TryRegisterWorldPawn(Pawn pawn)
         {
-            if (animal == null || animal.Destroyed) return;
+            // Caravan members are BOTH owner-held and world-registered. The
+            // generic holder transfer alone does not fulfill that invariant.
+            if (pawn == null || pawn.Destroyed || Find.WorldPawns == null) return false;
+            if (WorldPawnsUtility.IsWorldPawn(pawn)) return true;
+            try
+            {
+                Find.WorldPawns.PassToWorld(pawn, PawnDiscardDecideMode.KeepForever);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("[WildShift] World registration of replacement pawn failed: " + ex);
+            }
+            return WorldPawnsUtility.IsWorldPawn(pawn);
+        }
+
+        public static bool DestroyEmptyForm(Pawn animal)
+        {
+            if (animal == null || animal.Destroyed) return true;
             HediffComp_Transformed comp = TransformUtility.TryGetTransformedComp(animal);
             if (comp != null && comp.HasStoredPawn)
             {
                 Log.Error("[WildShift] Refusing to discard an animal that still holds its human body.");
-                return;
+                return false;
+            }
+            // Also protect emergency death recovery and failed form cleanup.
+            // An occupied shell must survive if its possessions cannot unload.
+            if (comp != null && AwakeningPossessions.HasPossessions(animal)
+                && !AwakeningPossessions.TryDropAll(animal))
+            {
+                Log.Error("[WildShift] Refusing to discard an animal form that still owns possessions.");
+                return false;
             }
             try
             {
@@ -168,10 +193,12 @@ namespace WildShift
             }
             catch (Exception ex)
             {
-                // The human has already been committed to a safe destination.
-                // Never roll it back because a shell-cleanup callback failed.
-                Log.Error("[WildShift] Empty animal cleanup failed after body transfer: " + ex);
+                // Cleanup failure must not roll back a committed destination.
+                // Awakening callers also use the result to retain failed
+                // candidate cleanup across saves before permitting another roll.
+                Log.Error("[WildShift] Body cleanup failed: " + ex);
             }
+            return animal.Destroyed;
         }
     }
 }

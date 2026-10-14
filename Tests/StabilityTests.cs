@@ -2,22 +2,26 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using HarmonyLib;
 using RimWorld;
 using RimWorld.Planet;
 using UnityEngine;
 using Verse;
+using Verse.AI.Group;
+using Verse.AI;
 
 // These stubs model ownership and injected failures, not RimWorld rendering/AI.
 namespace HarmonyLib
 {
     public class HarmonyPatch : Attribute { public HarmonyPatch(Type t, string s) {} }
     public class HarmonyMethod { public HarmonyMethod(Type t,string s) {} }
-    public class Harmony { public int patches; public MethodInfo lastTarget; public void Patch(MethodInfo target,HarmonyMethod prefix) { patches++; lastTarget=target; } }
+    public class Harmony { public int patches; public bool fail; public MethodInfo lastTarget; public void Patch(MethodInfo target,HarmonyMethod prefix) { if(fail) throw new Exception("injected optional patch failure"); patches++; lastTarget=target; } }
     public static class AccessTools
     {
         public static Type optionalType;
         public static Type TypeByName(string name) { return optionalType; }
+        public static FieldInfo Field(Type t,string name) { return t.GetField(name,BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static); }
         public static MethodInfo DeclaredMethod(Type t,string name,Type[] args) { return t.GetMethod(name,BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly,null,args,null); }
     }
 }
@@ -34,31 +38,56 @@ namespace Verse
     public struct IntVec3 {}
     public struct Rot4 {}
     public interface IThingHolder { ThingOwner GetDirectlyHeldThings(); }
-    public class Thing { public bool Destroyed, Spawned; public Map Map; public IntVec3 Position; }
+    public class Thing { public bool Destroyed, Spawned; public Map Map; public IntVec3 Position; public Faction Faction; public ThingOwner holdingOwner; }
     public class ThingComp { public Thing parent; }
-    public class RaceProperties { public bool Animal = true; }
-    public class Jobs { public void StopAll(bool b) {} }
+    public class RaceProperties { public bool Animal = true, Humanlike; }
+    public class PawnKindDef { public bool forceDeathOnDowned; public string LabelCap="animal"; }
+    public class Hediff {}
+    public class ThinkTreeDef {}
+    public class MindState { public object duty; }
+    public class HediffSet { public bool latent; public Hediff GetFirstHediffOfDef(object def) { return latent ? new Hediff() : null; } }
+    public class Pawn_HealthTracker { public float overrideDeathOnDownedChance = -1f; public HediffSet hediffSet = new HediffSet(); public int added; public void AddHediff(Hediff hediff) { hediffSet.latent=true; added++; } }
+    public static class HediffMaker { public static Hediff MakeHediff(object def,Pawn pawn) { return new Hediff(); } }
+    public class Jobs
+    {
+        public Job lastJob;
+        public void StopAll(bool b) {}
+        public bool TryTakeOrderedJob(Job job) { lastJob=job; WildShift.TransformUtility.orders++; return WildShift.TransformUtility.orderSuccess; }
+    }
     public class Pawn : Thing
     {
-        public ThingOwner holdingOwner;
+        private static int nextId;
+        public Pawn() { Faction = Faction.OfPlayer; }
+        public Pawn_HealthTracker health = new Pawn_HealthTracker();
+        public TestInventory inventory;
+        public TestEquipment equipment;
+        public TestApparel apparel;
+        public TestCarryTracker carryTracker;
         public IThingHolder ParentHolder { get { return holdingOwner; } }
         public Map MapHeld { get { return Map; } }
         public IntVec3 PositionHeld { get { return Position; } }
         public Rot4 Rotation;
         public bool Dead;
+        public bool Downed, InMentalState, IsPrisoner, IsSlave;
+        public Faction HostFaction;
+        public List<string> questTags;
+        public Lord lord;
+        public MindState mindState = new MindState();
+        public WildShift.HediffComp_Shapeshifter shifter;
+        public PawnKindDef kindDef = new PawnKindDef();
         public Pawn_DraftController drafter = new Pawn_DraftController();
         public bool Drafted { get { return drafter != null && drafter.Drafted; } }
         public string LabelShortCap = "test pawn";
         public Pawn_PlayerSettings playerSettings = new Pawn_PlayerSettings();
-        public Faction Faction = Faction.OfPlayer;
         public RaceProperties RaceProps = new RaceProperties();
-        public int thingIDNumber;
+        public int thingIDNumber = ++nextId;
         public Jobs jobs = new Jobs();
         public WildShift.HediffComp_Transformed comp;
         public void SetFaction(Faction faction) { Faction = faction; }
         public void DeSpawn(DestroyMode mode) { Spawned = false; Map = null; drafter = null; }
-        public void Destroy(DestroyMode mode) { Destroyed = true; Spawned = false; if (holdingOwner != null) holdingOwner.Remove(this); Find.WorldPawns.RemovePawn(this); }
-        public void Kill(DamageInfo? info) { Dead = true; }
+        public static Predicate<Pawn> DestroyFailBefore, DestroyFailAfter, DestroyNoop;
+        public void Destroy(DestroyMode mode) { if(DestroyFailBefore!=null && DestroyFailBefore(this)) throw new Exception("destroy before commit"); if(DestroyNoop!=null && DestroyNoop(this)) return; if(lord!=null) lord.Notify_PawnLost(this,PawnLostCondition.Killed); Destroyed = true; Spawned = false; if (holdingOwner != null) holdingOwner.Remove(this); Find.WorldPawns.RemovePawn(this); if(DestroyFailAfter!=null && DestroyFailAfter(this)) throw new Exception("destroy after commit"); }
+        public void Kill(DamageInfo? info) { Dead = true; if(lord!=null) lord.Notify_PawnLost(this,PawnLostCondition.Killed); }
         public void TakeDamage(DamageInfo info) {}
     }
     public class ThingOwner : IThingHolder
@@ -66,7 +95,19 @@ namespace Verse
         public List<Pawn> pawns = new List<Pawn>();
         public Predicate<Pawn> Reject, ThrowBefore, ThrowAfter;
         public bool PreflightReject;
-        public int Count { get { return pawns.Count; } }
+        public TestItemList items;
+        public bool RejectItems, ThrowItemBefore, ThrowItemAfter;
+        public int Count { get { return items != null ? items.Count : pawns.Count; } }
+        public Thing this[int i] { get { return items[i]; } }
+        public bool Contains(Thing item) { return items != null && items.Contains(item); }
+        public bool TryAdd(Thing item, bool merge) { if(RejectItems) return false; items.Add(item); if(ThrowItemAfter) throw new Exception("item add after commit"); return true; }
+        public bool TryTransferToContainer(Thing item, ThingOwner destination, bool merge)
+        {
+            if(destination.RejectItems) return false;
+            items.Remove(item); item.holdingOwner=null;
+            if(destination.ThrowItemBefore) throw new Exception("item detached before destination");
+            return destination.TryAdd(item,merge);
+        }
         public bool Contains(Pawn p) { return p != null && p.holdingOwner == this; }
         public bool CanAcceptAnyOf(Pawn p, bool merge) { return !PreflightReject; }
         public bool Remove(Pawn p) { if (!Contains(p)) return false; pawns.Remove(p); p.holdingOwner = null; return true; }
@@ -87,7 +128,16 @@ namespace Verse
         public int reads; public List<Pawn> pawns = new List<Pawn>();
         public IReadOnlyList<Pawn> AllPawnsSpawned { get { reads++; return pawns; } }
     }
-    public class Map { public MapPawns mapPawns = new MapPawns(); public bool IsPlayerHome; public int uniqueID; }
+    public class Map
+    {
+        public int componentReads; public bool failComponentLookup;
+        public MapPawns mapPawns = new MapPawns(); public bool IsPlayerHome; public int uniqueID;
+        public AttackTargetsCache attackTargetsCache = new AttackTargetsCache();
+        private WildShift.MapComponent_EnemyShapeshifters queue;
+        public T GetComponent<T>() where T : MapComponent { componentReads++; if(failComponentLookup) throw new Exception("injected map component error"); if(queue==null) queue=new WildShift.MapComponent_EnemyShapeshifters(this); return queue as T; }
+    }
+    public class AttackTargetsCache { public void UpdateTarget(Pawn p) {} }
+    public class MapComponent { protected Map map; public MapComponent(Map m) { map=m; } public virtual void FinalizeInit() {} }
     public static class GenSpawn
     {
         public static Predicate<Pawn> FailBefore, FailAfter;
@@ -98,7 +148,8 @@ namespace Verse
             if (FailAfter != null && FailAfter(p)) throw new Exception("spawn after commit");
         }
     }
-    public static class Log { public static void Error(string s) {} public static void Warning(string s) {} }
+    public static class PawnGenerator { public static Func<Pawn> Generate = () => new Pawn(); public static Pawn GeneratePawn(object request) { return Generate(); } }
+    public static class Log { public static HashSet<int> once=new HashSet<int>(); public static void Error(string s) {} public static void Warning(string s) {} public static void ErrorOnce(string s,int key) { once.Add(key); } }
     public class PlaySettings { public bool showColonistBar = true; }
     public static class Find
     {
@@ -108,6 +159,7 @@ namespace Verse
         public static PlaySettings PlaySettings = new PlaySettings();
         public static Selector Selector = new Selector();
         public static ColonistBar ColonistBar = new ColonistBar();
+        public static FactionManager FactionManager = new FactionManager();
     }
     public static class Extensions
     {
@@ -116,15 +168,23 @@ namespace Verse
         public static string Translate(this string s, params object[] args) { return s; }
     }
     public static class Messages { public static void Message(string s, Pawn p, object type, bool historical) {} }
-    public struct DamageInfo { public object Def; public float Amount; public DamageInfo(object def, float n) { Def=def; Amount=n; } }
+    public struct DamageInfo { public object Def; public float Amount; public Thing Instigator; public DamageInfo(object def, float n) { Def=def; Amount=n; Instigator=null; } }
     public static class Rand { public static bool Chance(float n) { return n >= 1; } }
-    public struct LocalTargetInfo { public Thing Thing; }
+    public struct LocalTargetInfo
+    {
+        public Thing Thing; public bool IsValid { get { return Thing!=null; } }
+        public static implicit operator LocalTargetInfo(Thing thing) { return new LocalTargetInfo { Thing=thing }; }
+    }
     public class TargetingParameters { public static TargetingParameters ForAttackAny() { return new TargetingParameters(); } }
     public static class GenUI { public static List<LocalTargetInfo> targets = new List<LocalTargetInfo>(); public static IEnumerable<LocalTargetInfo> TargetsAtMouse(TargetingParameters p, bool b, object o) { return targets; } }
 }
 namespace RimWorld
 {
-    public class Faction { public static Faction OfPlayer = new Faction(); }
+    public class Faction { public static Faction OfPlayer = new Faction(); public bool IsPlayer { get { return this==OfPlayer; } } public bool hostile; public bool HostileTo(Faction p) { return hostile && p!=null; } }
+    public class FactionManager { public Faction OfPlayer = Faction.OfPlayer; }
+    public class IncidentWorker_Raid {}
+    public class IncidentWorker_RaidEnemy : IncidentWorker_Raid {}
+    public class LordToil_AssaultColony : LordToil {}
     public class Pawn_DraftController { public bool Drafted; }
     public class Pawn_PlayerSettings { public const int UnsetDisplayOrder = -999; public int displayOrder; }
     public class Selector
@@ -134,8 +194,9 @@ namespace RimWorld
         public void Deselect(Pawn p) { SelectedPawns.Remove(p); }
         public void Select(Pawn p) { SelectedPawns.Add(p); }
     }
-    public static class MessageTypeDefOf { public static object PositiveEvent = new object(); }
+    public static class MessageTypeDefOf { public static object PositiveEvent = new object(), RejectInput = new object(); }
     public static class DamageDefOf { public static object ExecutionCut = new object(), Blunt = new object(); }
+    public static class JobDefOf { public static object AttackMelee = new object(); }
     public static class FleckDefOf { public static object FeedbackMelee = new object(); }
     public static class FleckMaker { public static void Static(IntVec3 c, Map m, object d, float scale) {} }
     public class Drawer { public int calls; public void Notify_RecachedEntries() { calls++; } }
@@ -151,8 +212,8 @@ namespace RimWorld.Planet
     public enum PawnDiscardDecideMode { KeepForever }
     public class WorldPawns
     {
-        public HashSet<Pawn> pawns = new HashSet<Pawn>(); public bool Fail;
-        public void PassToWorld(Pawn p, PawnDiscardDecideMode m) { if(Fail) throw new Exception("world registration"); pawns.Add(p); }
+        public HashSet<Pawn> pawns = new HashSet<Pawn>(); public bool Fail, FailAfter;
+        public void PassToWorld(Pawn p, PawnDiscardDecideMode m) { if(Fail) throw new Exception("world registration"); pawns.Add(p); if(FailAfter) throw new Exception("after world registration"); }
         public void RemovePawn(Pawn p) { pawns.Remove(p); }
     }
     public static class WorldPawnsUtility { public static bool IsWorldPawn(Pawn p) { return Find.WorldPawns.pawns.Contains(p); } }
@@ -161,8 +222,11 @@ namespace RimWorld.Planet
 }
 namespace WildShift
 {
+    public static class AnimalFormGender { public static bool mismatch; public static object CreateHumanRequest(Pawn p) { return p; } public static bool MatchesHumanRequest(Pawn p,object request) { return !mismatch; } }
+    public class HediffComp_Shapeshifter { public bool enemyRaidParticipant, enemyShiftUsed; public PawnKindDef assignedKind = new PawnKindDef(); }
     public class HediffComp_Transformed
     {
+        public bool enemyCombatForm, enemyReturnPending;
         public ThingOwner storage = new ThingOwner();
         public bool HasStoredPawn { get { return storage.Count > 0; } }
         public Pawn StoredPawn { get { return HasStoredPawn ? storage.pawns[0] : null; } }
@@ -172,20 +236,27 @@ namespace WildShift
     public static partial class TransformUtility
     {
         public static int orders; public static bool orderSuccess = true;
-        public static HediffComp_Transformed TryGetTransformedComp(Pawn p) { return p != null ? p.comp : null; }
-        public static bool IsTransformedAnimal(Pawn p) { return p != null && p.comp != null && p.comp.HasStoredPawn; }
+        public static int shiftCalls;
+        public static bool failAssignment;
+        public static HediffComp_Shapeshifter TryGetShapeshifterComp(Pawn p) { return p==null ? null : p.shifter; }
+        public static HediffComp_Shapeshifter AddOrGetShapeshifter(Pawn p, PawnKindDef k, bool racial=false) { if(failAssignment) return null; if(p.shifter==null) p.shifter=new HediffComp_Shapeshifter(); return p.shifter; }
+        // Pawn generation is a mocked boundary here; queue attempt/one-use rules
+        // and real reversion/Lord replacement are exercised separately.
+        public static bool TransformToAnimal(Pawn p, PawnKindDef k) { shiftCalls++; return false; }
+        public static int transformedLookups;
+        public static HediffComp_Transformed TryGetTransformedComp(Pawn p) { transformedLookups++; return p != null ? p.comp : null; }
+        public static bool IsTransformedAnimal(Pawn p) { transformedLookups++; return p != null && p.comp != null && p.comp.HasStoredPawn; }
         public static void EnsureTransformedAnimalControl(Pawn p, bool b) {}
-        public static bool TryOrderMeleeAttack(Pawn p, Thing target) { orders++; return orderSuccess; }
     }
     public static class Patch_GameEnder { public static void InvalidateCache() {} }
-    public class Settings { public float deathChance, spilloverDamageFactor; }
+    public class Settings { public float deathChance, spilloverDamageFactor, enemyShapeshifterChance = .05f; public bool forceTraderShapeshifters; }
     public static class WildShiftMod { public static Settings Settings = new Settings(); }
 }
 namespace WildShift.Tests
 {
-    public static class StabilityTests
+    public static partial class StabilityTests
     {
-        public class FakeFixedGender { public void CompTick() {} }
+        public class FakeFixedGender { public bool changeGenderOnce=true; public void CompTick() {} }
         private static int assertions;
         private static void Check(bool b,string message) { assertions++; if(!b) throw new Exception(message); }
         private static Pawn Form(out Pawn human, Map map = null)
@@ -199,6 +270,13 @@ namespace WildShift.Tests
         {
             GenSpawn.FailBefore=null; GenSpawn.FailAfter=null; Find.WorldPawns=new WorldPawns();
             Find.Selector=new Selector(); TransformUtility.orderSuccess=true;
+            TransformUtility.failAssignment=false; PawnGenerator.Generate=()=>new Pawn();
+            Current.Game=new Game(); LongEventHandler.Pending.Clear(); LongEventHandler.Defer=false;
+            TestDrops.Ground.Clear();
+            AnimalFormGender.mismatch=false;
+            Log.once.Clear();
+            Pawn.DestroyFailBefore=null; Pawn.DestroyFailAfter=null; Pawn.DestroyNoop=null;
+            WildShiftMod.Settings.forceTraderShapeshifters=false;
         }
         public static string Run()
         {
@@ -249,16 +327,6 @@ namespace WildShift.Tests
             Reset(); animal=Form(out human,map); GenSpawn.FailBefore=p=>p==human; Find.WorldPawns.Fail=true;
             Check(!Patch_TransformedDeath.Prefix(animal,null) && animal.comp.StoredPawn==human && !animal.Destroyed,"all recovery failures preserve occupied form");
 
-            Reset(); animal=Form(out human,map); animal.drafter.Drafted=true;
-            Find.Selector.SelectedPawns.Add(animal); Find.Selector.SelectedPawns.Add(human);
-            Event.current=new Event { type=EventType.MouseDown,button=1 };
-            Check(Patch_TransformedAnimalDirectRightClickAttack.Prefix() && Find.Selector.SelectedPawns.Count==2 && !Event.current.used,"mixed selection reaches vanilla unchanged");
-            Find.Selector.SelectedPawns.Remove(human);
-            GenUI.targets=new List<LocalTargetInfo> { new LocalTargetInfo { Thing=new Thing { Spawned=true,Map=map } } };
-            Check(!Patch_TransformedAnimalDirectRightClickAttack.Prefix() && Event.current.used,"animal direct attack consumes click without menu");
-            TransformUtility.orderSuccess=false; Event.current.used=false;
-            Check(Patch_TransformedAnimalDirectRightClickAttack.Prefix() && !Event.current.used,"failed direct order retains vanilla fallback");
-
             Reset(); animal=Form(out human,map); map.mapPawns.pawns.Add(animal); Find.Maps=new List<Map> { map };
             var entries=new List<ColonistBar.Entry>(); var locs=new List<Vector2>(); var groups=new List<int>();
             var bar=new ColonistBar(); var finder=new ColonistBarDrawLocsFinder(); float scale=1; bool state;
@@ -280,12 +348,22 @@ namespace WildShift.Tests
             AccessTools.optionalType=typeof(FakeFixedGender);
             AnimalModCompatibility.Install(harmony);
             Check(harmony.patches==1 && harmony.lastTarget.DeclaringType==typeof(FakeFixedGender),"only declared VEF method is patched");
-            Check(AnimalModCompatibility.FixedGenderPrefix(null),"null optional component untouched");
-            Check(AnimalModCompatibility.FixedGenderPrefix(new ThingComp { parent=human }),"ordinary human untouched");
-            Check(AnimalModCompatibility.FixedGenderPrefix(new ThingComp { parent=new Pawn() }),"ordinary animal keeps native fixed gender");
-            Check(!AnimalModCompatibility.FixedGenderPrefix(new ThingComp { parent=animal }),"transformed animal keeps generation-time sex");
+            bool pending=true;
+            Check(AnimalModCompatibility.FixedGenderPrefix(null,ref pending) && pending,"null optional component untouched");
+            Check(AnimalModCompatibility.FixedGenderPrefix(new ThingComp { parent=human },ref pending) && pending,"ordinary human untouched");
+            Check(AnimalModCompatibility.FixedGenderPrefix(new ThingComp { parent=new Pawn() },ref pending) && pending,"ordinary animal keeps native fixed gender");
+            Check(AnimalModCompatibility.FixedGenderPrefix(new ThingComp { parent=animal },ref pending) && !pending,"transformed animal consumes rewrite without suppressing original callback");
             animal.Faction=new Faction();
-            Check(!AnimalModCompatibility.FixedGenderPrefix(new ThingComp { parent=animal }),"gender guard is not restricted to player faction");
+            pending=true;
+            Check(AnimalModCompatibility.FixedGenderPrefix(new ThingComp { parent=animal },ref pending) && !pending,"gender guard is not restricted to player faction");
+            RunEnemyTests();
+            RunReviewTests();
+            RunMedicalAwakeningTests();
+            RunOwnedAnimalAwakeningTests();
+            RunTraderTestModeTests();
+            RunRecoveryRegressionTests();
+            RunPerformanceCompatibilityTests();
+            RunFormPossessionsTests();
             return "PASS: "+assertions+" stability assertions (fault-injecting engine stubs; not an in-game test).";
         }
     }

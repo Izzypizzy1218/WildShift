@@ -1,7 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LanguageData>
+  <WildShift_CommandFinishAwakeningLabel>Finish awakening</WildShift_CommandFinishAwakeningLabel>
+  <WildShift_CommandFinishAwakeningDesc>The human body has already awakened. Safely unload any remaining belongings and remove the old animal body.</WildShift_CommandFinishAwakeningDesc>
+  <WildShift_AwakenCleanupFailed>Awakening cleanup could not finish. The existing bodies have been retained. Retry after resolving the error; no additional human will be created while cleanup is pending.</WildShift_AwakenCleanupFailed>
+  <WildShift_SettingsForceTrader>Test: eligible trader animals are 100% latent shapeshifters</WildShift_SettingsForceTrader>
+  <WildShift_SettingsForceTraderDesc>Applies to newly generated animal stock. Existing stock and wild-animal chances are unchanged. Turn off after testing.</WildShift_SettingsForceTraderDesc>
+  <WildShift_CommandAwakenLabel>Awaken as human</WildShift_CommandAwakenLabel>
+  <WildShift_CommandAwakenDesc>Awaken this colony-owned latent shapeshifter, retaining its species as its assigned animal form. Race selection: 50% player-faction origin; 50% other eligible races and human xenotypes from vanilla and active mods. Purchased animals can awaken after map arrival regardless of past damage. Belongings are automatically placed nearby.</WildShift_CommandAwakenDesc>
+  <WildShift_AwakenNeedsMap>Arrive on a map before awakening.</WildShift_AwakenNeedsMap>
+  <WildShift_AwakenPlayerHarm>This animal was medically recruited after player-inflicted harm. Manual awakening cannot bypass that rejection. Normal taming or a subsequent purchase can still allow awakening.</WildShift_AwakenPlayerHarm>
+  <WildShift_AwakenDropFailed>Awakening could not safely place all belongings nearby. The animal and remaining items have been preserved; try again after clearing space.</WildShift_AwakenDropFailed>
   <WildShift_CommandRevertLabel>Return to human</WildShift_CommandRevertLabel>
-  <WildShift_CommandRevertDesc>Restore the preserved human body and remove this animal form.</WildShift_CommandRevertDesc>
+  <WildShift_CommandRevertDesc>Return to the preserved human body. The animal's apparel, equipment and cargo are dropped nearby. Anything that cannot be dropped is kept in the human's inventory. Away from a map, all belongings go to that inventory.</WildShift_CommandRevertDesc>
+  <WildShift_ReturnPossessionsBlocked>Could not preserve the animal's remaining belongings on the ground or in the human's inventory. Return was cancelled and both bodies and remaining items were preserved. Resolve the item-transfer error, then retry.</WildShift_ReturnPossessionsBlocked>
   <WildShift_CommandShiftLabel>Shift</WildShift_CommandShiftLabel>
   <WildShift_CommandShiftDesc>Shift into the assigned {0} form.</WildShift_CommandShiftDesc>
   <WildShift_CommandAttackLabel>Melee attack</WildShift_CommandAttackLabel>
@@ -21,10 +32,14 @@
   <WildShift_ScenPartSummary>Start with one shapeshifter</WildShift_ScenPartSummary>
   <WildShift_ScenarioIntro>All your life, you believed yourself to be human. Then another form sleeping beneath your skin opened its eyes. In one terrifying yet liberating moment, you ran on four legs beneath an unfamiliar sky and realized that the beast had always been a part of you.\n\nSome shapeshifters say they once lived as animals and only later learned to wear human skin. Others call this ability a bloodline, a forgotten experiment, or a curse. You know only one thing: neither form is a disguise. Both are you.\n\nNow a battered drop pod has cast you onto an unnamed rimworld. Will you settle as a human, survive as a beast, or become something that belongs to neither world?</WildShift_ScenarioIntro>
   <WildShift_SettingsShiftCooldown>Shift cooldown: {0} days</WildShift_SettingsShiftCooldown>
-  <WildShift_SettingsFieldChance>Latent wild shapeshifter chance: {0}%</WildShift_SettingsFieldChance>
+  <WildShift_SettingsFieldChance>Latent shapeshifter chance (wild/trader animals): {0}%</WildShift_SettingsFieldChance>
   <WildShift_SettingsDeathChance>Death chance while transformed: {0}%</WildShift_SettingsDeathChance>
   <WildShift_SettingsSpillover>Survival spillover damage factor: {0}%</WildShift_SettingsSpillover>
   <WildShift_SettingsAllowInsects>Allow insectoid forms</WildShift_SettingsAllowInsects>
   <WildShift_SettingsAllowInsectsDesc>Include insectoid races in the random animal pool.</WildShift_SettingsAllowInsectsDesc>
   <WildShift_SettingsReset>Reset WildShift settings</WildShift_SettingsReset>
+  <WildShift_SettingsEnemyChance>Shapeshifter chance per eligible raider: {0}%</WildShift_SettingsEnemyChance>
+  <WildShift_SettingsSoldRevenge>Sold shapeshifter revenge chance: {0}% (0% disables pending revenge)</WildShift_SettingsSoldRevenge>
+  <WildShift_RevengeLetterLabel>The sold shapeshifter returns</WildShift_RevengeLetterLabel>
+  <WildShift_RevengeLetterText>{0}, the shapeshifter you sold to a trader in animal form, has returned.\n\nThey have rallied {3} other shapeshifters and {2} animals of their own kind: {1}. The shapeshifters carry their own animal forms into battle. Together they are attacking your settlement. They have not forgotten being sold as livestock.</WildShift_RevengeLetterText>
 </LanguageData>

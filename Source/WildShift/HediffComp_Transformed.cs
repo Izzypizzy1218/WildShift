@@ -17,6 +17,8 @@ namespace WildShift
     {
         private ThingOwner<Pawn> storedPawns;
         private bool generatedHealthSanitized;
+        public bool enemyCombatForm;
+        public bool enemyReturnPending;
 
         public HediffComp_Transformed()
         {
@@ -86,6 +88,8 @@ namespace WildShift
             base.CompExposeData();
             Scribe_Deep.Look(ref storedPawns, "storedPawns", this);
             Scribe_Values.Look(ref generatedHealthSanitized, "generatedHealthSanitized", false);
+            Scribe_Values.Look(ref enemyCombatForm, "enemyCombatForm", false);
+            Scribe_Values.Look(ref enemyReturnPending, "enemyReturnPending", false);
             if (storedPawns == null)
             {
                 storedPawns = new ThingOwner<Pawn>(this, false, LookMode.Deep);
@@ -101,6 +105,14 @@ namespace WildShift
 
                 generatedHealthSanitized = true;
                 TransformUtility.EnsureTransformedAnimalControl(animal, true);
+                // Inspect only after native and optional-mod post-load work has
+                // completed. The normal unresolved tree is a cheap no-op.
+                if (animal != null)
+                    LongEventHandler.ExecuteWhenFinished(delegate
+                    {
+                        AnimalFormTraining.CompleteSpecialTraining(animal);
+                        AnimalApparelGraphics.RefreshIfOutOfSync(animal);
+                    });
             }
         }
 
@@ -138,20 +150,9 @@ namespace WildShift
 
             TransformUtility.EnsureTransformedAnimalControl(animal, true);
 
-            if (animal.Drafted)
-            {
-                yield return new Command_Target
-                {
-                    defaultLabel = "WildShift_CommandAttackLabel".Translate(),
-                    defaultDesc = "WildShift_CommandAttackDesc".Translate(),
-                    icon = TexCommand.AttackMelee,
-                    targetingParams = TargetingParameters.ForAttackAny(),
-                    action = delegate(LocalTargetInfo target)
-                    {
-                        TransformUtility.TryOrderMeleeAttack(animal, target);
-                    }
-                };
-            }
+            // Pawn.GetGizmos already supplies the native grouped melee command
+            // (Misc2, default H) for controlled animal forms. Do not add a second
+            // attack button here or filter unrelated same-icon apparel skills.
 
             yield return new Command_Action
             {

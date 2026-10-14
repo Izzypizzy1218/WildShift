@@ -1,5 +1,9 @@
 # Optional animal-pack integration — v1.1.4
 
+For the current VGE and Big and Small - Sapient Animals integration, see [v1.2.18 compatibility](Compatibility-v1.2.18.md). The investigation below describes earlier animal packs.
+
+As of v1.2.11, the VEF hook consumes its pending `changeGenderOnce` flag for a mapped transformed pawn instead of skipping the entire callback every tick. The original callback runs, and subsequent ticks return before searching health state. Installation validates the method and mutable bool field and isolates optional patch failures. Installed VEF metadata and real Harmony private-field injection against a modeled callback were checked; see [the final pass](FinalPass-v1.2.11.md). The original v1.1.4 investigation below is retained as history.
+
 ## What changed
 
 The existing AnimalPool already discovers all loaded eligible PawnKindDefs. Ordinary animal forms from these packs do not need one-by-one registration, and the integration does not override size/predator restrictions. Optional load-after hints now cover the four packs and VEF.
@@ -45,5 +49,5 @@ Use `-GameRoot` if RimWorld is not installed at the default Steam path. Run logi
 - Alpha's mature fleshbeast has its own swallowed-pawn container. Its source ejects contents during mapped destruction, but off-map reversion with swallowed contents has not been validated. Avoid that combination pending a dedicated holder audit.
 - Health-cleanup classification, special initial hediffs, generated resources, aura effects, reproduction, and custom animal AI need live testing with the chosen animals. No reproduction/prosthetics/armor redesign is included.
 - Disabling an animal's wild spawn in its original mod does not necessarily remove its loaded PawnKindDef from WildShift's pool.
-- Predator/large-animal limits, the blacklist, optional insectoid forms, 20% racial preferences, 1% starting-candidate chance, and 5% normal-join chance are unchanged.
+- Animal-pack integration does not change predator/large-animal limits, the blacklist, optional insectoid forms, 20% racial preferences or 5% normal-join chance. Starting-candidate chance is 5% as of v1.2.2 (previously 1%).
 - Enemy shapeshifter generation/attack AI and automatic enemy reversion on downing are not part of this release.

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <FactionDef ParentName="FactionBase">
+    <defName>WildShift_RevengeFaction</defName>
+    <label>vengeful shapeshifters</label>
+    <fixedName>The Betrayed</fixedName>
+    <description>Shapeshifters sold as livestock, returning to settle a personal score.</description>
+    <pawnSingular>shapeshifter</pawnSingular>
+    <pawnsPlural>shapeshifters</pawnsPlural>
+    <hidden>true</hidden>
+    <displayInFactionSelection>false</displayInFactionSelection>
+    <requiredCountAtGameStart>0</requiredCountAtGameStart>
+    <maxConfigurableAtWorldCreation>0</maxConfigurableAtWorldCreation>
+    <canGenerateQuestSites>false</canGenerateQuestSites>
+    <raidsForbidden>true</raidsForbidden>
+    <permanentEnemy>true</permanentEnemy>
+    <humanlikeFaction>true</humanlikeFaction>
+    <autoFlee>true</autoFlee>
+    <techLevel>Neolithic</techLevel>
+    <basicMemberKind>Colonist</basicMemberKind>
+    <backstoryFilters><li><categories><li>Tribal</li></categories></li></backstoryFilters>
+    <factionIconPath>World/WorldObjects/Expanding/Sites/DownedRefugee</factionIconPath>
+  </FactionDef>
+</Defs>

@@ -1,7 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LanguageData>
+  <WildShift_CommandFinishAwakeningLabel>각성 마무리</WildShift_CommandFinishAwakeningLabel>
+  <WildShift_CommandFinishAwakeningDesc>이미 인간으로 각성했습니다. 남은 소지품을 안전하게 내려놓고 이전 동물 몸을 정리합니다.</WildShift_CommandFinishAwakeningDesc>
+  <WildShift_AwakenCleanupFailed>각성 정리를 완료하지 못했습니다. 기존 몸은 보존되었습니다. 오류를 해결한 뒤 다시 시도해 주세요. 정리가 끝나기 전에는 인간을 추가로 생성하지 않습니다.</WildShift_AwakenCleanupFailed>
+  <WildShift_SettingsForceTrader>테스트: 판매 동물 잠재 변신자 100%</WildShift_SettingsForceTrader>
+  <WildShift_SettingsForceTraderDesc>새로 생성되는 변신 적격 판매 동물에 적용됩니다. 기존 판매 목록과 야생동물 확률은 바뀌지 않습니다. 테스트 후 꺼 주세요.</WildShift_SettingsForceTraderDesc>
+  <WildShift_CommandAwakenLabel>인간으로 각성</WildShift_CommandAwakenLabel>
+  <WildShift_CommandAwakenDesc>잠재 변신자를 각성시킵니다. 원래 동물 종은 고유 형상이 됩니다. 50%는 플레이어 세력 기본 종족, 나머지 50%는 바닐라·활성 모드의 다른 적격 종족 및 인간 이종족에서 선택됩니다. 구매 동물은 과거 피해와 관계없이 맵 도착 후 사용할 수 있으며, 소지품은 주변에 자동으로 내려놓습니다.</WildShift_CommandAwakenDesc>
+  <WildShift_AwakenNeedsMap>맵에 도착한 뒤 각성할 수 있습니다.</WildShift_AwakenNeedsMap>
+  <WildShift_AwakenPlayerHarm>플레이어 측이 다치게 한 뒤 치료로 길들여져 각성이 거부된 동물입니다. 수동 각성으로 우회할 수 없지만, 일반 길들이기나 이후 구매를 통해 각성할 수 있습니다.</WildShift_AwakenPlayerHarm>
+  <WildShift_AwakenDropFailed>소지품을 주변에 모두 내려놓지 못해 각성을 중단했습니다. 동물과 남은 물건은 보존되었습니다. 주변 공간을 확보한 뒤 다시 시도해 주세요.</WildShift_AwakenDropFailed>
   <WildShift_CommandRevertLabel>&#xC778;&#xAC04;&#xC73C;&#xB85C; &#xB3CC;&#xC544;&#xAC00;&#xAE30;</WildShift_CommandRevertLabel>
-  <WildShift_CommandRevertDesc>Restore the preserved human body and remove this animal form.</WildShift_CommandRevertDesc>
+  <WildShift_CommandRevertDesc>보존된 인간의 몸으로 돌아갑니다. 동물의 의상·장비·짐은 주변 바닥에 내려놓고, 내려놓지 못한 물건은 인간의 소지품으로 보관합니다. 상단 등 맵 밖에서는 모든 물건을 인간의 소지품으로 옮깁니다.</WildShift_CommandRevertDesc>
+  <WildShift_ReturnPossessionsBlocked>남은 물건을 바닥이나 인간의 소지품 어느 쪽에도 보관하지 못해 복귀를 중단했습니다. 남은 물건과 두 몸은 보존되었습니다. 물건 이동 오류를 해결한 뒤 다시 시도해 주세요.</WildShift_ReturnPossessionsBlocked>
   <WildShift_CommandShiftLabel>&#xBCC0;&#xC2E0;</WildShift_CommandShiftLabel>
   <WildShift_CommandShiftDesc>Shift into the assigned {0} form.</WildShift_CommandShiftDesc>
   <WildShift_CommandAttackLabel>&#xADFC;&#xC811; &#xACF5;&#xACA9;</WildShift_CommandAttackLabel>
@@ -21,10 +32,14 @@
   <WildShift_ScenPartSummary>Start with one shapeshifter</WildShift_ScenPartSummary>
   <WildShift_ScenarioIntro>All your life, you believed yourself to be human. Then another form sleeping beneath your skin opened its eyes. In one terrifying yet liberating moment, you ran on four legs beneath an unfamiliar sky and realized that the beast had always been a part of you.\n\nSome shapeshifters say they once lived as animals and only later learned to wear human skin. Others call this ability a bloodline, a forgotten experiment, or a curse. You know only one thing: neither form is a disguise. Both are you.\n\nNow a battered drop pod has cast you onto an unnamed rimworld. Will you settle as a human, survive as a beast, or become something that belongs to neither world?</WildShift_ScenarioIntro>
   <WildShift_SettingsShiftCooldown>변신 재사용 대기시간: {0}일</WildShift_SettingsShiftCooldown>
-  <WildShift_SettingsFieldChance>야생 잠재 변신자 확률: {0}%</WildShift_SettingsFieldChance>
+  <WildShift_SettingsFieldChance>야생·판매 동물 잠재 변신자 확률: {0}%</WildShift_SettingsFieldChance>
   <WildShift_SettingsDeathChance>변신체 사망 시 본체 사망 확률: {0}%</WildShift_SettingsDeathChance>
   <WildShift_SettingsSpillover>생존 시 본체에 전달되는 피해: {0}%</WildShift_SettingsSpillover>
   <WildShift_SettingsAllowInsects>곤충형 변신 허용</WildShift_SettingsAllowInsects>
   <WildShift_SettingsAllowInsectsDesc>Include insectoid races in the random animal pool.</WildShift_SettingsAllowInsectsDesc>
   <WildShift_SettingsReset>WildShift 설정 초기화</WildShift_SettingsReset>
+  <WildShift_SettingsEnemyChance>대상 습격자 1명당 Shapeshifter 확률: {0}%</WildShift_SettingsEnemyChance>
+  <WildShift_SettingsSoldRevenge>팔린 변신자의 복수 확률: {0}% (0%면 예정된 복수도 취소)</WildShift_SettingsSoldRevenge>
+  <WildShift_RevengeLetterLabel>팔려간 변신자의 귀환</WildShift_RevengeLetterLabel>
+  <WildShift_RevengeLetterText>당신이 동물 모습인 채 상인에게 팔아넘겼던 {0}이(가) 돌아왔습니다.\n\n동료 변신자 {3}명과 자신의 형상과 같은 종인 {1} {2}마리를 모아 정착지를 공격하고 있습니다. 동료 변신자들도 각자의 동물 형상으로 전투에 나섭니다. 가축 취급을 받으며 팔려갔던 일을 잊지 않은 듯합니다.</WildShift_RevengeLetterText>
 </LanguageData>

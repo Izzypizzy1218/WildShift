@@ -9,8 +9,12 @@ namespace WildShift
         {
             // A genderless animal has no sex to carry over to a human body.
             Gender? gender = animal.gender == Gender.None ? (Gender?)null : animal.gender;
-            return new PawnGenerationRequest(PawnKindDefOf.Colonist, Faction.OfPlayer,
-                forceGenerateNewPawn: true, fixedGender: gender);
+            return AwakeningRaceSelection.CreateRequest(gender);
+        }
+
+        public static bool MatchesHumanRequest(Pawn human, PawnGenerationRequest request)
+        {
+            return human != null && human.def == request.KindDef.race;
         }
 
         public static PawnGenerationRequest CreateRequest(Pawn human, PawnKindDef kind)

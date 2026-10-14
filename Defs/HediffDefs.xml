@@ -29,7 +29,7 @@
   <HediffDef>
     <defName>WildShift_FieldShapeshifterMarker</defName>
     <label>latent shapeshifter</label>
-    <description>This animal's shape conceals a dormant human identity. Most observers would see only an ordinary beast; the truth is usually revealed only when the creature accepts a bond with human hands.\n\nWhether it was born human, beast, or somewhere between is impossible to know. If the hidden nature awakens, this animal form becomes the single stable shape carried by the person within.</description>
+    <description>This animal's shape conceals a dormant human identity. Successful normal taming by a colonist awakens it in human form; a bonded relationship is not required. Medical care can also awaken it when a new bond automatically tames it, unless the player previously harmed it.\n\nPurchased and already owned animals can use Awaken as human after arriving on a map, provided they are not downed or in a mental state. Cargo, equipment and apparel are automatically placed nearby. A purchase allows manual awakening regardless of past damage. An animal specifically rejected after player-harm medical recruitment cannot bypass that rejection with this button; a subsequent purchase clears the rejection. Harm and medical-rejection records survive death and resurrection. Normal taming remains possible.\n\nOnce awakened, this animal's species becomes the person's assigned animal form.</description>
     <hediffClass>Hediff</hediffClass>
     <isBad>false</isBad>
     <tendable>false</tendable>

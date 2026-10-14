@@ -23,4 +23,40 @@
       </subNodes>
     </thinkRoot>
   </ThinkTreeDef>
+  <ThinkTreeDef>
+    <defName>WildShift_TransformedEnemy</defName>
+    <thinkRoot Class="ThinkNode_Priority">
+      <subNodes>
+        <li Class="ThinkNode_Subtree"><treeDef>Downed</treeDef></li>
+        <li Class="ThinkNode_Subtree"><treeDef>BurningResponse</treeDef></li>
+        <li Class="ThinkNode_Subtree"><treeDef>MentalStateCritical</treeDef></li>
+        <li Class="ThinkNode_QueuedJob" />
+        <li Class="JobGiver_MoveToStandable" />
+        <!-- Native raid duties handle fighting, approach, retreat and exit. -->
+        <li Class="WildShift.ThinkNode_ConditionalEnemyDutyReady">
+          <subNodes>
+            <li Class="ThinkNode_Subtree"><treeDef>LordDuty</treeDef></li>
+          </subNodes>
+        </li>
+        <li Class="WildShift.JobGiver_EnemyShiftWait" />
+      </subNodes>
+    </thinkRoot>
+  </ThinkTreeDef>
+  <ThinkTreeDef>
+    <defName>WildShift_TransformedEnemyConstant</defName>
+    <thinkRoot Class="ThinkNode_Priority">
+      <subNodes>
+        <li Class="ThinkNode_Subtree"><treeDef>Despawned</treeDef></li>
+        <li Class="ThinkNode_ConditionalCanDoLordJobNow">
+          <subNodes>
+            <li Class="WildShift.ThinkNode_ConditionalEnemyDutyReady">
+              <subNodes>
+                <li Class="ThinkNode_Subtree"><treeDef>LordDutyConstant</treeDef></li>
+              </subNodes>
+            </li>
+          </subNodes>
+        </li>
+      </subNodes>
+    </thinkRoot>
+  </ThinkTreeDef>
 </Defs>

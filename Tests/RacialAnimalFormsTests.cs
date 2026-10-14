@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using HarmonyLib;
 using RimWorld;
 using Verse;
 
@@ -10,14 +11,15 @@ namespace Verse
 {
     public class Def { public string defName; public string LabelCap { get { return defName; } } }
     public class ThingDef : Def { public RaceProperties race; }
-    public class PawnKindDef : Def { public ThingDef race; }
-    public class RaceProperties { public bool Animal, Humanlike, IsMechanoid, predator; public bool hasGenders = true; public float baseBodySize; public object FleshType; }
+    public class PawnKindDef : Def { public ThingDef race; public FactionDef defaultFactionDef; public bool isBoss,factionLeader,isFighter; public object mutant; public float combatPower; public Dictionary<XenotypeDef,float> xenotypes; }
+    public class RaceProperties { public bool Animal, Humanlike, IsMechanoid, IsAnomalyEntity, IsDrone, predator; public bool hasGenders = true; public float baseBodySize; public object FleshType; }
     public enum Gender { None, Male, Female }
     public struct PawnGenerationRequest
     {
         public PawnKindDef KindDef; public object Faction; public bool ForceGenerateNewPawn; public Gender? FixedGender;
-        public PawnGenerationRequest(PawnKindDef kind, object faction, bool forceGenerateNewPawn, Gender? fixedGender)
-        { KindDef = kind; Faction = faction; ForceGenerateNewPawn = forceGenerateNewPawn; FixedGender = fixedGender; }
+        public XenotypeDef ForcedXenotype;
+        public PawnGenerationRequest(PawnKindDef kind, object faction, bool forceGenerateNewPawn, Gender? fixedGender, XenotypeDef forcedXenotype=null)
+        { KindDef = kind; Faction = faction; ForceGenerateNewPawn = forceGenerateNewPawn; FixedGender = fixedGender; ForcedXenotype=forcedXenotype; }
     }
     public class Pawn
     {
@@ -100,9 +102,18 @@ namespace Verse
 }
 namespace RimWorld
 {
-    public static class PawnKindDefOf { public static PawnKindDef Colonist = new PawnKindDef { defName = "Colonist" }; }
+    public static class PawnKindDefOf { public static PawnKindDef Colonist = new PawnKindDef { defName = "Colonist",race=new ThingDef {defName="Human",race=new RaceProperties {Humanlike=true}} }; }
     public static class FleshTypeDefOf { public static object Insectoid = new object(); }
-    public static class Faction { public static object OfPlayer = new object(); }
+    public class FactionDef { public bool isPlayer; public PawnKindDef basicMemberKind; }
+    public class Faction { public static Faction OfPlayer = new Faction(); public FactionDef def=new FactionDef {isPlayer=true,basicMemberKind=PawnKindDefOf.Colonist}; public Dictionary<XenotypeDef,float> xenotypes; }
+    public class XenotypeDef : Def { }
+    public static class XenotypeDefOf { public static XenotypeDef Baseliner=new XenotypeDef {defName="Baseliner"}; }
+    public static class ModsConfig { public static bool BiotechActive; }
+    public static class PawnGenerator {
+        public static Dictionary<XenotypeDef,float> XenotypesAvailableFor(PawnKindDef kind,FactionDef def=null,Faction faction=null) {
+            return kind.xenotypes ?? faction?.xenotypes ?? new Dictionary<XenotypeDef,float> {{XenotypeDefOf.Baseliner,1f}};
+        }
+    }
     public static class MessageTypeDefOf { public static object RejectInput; }
 }
 namespace WildShift

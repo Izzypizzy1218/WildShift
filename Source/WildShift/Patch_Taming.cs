@@ -1,3 +1,4 @@
+using System;
 using HarmonyLib;
 using RimWorld;
 using Verse;
@@ -25,7 +26,7 @@ namespace WildShift
                 return;
             }
 
-            float chance = WildShiftMod.Settings != null ? WildShiftMod.Settings.fieldShapeshifterChance : 0.01f;
+            float chance = WildShiftMod.Settings != null ? WildShiftMod.Settings.fieldShapeshifterChance : 0.03f;
             if (chance <= 0f || !Rand.Chance(chance))
             {
                 return;
@@ -38,6 +39,8 @@ namespace WildShift
         }
     }
 
+    // Normal taming does not require a Bond and is not blocked by past damage.
+    // Medical-bond recruitment has a separate, player-harm-aware DoTend hook.
     [HarmonyPatch(typeof(InteractionWorker_RecruitAttempt), "Interacted")]
     public static class Patch_Taming
     {
@@ -61,7 +64,7 @@ namespace WildShift
             });
         }
 
-        private static bool IsLatentWildShapeshifter(Pawn pawn)
+        internal static bool IsLatentWildShapeshifter(Pawn pawn)
         {
             return pawn != null
                 && !pawn.Dead
@@ -71,10 +74,35 @@ namespace WildShift
                 && pawn.health.hediffSet.GetFirstHediffOfDef(WildShiftDefOf.WildShift_FieldShapeshifterMarker) != null;
         }
 
-        private static void RevealTamedShapeshifter(Pawn animal)
+        internal static void RevealTamedShapeshifter(Pawn animal)
         {
-            if (animal == null || animal.Destroyed || animal.Dead || !animal.Spawned)
+            // All acquisition routes share the lock, including normal taming
+            // and treatment callbacks, not just manual button actions.
+            if (!FormTransferUtility.TryBeginReturn(animal)) return;
+            try { RevealTamedShapeshifterCore(animal); }
+            finally { FormTransferUtility.EndReturn(animal); }
+        }
+
+        private static void RevealTamedShapeshifterCore(Pawn animal)
+        {
+            if (animal == null || animal.Destroyed || animal.Dead || !animal.Spawned
+                || !animal.RaceProps.Animal || animal.Faction != Faction.OfPlayer || TransformUtility.IsTransformedAnimal(animal))
             {
+                return;
+            }
+
+            GameComponent_AwakeningRecovery recovery = Current.Game?.GetComponent<GameComponent_AwakeningRecovery>();
+            if (recovery == null) return;
+            if (!recovery.TryClearRollback(animal))
+            {
+                Messages.Message("WildShift_AwakenCleanupFailed".Translate(), animal, MessageTypeDefOf.RejectInput, false);
+                return;
+            }
+            if (recovery.IsCompleted(animal))
+            {
+                // The human already exists. Retry only unloading/removing the
+                // old body, even after save/load or death of that human.
+                FinishAwakeningCleanup(animal);
                 return;
             }
 
@@ -85,16 +113,55 @@ namespace WildShift
             string animalLabel = animal.LabelShortCap;
             bool wasSelected = Find.Selector != null && Find.Selector.IsSelected(animal);
 
-            Pawn human = PawnGenerator.GeneratePawn(AnimalFormGender.CreateHumanRequest(animal));
-            TransformUtility.AddOrGetShapeshifter(human, animalKind);
-
-            animal.DeSpawn(DestroyMode.Vanish);
-            if (!animal.Destroyed)
+            Pawn human = null;
+            try
             {
-                animal.Destroy(DestroyMode.Vanish);
+                var request = AnimalFormGender.CreateHumanRequest(animal);
+                human = PawnGenerator.GeneratePawn(request);
+                if (human != null && !AnimalFormGender.MatchesHumanRequest(human, request))
+                {
+                    Log.Error("[WildShift] Another generation hook replaced the selected awakening race; preserving the original animal.");
+                    recovery.RollBack(animal, human);
+                    return;
+                }
+                // Alternative races are generated without the colony faction
+                // to avoid racial replacement, then join before map placement.
+                if (human != null && human.Faction != Faction.OfPlayer) human.SetFaction(Faction.OfPlayer);
+                if (human == null || TransformUtility.AddOrGetShapeshifter(human, animalKind) == null)
+                {
+                    recovery.RollBack(animal, human);
+                    return;
+                }
+                GeneticsCompatibility.Remember(animal, human);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("[WildShift] Tamed shapeshifter generation failed; keeping the animal: " + ex);
+                recovery.RollBack(animal, human);
+                return;
             }
 
-            GenSpawn.Spawn(human, cell, map);
+            // Like normal transformation, commit destination placement before
+            // removing the only original body. Spawn callbacks may fail either
+            // before or after registration; TrySpawn distinguishes those cases.
+            if (!FormTransferUtility.TrySpawn(human, cell, map))
+            {
+                recovery.RollBack(animal, human);
+                return;
+            }
+            // Generate/place first; keep all belongings safe before committing
+            // removal of the animal. Failed/partial drops permit a later retry.
+            if (!AwakeningPossessions.TryDropAll(animal))
+            {
+                recovery.RollBack(animal, human);
+                Messages.Message("WildShift_AwakenDropFailed".Translate(), animal, MessageTypeDefOf.RejectInput, false);
+                return;
+            }
+            // Commit before invoking arbitrary destruction callbacks. A failed
+            // cleanup cannot turn this animal into a fresh awakening candidate.
+            recovery.Complete(animal);
+            if (!FormTransferUtility.DestroyEmptyForm(animal))
+                Messages.Message("WildShift_AwakenCleanupFailed".Translate(), animal, MessageTypeDefOf.RejectInput, false);
             human.Rotation = rotation;
 
             if (wasSelected)
@@ -108,6 +175,14 @@ namespace WildShift
                 human,
                 MessageTypeDefOf.PositiveEvent,
                 false);
+        }
+
+        private static void FinishAwakeningCleanup(Pawn animal)
+        {
+            if (!AwakeningPossessions.TryDropAll(animal))
+                Messages.Message("WildShift_AwakenDropFailed".Translate(), animal, MessageTypeDefOf.RejectInput, false);
+            else if (!FormTransferUtility.DestroyEmptyForm(animal))
+                Messages.Message("WildShift_AwakenCleanupFailed".Translate(), animal, MessageTypeDefOf.RejectInput, false);
         }
     }
 }

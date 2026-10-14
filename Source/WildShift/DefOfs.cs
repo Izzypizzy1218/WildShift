@@ -11,6 +11,9 @@ namespace WildShift
         public static HediffDef WildShift_FieldShapeshifterMarker;
         public static AbilityDef WildShift_Shift;
         public static ThinkTreeDef WildShift_TransformedDrafted;
+        public static ThinkTreeDef WildShift_TransformedEnemy;
+        public static ThinkTreeDef WildShift_TransformedEnemyConstant;
+        public static FactionDef WildShift_RevengeFaction;
 
         static WildShiftDefOf()
         {

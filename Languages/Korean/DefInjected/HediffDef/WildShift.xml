@@ -5,4 +5,5 @@
   <WildShift_Transformed.label>shapeshifter</WildShift_Transformed.label>
 
   <WildShift_FieldShapeshifterMarker.label>잠재된 변신자</WildShift_FieldShapeshifterMarker.label>
+  <WildShift_FieldShapeshifterMarker.description>이 동물의 모습 안에는 아직 깨어나지 않은 인간의 정체가 숨어 있습니다. 정착민이 일반 길들이기에 성공하면 인간으로 각성하며, 각별한 관계는 필요하지 않습니다. 치료 중 새로 각별한 관계가 생겨 자동으로 길들여져도 각성할 수 있지만, 플레이어 측이 다치게 한 이력이 있으면 치료 각성은 거부됩니다.\n\n구매했거나 이미 정착지 소속인 동물은 맵에서 선택한 뒤 '인간으로 각성' 버튼을 누르세요. 쓰러지거나 정신이상 상태가 아니면 사용할 수 있으며, 짐·장비·의복은 주변 바닥에 자동으로 내려놓습니다. 구매한 동물은 과거 피해와 관계없이 수동 각성이 가능합니다. 단, 플레이어 측이 다치게 한 뒤 치료로 길들여져 각성이 거부된 동물은 버튼으로 우회할 수 없습니다. 이후 구매하면 이 거부 상태가 해제됩니다. 피해·치료 각성 거부 이력은 사망·부활 후에도 남으며, 일반 길들이기를 통한 각성은 계속 가능합니다.\n\n각성하면 원래 동물 종은 이후 변신할 고유 형상이 됩니다.</WildShift_FieldShapeshifterMarker.description>
 </LanguageData>

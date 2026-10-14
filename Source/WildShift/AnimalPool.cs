@@ -34,7 +34,7 @@ namespace WildShift
 
         public static bool IsEligible(Pawn pawn)
         {
-            return pawn != null && IsEligible(pawn.kindDef);
+            return pawn != null && pawn.RaceProps != null && pawn.RaceProps.Animal && IsEligible(pawn.kindDef);
         }
 
         public static bool IsEligible(PawnKindDef kind)
@@ -59,6 +59,8 @@ namespace WildShift
             {
                 return false;
             }
+
+            if (GeneticsCompatibility.Excluded(raceDef)) return false;
 
             if (BlacklistedRaceDefs.Contains(raceDef.defName))
             {

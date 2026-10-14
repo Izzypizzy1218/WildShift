@@ -47,11 +47,13 @@ namespace WildShift
             if (humanDies)
             {
                 human.Kill(dinfo);
-                return false;
+                return !__instance.Destroyed && !transformed.HasStoredPawn;
             }
 
             ApplySpilloverDamage(human, dinfo);
-            return false;
+            // If emergency cleanup retained possessions, let native death
+            // preserve them on/in the corpse instead of leaving a living shell.
+            return !__instance.Destroyed && !transformed.HasStoredPawn;
         }
 
         private static void ApplySpilloverDamage(Pawn human, DamageInfo? dinfo)

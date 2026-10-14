@@ -71,11 +71,18 @@ namespace WildShift
         {
             if (animal == null
                 || animal.Dead
+                || animal.Downed
                 || !animal.Spawned
                 || !animal.Drafted
+                || animal.Faction == null
+                || !animal.Faction.IsPlayer
                 || animal.jobs == null
                 || !target.IsValid
-                || target.Thing == animal)
+                || target.Thing == null
+                || target.Thing == animal
+                || target.Thing.Destroyed
+                || !target.Thing.Spawned
+                || target.Thing.Map != animal.Map)
             {
                 return false;
             }
@@ -157,6 +164,14 @@ namespace WildShift
             }
 
             ClearGeneratedAnimalHealth(animal);
+            GeneticsCompatibility.Restore(animal, TryGetShapeshifterComp(human)?.geneticForm);
+            if (animal.Dead || animal.Destroyed)
+            {
+                // A restored terminal hybrid disease may reject the new body.
+                // The original pawn has not been despawned or transferred yet.
+                FormTransferUtility.DestroyEmptyForm(animal);
+                return false;
+            }
 
             Hediff transformed = HediffMaker.MakeHediff(WildShiftDefOf.WildShift_Transformed, animal);
             animal.health.AddHediff(transformed);
@@ -169,6 +184,8 @@ namespace WildShift
                 return false;
             }
 
+            AnimalFormTraining.CompleteSpecialTraining(animal);
+
             // Prepare the destination before removing the original pawn. Pawns
             // can occupy the same cell; no frame/tick elapses during this swap.
             if (!FormTransferUtility.TrySpawn(animal, cell, map) || !comp.TryStore(human))
@@ -179,6 +196,7 @@ namespace WildShift
                 return false;
             }
             animal.Rotation = rotation;
+            EnemyShapeshifterUtility.OnTransformed(human, animal, comp);
             EnsureTransformedAnimalControl(animal, true);
             if (human.playerSettings != null && animal.playerSettings != null)
             {
@@ -205,7 +223,7 @@ namespace WildShift
             Messages.Message(
                 "WildShift_MessageTransformed".Translate(humanLabel, kind.LabelCap),
                 animal,
-                MessageTypeDefOf.PositiveEvent,
+                faction != null && faction.IsPlayer ? MessageTypeDefOf.PositiveEvent : MessageTypeDefOf.NeutralEvent,
                 false);
             return true;
         }
@@ -319,6 +337,15 @@ namespace WildShift
             Faction faction = animal.Faction;
             bool wasSelected = Find.Selector != null && Find.Selector.IsSelected(animal);
 
+            // Unload before releasing the preserved human or deleting this
+            // body. Native drops can fail silently; leave the form for retry.
+            if (!FormPossessions.TryUnload(animal, human))
+            {
+                if (sendMessage && faction == Faction.OfPlayer)
+                    Messages.Message("WildShift_ReturnPossessionsBlocked".Translate(), animal, MessageTypeDefOf.RejectInput, false);
+                return null;
+            }
+
             // A released animal has no faction. The stored human must follow
             // that state too, otherwise killing a released form can restore a
             // player colonist from an animal that was no longer in the colony.
@@ -348,15 +375,21 @@ namespace WildShift
                     return null;
                 }
             }
-            else if (!TryReplaceInHoldingOwner(animal, human))
+            else if (animal.ParentHolder != null)
             {
-                if (!TryReplaceWorldPawn(animal, comp, ref human))
-                {
-                    Log.Error("[WildShift] Could not replace an unspawned transformed animal in its holder or world-pawn registry.");
-                    return null;
-                }
+                // A failed holder swap is not a loose world-pawn return. Keep
+                // the restored member in its caravan/container for a retry.
+                if (!TryReplaceInHoldingOwner(animal, human)) return null;
+            }
+            else if (!TryReplaceWorldPawn(animal, comp, ref human))
+            {
+                Log.Error("[WildShift] Could not replace an unspawned transformed animal in its world-pawn registry.");
+                return null;
             }
 
+            // Preserve raid membership before Destroy can report a lost pawn.
+            GeneticsCompatibility.Remember(animal, human);
+            EnemyShapeshifterUtility.ReplaceLordPawn(animal, human);
             FormTransferUtility.DestroyEmptyForm(animal);
             human.Rotation = rotation;
 
@@ -376,7 +409,7 @@ namespace WildShift
                 Find.ColonistBar.MarkColonistsDirty();
             }
 
-            if (sendMessage)
+            if (sendMessage && faction != null && faction.IsPlayer)
             {
                 Messages.Message(
                     "WildShift_MessageReverted".Translate(human.LabelShortCap),
@@ -397,16 +430,18 @@ namespace WildShift
                 return false;
             }
 
+            bool needsWorldRegistration = Find.WorldPawns != null && WorldPawnsUtility.IsWorldPawn(animal);
             try
             {
                 owner.Remove(animal);
-                if (owner.TryAddOrTransfer(human, false)) return true;
+                owner.TryAddOrTransfer(human, false);
             }
             catch (Exception ex)
             {
                 Log.Error("[WildShift] Container transfer failed; restoring the animal: " + ex);
             }
-            if (owner.Contains(human)) return true;
+            if (owner.Contains(human)
+                && (!needsWorldRegistration || FormTransferUtility.TryRegisterWorldPawn(human))) return true;
             HediffComp_Transformed comp = TryGetTransformedComp(animal);
             if (comp != null && !comp.HasStoredPawn && !comp.TryStore(human)) FormTransferUtility.PreserveDetachedPawn(human);
             if (!FormTransferUtility.TryRestoreOwner(animal, owner)) FormTransferUtility.PreserveDetachedPawn(animal);

@@ -104,88 +104,48 @@ namespace WildShift
         }
     }
 
-    [HarmonyPatch(typeof(Selector), "HandleMapClicks")]
-    public static class Patch_TransformedAnimalDirectRightClickAttack
+    [HarmonyPatch(typeof(FloatMenuUtility), "UseRangedAttack")]
+    public static class Patch_TransformedUnarmedAttack
     {
-        public static bool Prefix()
+        public static bool Prefix(Pawn pawn, ref bool __result)
         {
-            Event currentEvent = Event.current;
-            if (currentEvent == null
-                || currentEvent.type != EventType.MouseDown
-                || currentEvent.button != 1
-                || Find.Selector == null)
-            {
-                return true;
-            }
-
-            List<Pawn> selectedPawns = Find.Selector.SelectedPawns;
-            if (selectedPawns == null || selectedPawns.Count == 0)
-            {
-                return true;
-            }
-
-            for (int i = 0; i < selectedPawns.Count; i++)
-            {
-                Pawn pawn = selectedPawns[i];
-                if (!TransformUtility.IsTransformedAnimal(pawn) || !pawn.Drafted)
-                {
-                    return true;
-                }
-            }
-
-            Thing attackTarget = FindAttackTarget(selectedPawns);
-            if (attackTarget == null)
-            {
-                return true;
-            }
-
-            bool orderedAny = false;
-            for (int i = 0; i < selectedPawns.Count; i++)
-            {
-                orderedAny |= TransformUtility.TryOrderMeleeAttack(selectedPawns[i], attackTarget);
-            }
-
-            if (!orderedAny)
-            {
-                return true;
-            }
-
-            FleckMaker.Static(attackTarget.Position, attackTarget.Map, FleckDefOf.FeedbackMelee, 1f);
-            currentEvent.Use();
+            // Native drafted menus assume an equipment tracker exists. Animal
+            // forms without one are unarmed and can use native melee orders.
+            if (pawn == null || pawn.equipment != null || !TransformUtility.IsTransformedAnimal(pawn)) return true;
+            __result = false;
             return false;
-        }
-
-        private static Thing FindAttackTarget(List<Pawn> selectedAnimals)
-        {
-            foreach (LocalTargetInfo candidate in GenUI.TargetsAtMouse(TargetingParameters.ForAttackAny(), true, null))
-            {
-                Thing thing = candidate.Thing;
-                if (thing == null || thing.Destroyed || !thing.Spawned)
-                {
-                    continue;
-                }
-
-                bool isSelectedAnimal = false;
-                for (int i = 0; i < selectedAnimals.Count; i++)
-                {
-                    if (thing == selectedAnimals[i])
-                    {
-                        isSelectedAnimal = true;
-                        break;
-                    }
-                }
-
-                if (!isSelectedAnimal)
-                {
-                    return thing;
-                }
-            }
-
-            return null;
         }
     }
 
-    // Successful direct attacks already consume HandleMapClicks above. Do not
-    // suppress the vanilla attack provider: mixed selections and unsuccessful
-    // direct orders must retain its full context and fallback options.
+    [HarmonyPatch(typeof(Pawn), "GetGizmos")]
+    public static class Patch_TransformedDraftableAnimalsGizmos
+    {
+        // A passthrough postfix must run after the other mod's passthrough
+        // postfix. A ref-result (void) postfix runs before that iterator.
+        [HarmonyAfter("DraftableAnimals.Mod")]
+        [HarmonyPriority(Priority.Last)]
+        public static IEnumerable<Gizmo> Postfix(IEnumerable<Gizmo> __result, Pawn __instance)
+        {
+            if (__instance == null || __instance.Faction != Faction.OfPlayer
+                || TransformUtility.TryGetTransformedComp(__instance)?.HasStoredPawn != true)
+                return __result;
+            return WithoutDuplicateDraft(__result);
+        }
+
+        private static IEnumerable<Gizmo> WithoutDuplicateDraft(IEnumerable<Gizmo> original)
+        {
+            if (original == null) yield break;
+            foreach (Gizmo gizmo in original)
+            {
+                // Releashed adds its own button and only removes vanilla's
+                // description. Preserve WildShift's grouped button and every
+                // unrelated command, including other mods' custom actions.
+                if (gizmo is Command_Toggle command
+                    && command.hotKey == KeyBindingDefOf.Command_ColonistDraft
+                    && command.toggleAction?.Method.DeclaringType?.Assembly.GetName().Name == "DraftableAnimals")
+                    continue;
+                yield return gizmo;
+            }
+        }
+    }
 }

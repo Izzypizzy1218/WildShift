@@ -7,7 +7,7 @@ namespace WildShift
     [HarmonyPatch(typeof(StartingPawnUtility), "NewGeneratedStartingPawn")]
     public static class Patch_RandomStartingShapeshifter
     {
-        private const float RandomStartingShapeshifterChance = 0.01f;
+        private const float RandomStartingShapeshifterChance = 0.05f;
 
         public static void Postfix(ref Pawn __result)
         {

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+  <WildShift_RevengeFaction.label>복수하는 변신자들</WildShift_RevengeFaction.label>
+  <WildShift_RevengeFaction.fixedName>배신당한 자들</WildShift_RevengeFaction.fixedName>
+  <WildShift_RevengeFaction.description>가축으로 팔려갔다가 자신을 배신한 자들에게 복수하기 위해 돌아온 변신자들입니다.</WildShift_RevengeFaction.description>
+  <WildShift_RevengeFaction.pawnSingular>변신자</WildShift_RevengeFaction.pawnSingular>
+  <WildShift_RevengeFaction.pawnsPlural>변신자들</WildShift_RevengeFaction.pawnsPlural>
+</LanguageData>

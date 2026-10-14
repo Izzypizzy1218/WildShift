@@ -8,14 +8,25 @@ $start = $transform.IndexOf('        public static HediffComp_Shapeshifter AddOr
 $end = $transform.IndexOf('        public static bool IsShapeshifter(', $start)
 if ($start -lt 0 -or $end -le $start) { throw 'Cannot locate production assignment method.' }
 $source = Get-Content "$PSScriptRoot/RacialAnimalFormsTests.cs" -Raw
+# Optional integrations are exercised against the actual game/mod assemblies in
+# Compatibility-v1.2.18. These unit tests continue to cover the no-mod path.
+$source += @'
+namespace Verse { public static class Scribe_Deep { public static void Look<T>(ref T v, string k) { } } }
+namespace WildShift {
+ public sealed class GeneticFormState { }
+ public static class GeneticsCompatibility { public static bool Excluded(Verse.ThingDef race) { return false; } }
+ public static class SapientAnimalsCompatibility { public static Verse.PawnKindDef OriginalKind(Verse.Pawn pawn) { return null; } }
+}
+'@
 $source += "`nnamespace WildShift { public static partial class TransformUtility {`n" + $transform.Substring($start, $end - $start) + "`n} }"
 $validationStart = $transform.IndexOf('        private static bool CanTransformToAnimal(')
 $validationEnd = $transform.LastIndexOf("`n    }")
 if ($validationStart -lt 0 -or $validationEnd -le $validationStart) { throw 'Cannot locate production transformation guard.' }
 $source += "`nnamespace WildShift { public static partial class TransformUtility {`n" + $transform.Substring($validationStart, $validationEnd - $validationStart) + "`n} }"
 # Shared using directives are already in the harness header.
-foreach ($name in @('AnimalPool', 'RacialAnimalForms', 'AnimalFormGender', 'HediffComp_Shapeshifter', 'StartingFormPreviewCache')) {
+foreach ($name in @('AnimalPool', 'RacialAnimalForms', 'AnimalFormGender', 'AwakeningRaceSelection', 'HediffComp_Shapeshifter', 'StartingFormPreviewCache')) {
     $source += "`n" + ((Get-Content "$root/Source/WildShift/$name.cs" -Raw) -replace '(?m)^using [^;]+;\r?\n', '')
 }
+$source += "`n" + (Get-Content "$PSScriptRoot/AwakeningRaceSelectionTests.cs" -Raw)
 Add-Type -TypeDefinition $source
-if (-not $CompileOnly) { [WildShift.Tests.RacialAnimalFormsTests]::Run() }
+if (-not $CompileOnly) { [WildShift.Tests.RacialAnimalFormsTests]::Run(); [WildShift.Tests.AwakeningRaceSelectionTests]::Run() }

@@ -13,22 +13,31 @@ namespace WildShift
             if (type == null) return;
 
             MethodInfo target = AccessTools.DeclaredMethod(type, "CompTick", System.Type.EmptyTypes);
-            if (target == null)
+            FieldInfo once = AccessTools.Field(type, "changeGenderOnce");
+            if (target == null || once == null || once.FieldType != typeof(bool) || once.IsStatic || once.IsInitOnly)
             {
                 Log.Warning("[WildShift] VEF fixed-gender hook was not found; transformed animal gender compatibility needs verification.");
                 return;
             }
 
-            harmony.Patch(target, prefix: new HarmonyMethod(typeof(AnimalModCompatibility), "FixedGenderPrefix"));
+            try { harmony.Patch(target, prefix: new HarmonyMethod(typeof(AnimalModCompatibility), "FixedGenderPrefix")); }
+            catch (System.Exception ex)
+            {
+                Log.Warning("[WildShift] Optional VEF gender integration could not be installed: " + ex);
+            }
         }
 
-        public static bool FixedGenderPrefix(ThingComp __instance)
+        public static bool FixedGenderPrefix(ThingComp __instance, ref bool ___changeGenderOnce)
         {
-            // VEF normally forces clutch mothers to female on their first tick,
-            // including after loading. Preserve WildShift's generation-time sex.
-            // Use the existing component callback; no new pawn/tick scan is added.
+            // Consume only the first-tick gender rewrite for transformed forms.
+            // Leave the original callback running; later ticks need no health
+            // lookup. No pawn cache: a newly added marker is checked while the
+            // framework still has a pending gender rewrite.
+            if (!___changeGenderOnce) return true;
             Pawn animal = __instance != null ? __instance.parent as Pawn : null;
-            return !TransformUtility.IsTransformedAnimal(animal);
+            if (animal != null && animal.Spawned && TransformUtility.IsTransformedAnimal(animal))
+                ___changeGenderOnce = false;
+            return true;
         }
     }
 }

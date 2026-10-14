@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Patch>
+  <!-- Optional integration: the tag is defined by Animal Apparel: Framework.
+       Its Animal/AA_* patches do not cover VEF's terrain-dependent animal tree.
+       Leave existing apparel roots and all graphics/texture selection intact. -->
+  <Operation Class="PatchOperationConditional">
+    <xpath>Defs/PawnRenderNodeTagDef[defName="AnimalApparel"]</xpath>
+    <match Class="PatchOperationConditional">
+      <xpath>Defs/PawnRenderTreeDef[defName="VEF_GraphicByTerrainRenderTree" and not(.//tagDef[text()="AnimalApparel"])]/root/children/li[tagDef="Body"]/children</xpath>
+      <match Class="PatchOperationAdd">
+        <xpath>Defs/PawnRenderTreeDef[defName="VEF_GraphicByTerrainRenderTree" and not(.//tagDef[text()="AnimalApparel"])]/root/children/li[tagDef="Body"]/children</xpath>
+        <value>
+          <li>
+            <debugLabel>Animal apparel root</debugLabel>
+            <tagDef>AnimalApparel</tagDef>
+            <useGraphic>false</useGraphic>
+            <baseLayer>70</baseLayer>
+          </li>
+        </value>
+      </match>
+    </match>
+  </Operation>
+</Patch>

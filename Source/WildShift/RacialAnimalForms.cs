@@ -38,6 +38,8 @@ namespace WildShift
         // Called only when assigning a new form, not every tick or transformation.
         public static PawnKindDef Choose(Pawn pawn, PawnKindDef fallback = null)
         {
+            PawnKindDef sapientKind = SapientAnimalsCompatibility.OriginalKind(pawn);
+            if (sapientKind != null) return sapientKind;
             string[] names = GetPreferredNames(pawn);
             if (names != null && Rand.Chance(PreferenceChance))
             {
@@ -55,6 +57,7 @@ namespace WildShift
 
         public static bool IsAllowed(Pawn pawn, PawnKindDef kind)
         {
+            if (kind != null && kind == SapientAnimalsCompatibility.OriginalKind(pawn)) return true;
             if (AnimalPool.IsEligible(kind))
             {
                 return true;

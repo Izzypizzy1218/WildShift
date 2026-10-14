@@ -15,6 +15,10 @@ namespace WildShift
     public class HediffComp_Shapeshifter : HediffComp
     {
         public PawnKindDef assignedKind;
+        public GeneticFormState geneticForm;
+        public bool saleRevengeRolled;
+        public bool enemyRaidParticipant;
+        public bool enemyShiftUsed;
         private int lastShiftTick = -999999;
         private bool legacyAbilitiesRemoved;
 
@@ -43,6 +47,10 @@ namespace WildShift
         {
             base.CompExposeData();
             Scribe_Defs.Look(ref assignedKind, "assignedKind");
+            Scribe_Deep.Look(ref geneticForm, "geneticForm");
+            Scribe_Values.Look(ref saleRevengeRolled, "saleRevengeRolled", false);
+            Scribe_Values.Look(ref enemyRaidParticipant, "enemyRaidParticipant", false);
+            Scribe_Values.Look(ref enemyShiftUsed, "enemyShiftUsed", false);
             Scribe_Values.Look(ref lastShiftTick, "lastShiftTick", -999999);
             Scribe_Values.Look(ref legacyAbilitiesRemoved, "legacyAbilitiesRemoved", false);
         }

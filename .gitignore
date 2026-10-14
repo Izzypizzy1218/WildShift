@@ -5,4 +5,6 @@ obj/
 *.csproj.user
 Assemblies/*.pdb
 Assemblies/*.mdb
+**/Assemblies/*.pdb
+**/Assemblies/*.mdb
 .tmp_frames/
