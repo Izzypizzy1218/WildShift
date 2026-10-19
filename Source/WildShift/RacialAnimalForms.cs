@@ -38,8 +38,21 @@ namespace WildShift
         // Called only when assigning a new form, not every tick or transformation.
         public static PawnKindDef Choose(Pawn pawn, PawnKindDef fallback = null)
         {
+            bool customChosen;
+            return Choose(pawn, fallback, out customChosen);
+        }
+
+        public static PawnKindDef Choose(Pawn pawn, PawnKindDef fallback, out bool customChosen)
+        {
+            customChosen = false;
             PawnKindDef sapientKind = SapientAnimalsCompatibility.OriginalKind(pawn);
             if (sapientKind != null) return sapientKind;
+            PawnKindDef customKind;
+            if (CustomRacialForms.TryChoose(pawn, out customKind))
+            {
+                customChosen = true;
+                return customKind;
+            }
             string[] names = GetPreferredNames(pawn);
             if (names != null && Rand.Chance(PreferenceChance))
             {
@@ -80,6 +93,18 @@ namespace WildShift
                 }
             }
 
+            return false;
+        }
+
+        public static bool IsPresetForm(PawnKindDef kind)
+        {
+            if (kind == null) return false;
+            foreach (string[] names in RaceForms.Values)
+                for (int i = 0; i < names.Length; i++)
+                    if (kind.defName == names[i]) return true;
+            foreach (string[] names in XenotypeForms.Values)
+                for (int i = 0; i < names.Length; i++)
+                    if (kind.defName == names[i]) return true;
             return false;
         }
 

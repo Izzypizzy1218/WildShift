@@ -79,21 +79,30 @@ namespace Verse
     public static class Extensions
     {
         public static int PoolCalls, PoolIndex;
-        public static T RandomElement<T>(this List<T> list) { return list[0]; }
+        public static T RandomElement<T>(this List<T> list) { return list[Rand.Range(0, list.Count)]; }
         public static T RandomElementWithFallback<T>(this List<T> list) { PoolCalls++; return list.Count == 0 ? default(T) : list[PoolIndex]; }
         public static string Translate(this string s, params object[] args) { return s; }
         public static bool NullOrEmpty(this string s) { return string.IsNullOrEmpty(s); }
     }
     public static class Scribe_Defs
     {
-        public static bool Loading; public static string SavedName;
+        public static bool Loading;
+        private static readonly Dictionary<string, string> SavedNames = new Dictionary<string, string>();
         public static void Look(ref PawnKindDef value, string key)
         {
-            if (Loading) value = DefDatabase<PawnKindDef>.GetNamedSilentFail(SavedName);
-            else SavedName = value == null ? null : value.defName;
+            if (Loading)
+            {
+                string name;
+                value = SavedNames.TryGetValue(key, out name) && name != null
+                    ? DefDatabase<PawnKindDef>.GetNamedSilentFail(name) : null;
+            }
+            else SavedNames[key] = value == null ? null : value.defName;
         }
     }
-    public static class Scribe_Values { public static void Look<T>(ref T v, string k, T d) { } }
+    public interface IExposable { void ExposeData(); }
+    public enum LookMode { Value, Deep }
+    public static class Scribe_Collections { public static void Look<T>(ref List<T> v, string k, LookMode m) { } }
+    public static class Scribe_Values { public static void Look<T>(ref T v, string k, T d = default(T)) { } }
     public static class Log { public static void Warning(string s) { } public static void Error(string s) { throw new Exception(s); } }
     public static class Messages { public static void Message(string s, Pawn p, object t, bool h) { } }
     public static class LongEventHandler { public static void ExecuteWhenFinished(Action a) { a(); } }
@@ -119,12 +128,20 @@ namespace RimWorld
 namespace WildShift
 {
     public static class WildShiftMod { public static Settings Settings = new Settings(); }
-    public class Settings { public bool allowInsectoids; public int ShiftCooldownTicks; }
+    public class Settings
+    {
+        public bool allowInsectoids;
+        public int ShiftCooldownTicks;
+        public bool customRacialFormsEnabled;
+        public List<CustomRacialFormRule> customRacialForms = new List<CustomRacialFormRule>();
+    }
     public static class WildShiftDefOf { public static object WildShift_Shift, WildShift_Shapeshifter; }
     public static class WildShiftTextures { public static object Transform; }
     public static partial class TransformUtility
     {
         public static bool IsTransformedAnimal(Pawn p) { return false; }
+        public static HediffComp_Shapeshifter TryGetShapeshifterComp(Pawn p)
+        { return p == null ? null : p.health.hediffSet.Value == null ? null : p.health.hediffSet.Value.Comp; }
         // Exercise the actual production guard without spawning an engine pawn.
         public static bool TransformToAnimal(Pawn p, PawnKindDef k) { string reason; return CanTransformToAnimal(p, k, out reason); }
     }

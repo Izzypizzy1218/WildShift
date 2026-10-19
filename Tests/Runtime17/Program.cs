@@ -63,6 +63,7 @@ internal static class Program
         SetupGame();
         TestNativeControlAndStorage();
         TestStorageSerialization(scratch);
+        TestCustomSettingsSerialization(scratch);
         AccessTools.Method(typeof(Log), "DrainOffThreadMessages").Invoke(null, null);
         File.WriteAllLines(Path.Combine(scratch, "native-log.txt"), Log.Messages.Select(m => m.type + ": " + m.text + "\n" + m.StackTrace));
         var errors = Log.Messages.Where(m => m.type == LogMessageType.Error).ToArray();
@@ -242,6 +243,78 @@ internal static class Program
         Check(loaded.comp.ReleaseStoredPawn() == restored && !loaded.comp.HasStoredPawn && restored.holdingOwner == null, "Reloaded body releases without duplication");
     }
 
+    private static void TestCustomSettingsSerialization(string scratch)
+    {
+        var human = Pawn(91, Intelligence.Humanlike, null);
+        human.def.defName = "RuntimeCustomRace";
+        var smallAnimal = Pawn(92, Intelligence.Animal, null);
+        smallAnimal.def.race.baseBodySize = 0.2f;
+        smallAnimal.def.race.predator = false;
+        var cat = new PawnKindDef { defName = "Cat", label = "cat", race = smallAnimal.def };
+        DefDatabase<ThingDef>.Add(smallAnimal.def);
+        DefDatabase<PawnKindDef>.Add(cat);
+        var snapshot = new CustomSettingsSnapshot();
+        Check(!snapshot.settings.customRacialFormsEnabled && snapshot.settings.customRacialForms.Count == 0,
+            "Native settings default to existing form rules");
+        snapshot.settings.customRacialFormsEnabled = true;
+        snapshot.settings.customRacialForms.Add(new CustomRacialFormRule {
+            targetDefName = human.def.defName, chance = 1f,
+            animalKindDefNames = new List<string> { "Cat", "AbsentOptionalAnimal" }
+        });
+        snapshot.settings.customRacialForms.Add(new CustomRacialFormRule {
+            xenotype = true, targetDefName = "AbsentOptionalXenotype", chance = 0.35f,
+            animalKindDefNames = new List<string> { "AbsentOptionalAnimal" }
+        });
+        WildShiftMod.Settings = snapshot.settings;
+        bool customChosen;
+        Check(RacialAnimalForms.Choose(human, null, out customChosen) == cat && customChosen,
+            "Native custom assignment resolves valid saved kind names and skips absent animals");
+        snapshot.comp.SetAssignedKind(cat, true);
+        string path = Path.Combine(scratch, "custom-rules-roundtrip.xml");
+        Scribe.saver.InitSaving(path, "CustomRules");
+        Scribe_Deep.Look(ref snapshot, "snapshot");
+        Scribe.saver.FinalizeSaving();
+        CustomSettingsSnapshot loaded = null;
+        Scribe.loader.InitLoading(path);
+        Scribe_Deep.Look(ref loaded, "snapshot");
+        Scribe.loader.FinalizeLoading();
+        Check(loaded?.settings != null && loaded.settings.customRacialFormsEnabled,
+            "Native Scribe reload preserves opt-in toggle");
+        Check(loaded.settings.customRacialForms.Count == 2
+            && loaded.settings.customRacialForms[0].targetDefName == human.def.defName
+            && loaded.settings.customRacialForms[1].xenotype
+            && Math.Abs(loaded.settings.customRacialForms[1].chance - 0.35f) < 0.0001f,
+            "Native Scribe reload preserves race/xenotype rules and probability");
+        Check(loaded.settings.customRacialForms[0].animalKindDefNames.SequenceEqual(new[] { "Cat", "AbsentOptionalAnimal" })
+            && loaded.settings.customRacialForms[1].targetDefName == "AbsentOptionalXenotype",
+            "Native Scribe keeps absent mod names without unresolved Def references");
+        Check(loaded.comp.assignedKind == cat && loaded.comp.customAssignedKind == cat,
+            "Native Scribe reload preserves exact custom form provenance");
+        string legacyPath = Path.Combine(scratch, "custom-rules-legacy.xml");
+        var legacyXml = XDocument.Load(path);
+        foreach (var element in legacyXml.Descendants().Where(e => new[] {
+            "customRacialFormsEnabled", "customRacialForms", "customAssignedKind"
+        }.Contains(e.Name.LocalName)).ToArray()) element.Remove();
+        legacyXml.Save(legacyPath);
+        CustomSettingsSnapshot legacy = null;
+        Scribe.loader.InitLoading(legacyPath);
+        Scribe_Deep.Look(ref legacy, "snapshot");
+        Scribe.loader.FinalizeLoading();
+        Check(legacy?.settings != null && !legacy.settings.customRacialFormsEnabled
+            && legacy.settings.customRacialForms.Count == 0,
+            "Legacy settings without custom keys retain disabled defaults");
+        Check(legacy.comp.assignedKind == cat && legacy.comp.customAssignedKind == null,
+            "Legacy save does not invent custom form provenance");
+        loaded.settings.customRacialFormsEnabled = false;
+        loaded.settings.customRacialForms.Clear();
+        WildShiftMod.Settings = loaded.settings;
+        Check(loaded.comp.AllowsAssignedKind(cat),
+            "Existing custom small form remains valid after rules are disabled and removed");
+        loaded.settings.Reset();
+        Check(!loaded.settings.customRacialFormsEnabled && loaded.settings.customRacialForms.Count == 0,
+            "Reset restores original assignment settings");
+    }
+
     private static T Bare<T>() where T : class => (T)RuntimeHelpers.GetUninitializedObject(typeof(T));
     private static void Check(bool condition, string description)
     {
@@ -255,4 +328,15 @@ public sealed class StorageSnapshot : IExposable
 {
     public HediffComp_Transformed comp = new HediffComp_Transformed();
     public void ExposeData() => comp.CompExposeData();
+}
+
+public sealed class CustomSettingsSnapshot : IExposable
+{
+    public WildShiftSettings settings = new WildShiftSettings();
+    public HediffComp_Shapeshifter comp = new HediffComp_Shapeshifter();
+    public void ExposeData()
+    {
+        Scribe_Deep.Look(ref settings, "settings");
+        comp.CompExposeData();
+    }
 }

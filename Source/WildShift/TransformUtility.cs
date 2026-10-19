@@ -40,11 +40,13 @@ namespace WildShift
             // existing pawn's form; taming can still supply an explicit form.
             if (isNew && useRacialAffinity)
             {
-                comp.assignedKind = RacialAnimalForms.Choose(pawn, assignedKind);
+                bool customChosen;
+                PawnKindDef chosenKind = RacialAnimalForms.Choose(pawn, assignedKind, out customChosen);
+                comp.SetAssignedKind(chosenKind, customChosen);
             }
             else if (!useRacialAffinity && assignedKind != null)
             {
-                comp.assignedKind = assignedKind;
+                comp.SetAssignedKind(assignedKind, false);
             }
 
             if (isNew)
@@ -476,7 +478,8 @@ namespace WildShift
                 return false;
             }
 
-            if (kind == null || !RacialAnimalForms.IsAllowed(human, kind))
+            HediffComp_Shapeshifter shifter = TryGetShapeshifterComp(human);
+            if (kind == null || !(shifter != null ? shifter.AllowsAssignedKind(kind) : RacialAnimalForms.IsAllowed(human, kind)))
             {
                 reason = "WildShift_ShiftDisabledNoKind".Translate();
                 return false;

@@ -14,8 +14,15 @@ $source += @'
 namespace Verse { public static class Scribe_Deep { public static void Look<T>(ref T v, string k) { } } }
 namespace WildShift {
  public sealed class GeneticFormState { }
- public static class GeneticsCompatibility { public static bool Excluded(Verse.ThingDef race) { return false; } }
- public static class SapientAnimalsCompatibility { public static Verse.PawnKindDef OriginalKind(Verse.Pawn pawn) { return null; } }
+ public static class GeneticsCompatibility {
+  public static System.Collections.Generic.HashSet<string> ExcludedNames = new System.Collections.Generic.HashSet<string>();
+  public static bool Excluded(Verse.ThingDef race) { return race != null && ExcludedNames.Contains(race.defName); }
+ }
+ public static class SapientAnimalsCompatibility {
+  public static Verse.Pawn TestPawn;
+  public static Verse.PawnKindDef TestOriginalKind;
+  public static Verse.PawnKindDef OriginalKind(Verse.Pawn pawn) { return pawn == TestPawn ? TestOriginalKind : null; }
+ }
 }
 '@
 $source += "`nnamespace WildShift { public static partial class TransformUtility {`n" + $transform.Substring($start, $end - $start) + "`n} }"
@@ -24,9 +31,14 @@ $validationEnd = $transform.LastIndexOf("`n    }")
 if ($validationStart -lt 0 -or $validationEnd -le $validationStart) { throw 'Cannot locate production transformation guard.' }
 $source += "`nnamespace WildShift { public static partial class TransformUtility {`n" + $transform.Substring($validationStart, $validationEnd - $validationStart) + "`n} }"
 # Shared using directives are already in the harness header.
-foreach ($name in @('AnimalPool', 'RacialAnimalForms', 'AnimalFormGender', 'AwakeningRaceSelection', 'HediffComp_Shapeshifter', 'StartingFormPreviewCache')) {
+foreach ($name in @('AnimalPool', 'RacialAnimalForms', 'CustomRacialForms', 'AnimalFormGender', 'AwakeningRaceSelection', 'HediffComp_Shapeshifter', 'StartingFormPreviewCache')) {
     $source += "`n" + ((Get-Content "$root/Source/WildShift/$name.cs" -Raw) -replace '(?m)^using [^;]+;\r?\n', '')
 }
 $source += "`n" + (Get-Content "$PSScriptRoot/AwakeningRaceSelectionTests.cs" -Raw)
+$source += "`n" + (Get-Content "$PSScriptRoot/CustomRacialFormsTests.cs" -Raw)
 Add-Type -TypeDefinition $source
-if (-not $CompileOnly) { [WildShift.Tests.RacialAnimalFormsTests]::Run(); [WildShift.Tests.AwakeningRaceSelectionTests]::Run() }
+if (-not $CompileOnly) {
+    [WildShift.Tests.RacialAnimalFormsTests]::Run()
+    [WildShift.Tests.CustomRacialFormsTests]::Run()
+    [WildShift.Tests.AwakeningRaceSelectionTests]::Run()
+}

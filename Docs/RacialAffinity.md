@@ -1,5 +1,7 @@
 # Racial affinity integration notes (v1.1.1)
 
+These remain the default rules. Since v1.3.0-beta.2, players may optionally override new assignments through [custom race and xenotype settings](CustomRacialForms.md); customization defaults off.
+
 ## Behavior
 
 New shapeshifter assignments roll a 20% preference for a matching racial animal. Otherwise they use the existing normal pool (or the Lone Beastkin scenario's existing fallback form). Ratkin's preference is split equally into 10% rat and 10% Hamstrox. A missing target's slot falls back to the normal pool without redistributing its share. The ordinary pool may already contain preferred animals (including Hamstrox), so final frequencies can exceed the dedicated branch percentages. A pawn has one assigned form, not a fresh roll on every transformation.

@@ -1,6 +1,6 @@
 # WildShift
 
-WildShift is a RimWorld 1.6 mod about colonists who can transform into an assigned animal form and later return to their preserved human body.
+WildShift is a RimWorld 1.6 / 1.7 beta mod about colonists who can transform into an assigned animal form and later return to their preserved human body.
 
 ## Features
 
@@ -22,6 +22,7 @@ WildShift is a RimWorld 1.6 mod about colonists who can transform into an assign
 - Select a purchased or already owned latent animal on a map and use **Awaken as human**. Purchases ignore past damage; belongings are automatically placed nearby.
 - Every normal human colonist join has a 5% chance to reveal a shapeshifter instead of triggering a separate join event.
 - Supported animal-eared races and xenotypes have a 20% preference roll for a matching animal when first assigned a shapeshifter form. The other branch uses the normal pool; existing forms are not rerolled.
+- Optionally configure animal choices and a 0–100% assignment probability for individual races or xenotypes in mod settings. Customization defaults off, preserves the existing rules, and affects newly assigned forms. See [custom rule behavior](Docs/CustomRacialForms.md).
 - New animal forms match the original pawn's gender. Genderless animal species remain genderless.
 - Optional Vanilla Genetics Expanded support preserves hybrid quality and genetic-disease progress through awakening, repeated transformations and save/load.
 - Optional Big and Small - Sapient Animals support recognizes each sapient animal's source species and preserves original-pawn storage and possessions through Cogni-Fi. See [compatibility behavior and tests](Docs/Compatibility-v1.2.18.md).
@@ -33,7 +34,7 @@ WildShift is a RimWorld 1.6 mod about colonists who can transform into an assign
 
 ## Requirements
 
-- RimWorld 1.6
+- RimWorld 1.6 or 1.7 (beta)
 - Harmony
 
 ## Awakening latent shapeshifters
@@ -101,7 +102,9 @@ The optional VEF compatibility hook prevents fixed-female animal components from
 
 The repository uses RimWorld's standard mod layout. Shared definitions, translations and textures remain at the root; `LoadFolders.xml` selects the compiled DLL in `1.6/Assemblies` or `1.7/Assemblies`. When upgrading a manual installation, replace the old WildShift folder instead of merging it: an old root `Assemblies/WildShift.dll` would load twice.
 
-RimWorld 1.7 support is a beta tested against **1.7.4977 rev1248 (unstable)**. The preserved 1.6 DLL is the v1.2.24 release. Optional mods such as HAR, Releashed and Animal Apparel require compatible releases of their own; the historical 1.6 integration reports below are not 1.7 validation.
+RimWorld 1.7 support is a beta, currently built against **1.7.4982 rev1280 (unstable)**. Both version-specific DLLs include the optional custom form settings. The 1.6 build uses RimRef 1.6.4871 reference assemblies; actual-game validation here uses 1.7. Optional mods such as HAR, Releashed and Animal Apparel require compatible releases of their own; the historical 1.6 integration reports below are not 1.7 validation.
+
+The preceding beta's startup and native-assembly revalidation on **1.7.4982 rev1280** did not reproduce the earlier intermittent CLR/JIT crash; it is not claimed fixed. See the [2026-10-19 investigation](Docs/Startup-1.7-2026-10-19.md) and `Tests/Run-Startup17Tests.ps1` for repeatable actual-game startup checks.
 
 ## Building
 
@@ -113,11 +116,11 @@ dotnet build WildShift.csproj -c Release
 
 This builds `1.7/Assemblies/WildShift.dll`. Game and Harmony binaries are references only and are not redistributed. Override `RimWorldDir`, `RimWorldManaged` or `HarmonyAssemblies` for non-default installation paths. See [1.7 build and verification notes](Docs/RimWorld-1.7.md).
 
-The existing 1.6 DLL is preserved rather than rebuilt with 1.7 APIs. To rebuild it, supply real 1.6 references and `-p:RimWorldVersion=1.6`; that target uses .NET Framework 4.7.2.
+To build 1.6, supply matching 1.6 game or reference assemblies and `-p:RimWorldVersion=1.6`; that target uses .NET Framework 4.7.2. Do not use 1.7 assemblies as 1.6 references.
 
 ## Current version
 
-`v1.3.0-beta.1`
+`v1.3.0-beta.2`
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
 

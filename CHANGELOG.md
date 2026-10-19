@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.3.0-beta.2 — Optional custom race forms (2026-10-20)
+
+- Add an optional mod-settings editor for choosing one or more animal forms and a 0–100% custom assignment probability per humanlike race or xenotype. The feature defaults off and the existing assignment rules remain the default.
+- Apply rules to new form assignments only. Preserve existing forms after customization is disabled or a rule changes; keep awakening and Sapient Animals source-species behavior.
+- Provide searchable race/xenotype and animal lists, equal selection among chosen usable forms, xenotype priority, rule removal and a confirmed custom-settings reset. Retain unavailable mod names in saved settings and fall back safely when no configured choice can be used.
+- Include English and Korean UI text, both 1.6 and 1.7 builds, new production-rule checks and native settings/legacy-save round-trip checks. See `Docs/CustomRacialForms.md`.
+- Add reproducible 1.7 startup validation that checks exit codes, fatal stderr and completed initialization. Document analysis of the historical CLR/JIT crash; its exact cause remains unproven and this release does not claim to fix it.
+
 ## v1.3.0-beta.1 — RimWorld 1.7 (2026-10-15)
 
 - Add a dedicated .NET 10 assembly for RimWorld 1.7.4977 rev1248 (unstable), built against the actual 1.7 game, UnityStubs and Harmony assemblies.

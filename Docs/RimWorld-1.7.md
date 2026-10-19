@@ -1,6 +1,10 @@
 # RimWorld 1.7 support — v1.3.0-beta.1
 
+This page records the original beta.1 port. For the current beta.2 custom-form feature and rebuilt 1.6/1.7 binaries, see [optional race and xenotype rules](CustomRacialForms.md).
+
 Build target: RimWorld **1.7.4977 rev1248**, Steam's `unstable` branch, checked on 2026-10-15.
+
+The unchanged release binary was revalidated against **1.7.4982 rev1280** on 2026-10-19. Current startup and native-assembly checks pass; the original intermittent CLR/JIT crash remains unproven as fixed. See the [startup investigation and reproducible checks](Startup-1.7-2026-10-19.md).
 
 ## Version selection
 

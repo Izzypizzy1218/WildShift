@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using HarmonyLib;
 using RimWorld;
 using UnityEngine;
@@ -15,6 +16,8 @@ namespace WildShift
         public float deathChance = 0.2f;
         public float spilloverDamageFactor = 0f;
         public bool allowInsectoids;
+        public bool customRacialFormsEnabled;
+        public List<CustomRacialFormRule> customRacialForms = new List<CustomRacialFormRule>();
 
         public int ShiftCooldownTicks
         {
@@ -35,6 +38,8 @@ namespace WildShift
             Scribe_Values.Look(ref deathChance, "deathChance", 0.2f);
             Scribe_Values.Look(ref spilloverDamageFactor, "spilloverDamageFactor", 0f);
             Scribe_Values.Look(ref allowInsectoids, "allowInsectoids", false);
+            Scribe_Values.Look(ref customRacialFormsEnabled, "customRacialFormsEnabled", false);
+            Scribe_Collections.Look(ref customRacialForms, "customRacialForms", LookMode.Deep);
             Normalize();
         }
 
@@ -48,6 +53,8 @@ namespace WildShift
             deathChance = 0.2f;
             spilloverDamageFactor = 0f;
             allowInsectoids = false;
+            customRacialFormsEnabled = false;
+            customRacialForms = new List<CustomRacialFormRule>();
         }
 
         public void Normalize()
@@ -58,6 +65,8 @@ namespace WildShift
             soldRevengeChance = float.IsNaN(soldRevengeChance) ? 0.5f : Mathf.Clamp01(soldRevengeChance);
             deathChance = Mathf.Clamp01(deathChance);
             spilloverDamageFactor = Mathf.Clamp01(spilloverDamageFactor);
+            if (customRacialForms == null) customRacialForms = new List<CustomRacialFormRule>();
+            CustomRacialForms.NormalizeRules(customRacialForms);
         }
     }
 
@@ -67,6 +76,7 @@ namespace WildShift
 
         private static Harmony harmony;
         private Vector2 scrollPosition;
+        private float settingsViewHeight = 700f;
 
         public WildShiftMod(ModContentPack content) : base(content)
         {
@@ -85,7 +95,7 @@ namespace WildShift
 
         public override void DoSettingsWindowContents(Rect inRect)
         {
-            Rect viewRect = new Rect(0f, 0f, inRect.width - 16f, 550f);
+            Rect viewRect = new Rect(0f, 0f, inRect.width - 16f, Mathf.Max(inRect.height - 16f, settingsViewHeight));
 
             Widgets.BeginScrollView(inRect, ref scrollPosition, viewRect);
             Listing_Standard listing = new Listing_Standard();
@@ -164,12 +174,16 @@ namespace WildShift
                 ref Settings.allowInsectoids,
                 "WildShift_SettingsAllowInsectsDesc".Translate());
 
+            listing.GapLine();
+            CustomRacialFormsSettingsUI.Draw(listing, Settings);
+
             listing.Gap();
             if (listing.ButtonText("WildShift_SettingsReset".Translate()))
             {
                 Settings.Reset();
             }
 
+            settingsViewHeight = listing.CurHeight + 12f;
             listing.End();
             Widgets.EndScrollView();
 

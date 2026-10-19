@@ -42,4 +42,30 @@
   <WildShift_SettingsSoldRevenge>Sold shapeshifter revenge chance: {0}% (0% disables pending revenge)</WildShift_SettingsSoldRevenge>
   <WildShift_RevengeLetterLabel>The sold shapeshifter returns</WildShift_RevengeLetterLabel>
   <WildShift_RevengeLetterText>{0}, the shapeshifter you sold to a trader in animal form, has returned.\n\nThey have rallied {3} other shapeshifters and {2} animals of their own kind: {1}. The shapeshifters carry their own animal forms into battle. Together they are attacking your settlement. They have not forgotten being sold as livestock.</WildShift_RevengeLetterText>
+  <WildShift_CustomFormsEnabled>Use custom race and xenotype animal forms</WildShift_CustomFormsEnabled>
+  <WildShift_CustomFormsEnabledDesc>Optional rules for newly assigned forms. Disabled by default; the existing form assignment rules apply when disabled.</WildShift_CustomFormsEnabledDesc>
+  <WildShift_CustomFormsNewOnly>Changes apply only when a new animal form is assigned. Existing forms are kept.</WildShift_CustomFormsNewOnly>
+  <WildShift_CustomFormsOpen>Edit custom animal forms ({0} rules)</WildShift_CustomFormsOpen>
+  <WildShift_CustomFormsTitle>Custom animal forms</WildShift_CustomFormsTitle>
+  <WildShift_CustomFormsRulesDesc>Choose one or more animals and a chance for each race or xenotype. A successful roll selects equally among the available chosen animals; a failed roll uses the existing rules. Xenotype rules take priority over race rules. The insectoid setting still applies. Awakened animals and Sapient Animals keep their original species.</WildShift_CustomFormsRulesDesc>
+  <WildShift_CustomFormsAddRace>Add race</WildShift_CustomFormsAddRace>
+  <WildShift_CustomFormsAddXenotype>Add xenotype</WildShift_CustomFormsAddXenotype>
+  <WildShift_CustomFormsRace>Race</WildShift_CustomFormsRace>
+  <WildShift_CustomFormsXenotype>Xenotype</WildShift_CustomFormsXenotype>
+  <WildShift_CustomFormsTarget>{0}: {1}</WildShift_CustomFormsTarget>
+  <WildShift_CustomFormsReset>Restore defaults</WildShift_CustomFormsReset>
+  <WildShift_CustomFormsResetConfirm>Delete all custom animal-form rules and turn off custom assignment? Other WildShift settings will be kept.</WildShift_CustomFormsResetConfirm>
+  <WildShift_CustomFormsDelete>Remove rule</WildShift_CustomFormsDelete>
+  <WildShift_CustomFormsEditAnimals>Choose animals</WildShift_CustomFormsEditAnimals>
+  <WildShift_CustomFormsNoAnimals>No animals selected; uses existing rules.</WildShift_CustomFormsNoAnimals>
+  <WildShift_CustomFormsChance>Custom chance: {0}%</WildShift_CustomFormsChance>
+  <WildShift_CustomFormsEmpty>No custom rules. Add a race or xenotype to choose its animal forms.</WildShift_CustomFormsEmpty>
+  <WildShift_CustomFormsSearch>Search</WildShift_CustomFormsSearch>
+  <WildShift_CustomFormsNoMatches>No available matches.</WildShift_CustomFormsNoMatches>
+  <WildShift_CustomFormsMissing>Unavailable: {0}</WildShift_CustomFormsMissing>
+  <WildShift_CustomFormsAnimalTitle>Choose animal forms</WildShift_CustomFormsAnimalTitle>
+  <WildShift_CustomFormsAnimalDesc>Select one animal to fix the form, or several for equal random selection. Set the rule's chance to 100% to always use your selection. Only currently allowed forms are listed.</WildShift_CustomFormsAnimalDesc>
+  <WildShift_CustomFormsSelected>Selected: {0} (currently unavailable: {1})</WildShift_CustomFormsSelected>
+  <WildShift_CustomFormsClear>Clear selection</WildShift_CustomFormsClear>
+  <WildShift_CustomFormsApply>Apply</WildShift_CustomFormsApply>
 </LanguageData>

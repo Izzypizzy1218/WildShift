@@ -15,6 +15,7 @@ namespace WildShift
     public class HediffComp_Shapeshifter : HediffComp
     {
         public PawnKindDef assignedKind;
+        public PawnKindDef customAssignedKind;
         public GeneticFormState geneticForm;
         public bool saleRevengeRolled;
         public bool enemyRaidParticipant;
@@ -47,6 +48,7 @@ namespace WildShift
         {
             base.CompExposeData();
             Scribe_Defs.Look(ref assignedKind, "assignedKind");
+            Scribe_Defs.Look(ref customAssignedKind, "customAssignedKind");
             Scribe_Deep.Look(ref geneticForm, "geneticForm");
             Scribe_Values.Look(ref saleRevengeRolled, "saleRevengeRolled", false);
             Scribe_Values.Look(ref enemyRaidParticipant, "enemyRaidParticipant", false);
@@ -121,16 +123,30 @@ namespace WildShift
 
         public void EnsureAssignedKind()
         {
-            if (assignedKind != null && RacialAnimalForms.IsAllowed(ParentPawn, assignedKind))
+            if (assignedKind != null && AllowsAssignedKind(assignedKind))
             {
                 return;
             }
 
-            assignedKind = RacialAnimalForms.Choose(ParentPawn);
+            bool customChosen;
+            PawnKindDef kind = RacialAnimalForms.Choose(ParentPawn, null, out customChosen);
+            SetAssignedKind(kind, customChosen);
             if (assignedKind == null)
             {
                 Log.Warning("[WildShift] No eligible animal kind could be assigned to a shapeshifter.");
             }
+        }
+
+        public void SetAssignedKind(PawnKindDef kind, bool customChosen)
+        {
+            assignedKind = kind;
+            customAssignedKind = customChosen ? kind : null;
+        }
+
+        public bool AllowsAssignedKind(PawnKindDef kind)
+        {
+            return RacialAnimalForms.IsAllowed(ParentPawn, kind)
+                || (kind != null && kind == assignedKind && kind == customAssignedKind && CustomRacialForms.IsSelectable(kind));
         }
 
         public void RemoveLegacyAbilities()
