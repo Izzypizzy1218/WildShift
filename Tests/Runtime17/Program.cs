@@ -140,6 +140,9 @@ internal static class Program
         game.InitData.playerFaction = Bare<Faction>();
         game.InitData.playerFaction.def = new FactionDef { defName = "RuntimePlayer", isPlayer = true };
         AccessTools.Field(typeof(Game), "worldInt").SetValue(game, Bare<World>());
+        // Real native Map entries let Spawned/Map resolve normally without
+        // generating or ticking a colony in this isolated object-graph test.
+        AccessTools.Field(typeof(Game), "maps").SetValue(game, new List<Map> { Bare<Map>() });
         Current.Game = game;
         WildShiftMod.Settings = new WildShiftSettings();
         WildShiftDefOf.WildShift_Transformed = new HediffDef { defName = "WildShift_Transformed" };
@@ -190,10 +193,31 @@ internal static class Program
         Check(comp.TryStore(human), "Storing same original is idempotent");
         Check(comp.StoredPawn == human && human.holdingOwner == comp.GetDirectlyHeldThings(), "Stored body is same instance with exactly one native owner");
         Check(comp.GetDirectlyHeldThings().Count == 1, "No duplicate body when storing twice");
+        Check(!animal.IsColonistPlayerControlled, "Unspawned transformed animal is not player-controlled");
+        Check(animal.drafter == null && animal.playerSettings == null, "Unspawned control query does not create trackers");
+        foreach (var pawn in new[] { animal, ordinary, enemy })
+            AccessTools.Field(typeof(Thing), "mapIndexOrState").SetValue(pawn, (sbyte)0);
+        Check(animal.Spawned && animal.Map == Current.Game.Maps[0], "Native spawned control fixture resolves registered map");
         Check(animal.IsColonistPlayerControlled, "Actual patched player-control getter accepts transformed animal");
         Check(animal.drafter != null && animal.playerSettings != null, "Control getter initializes native trackers");
         Check(!ordinary.IsColonistPlayerControlled, "Ordinary animal is not player colonist-controlled");
         Check(!enemy.IsColonistPlayerControlled, "Enemy transformed animal is not player-controlled");
+        AccessTools.Field(typeof(MentalStateHandler), "curStateInt").SetValue(animal.mindState.mentalStateHandler,
+            new MentalState { pawn = animal, def = new MentalStateDef { defName = "RuntimeMentalState" } });
+        Check(animal.InMentalState && animal.MentalStateDef != null, "Native mental-state fixture has active mental break");
+        Check(!animal.IsColonistPlayerControlled, "Transformed animal in mental state is not player-controlled");
+        Check(!animal.CanTakeOrder, "Native order eligibility rejects transformed animal in mental state");
+        AccessTools.Field(typeof(MentalStateHandler), "curStateInt").SetValue(animal.mindState.mentalStateHandler, null);
+        Check(animal.IsColonistPlayerControlled, "Transformed animal regains control after mental state ends");
+        AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(animal.health, PawnHealthState.Down);
+        Check(animal.IsColonistPlayerControlled, "Downed transformed classification retains native control semantics");
+        AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(animal.health, PawnHealthState.Mobile);
+        AccessTools.Field(typeof(Thing), "mapIndexOrState").SetValue(animal, (sbyte)-1);
+        Check(!animal.IsColonistPlayerControlled && !animal.CanTakeOrder, "Despawned form loses player control and orders despite existing trackers");
+        AccessTools.Field(typeof(Thing), "mapIndexOrState").SetValue(animal, (sbyte)0);
+        var nativeColonist = Pawn(5, Intelligence.Humanlike, Faction.OfPlayer);
+        AccessTools.Field(typeof(Thing), "mapIndexOrState").SetValue(nativeColonist, (sbyte)0);
+        Check(nativeColonist.IsColonistPlayerControlled, "Native true player-control result is preserved for normal human colonist");
         var drag = Patch_TransformedDragSelection.FindTarget();
         Check((bool)drag.Invoke(null, new object[] { animal }), "Actual native drag predicate prioritizes player form");
         Check(!(bool)drag.Invoke(null, new object[] { ordinary }), "Native drag predicate excludes ordinary animal");

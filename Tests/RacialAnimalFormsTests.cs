@@ -11,14 +11,15 @@ namespace Verse
 {
     public class Def { public string defName; public string LabelCap { get { return defName; } } }
     public class ThingDef : Def { public RaceProperties race; }
-    public class PawnKindDef : Def { public ThingDef race; public FactionDef defaultFactionDef; public bool isBoss,factionLeader,isFighter; public object mutant; public float combatPower; public Dictionary<XenotypeDef,float> xenotypes; }
+    public class PawnKindDef : Def { public ThingDef race; public FactionDef defaultFactionDef; public bool isBoss,factionLeader,isFighter,forceDeathOnDowned; public object mutant; public float combatPower; public Dictionary<XenotypeDef,float> xenotypes; }
     public class RaceProperties { public bool Animal, Humanlike, IsMechanoid, IsAnomalyEntity, IsDrone, predator; public bool hasGenders = true; public float baseBodySize; public object FleshType; }
     public enum Gender { None, Male, Female }
     public struct PawnGenerationRequest
     {
         public PawnKindDef KindDef; public object Faction; public bool ForceGenerateNewPawn; public Gender? FixedGender;
         public XenotypeDef ForcedXenotype;
-        public PawnGenerationRequest(PawnKindDef kind, object faction, bool forceGenerateNewPawn, Gender? fixedGender, XenotypeDef forcedXenotype=null)
+        public PawnGenerationRequest(PawnKindDef kind, object faction, bool forceGenerateNewPawn, Gender? fixedGender=null, XenotypeDef forcedXenotype=null,
+            bool canGeneratePawnRelations=true, bool mustBeCapableOfViolence=false)
         { KindDef = kind; Faction = faction; ForceGenerateNewPawn = forceGenerateNewPawn; FixedGender = fixedGender; ForcedXenotype=forcedXenotype; }
     }
     public class Pawn
@@ -26,8 +27,12 @@ namespace Verse
         public ThingDef def; public PawnKindDef kindDef; public Genes genes; public Gender gender;
         public RaceProperties RaceProps { get { return def.race; } }
         public Health health = new Health(); public Abilities abilities; public object drafter;
-        public object Faction; public bool Dead, Spawned = true; public object Map = new object();
+        public object Faction; public bool Dead, Downed, Destroyed, Spawned = true; public object Map = new object();
+        public object holdingOwner;
+        public bool SpawnedOrAnyParentSpawned { get { return Spawned; } }
+        public void Destroy(DestroyMode mode) { Destroyed = true; }
     }
+    public enum DestroyMode { Vanish }
     public class Genes { public Def Xenotype; }
     public class Health
     {
@@ -72,9 +77,9 @@ namespace Verse
     }
     public static class Rand
     {
-        public static bool? Force; public static int? ForceIndex = 0; public static int Calls; private static Random random = new Random(947);
+        public static bool? Force; public static int? ForceIndex = 0; public static int Calls, RangeCalls; private static Random random = new Random(947);
         public static bool Chance(float chance) { Calls++; return Force ?? random.NextDouble() < chance; }
-        public static int Range(int min, int max) { return ForceIndex ?? random.Next(min, max); }
+        public static int Range(int min, int max) { RangeCalls++; return ForceIndex ?? random.Next(min, max); }
     }
     public static class Extensions
     {
@@ -119,6 +124,16 @@ namespace RimWorld
     public static class XenotypeDefOf { public static XenotypeDef Baseliner=new XenotypeDef {defName="Baseliner"}; }
     public static class ModsConfig { public static bool BiotechActive; }
     public static class PawnGenerator {
+        public static readonly List<Pawn> Generated = new List<Pawn>();
+        public static Func<PawnGenerationRequest, Pawn> Generate;
+        public static Pawn GeneratePawn(PawnGenerationRequest request) {
+            // A finite fixture cap catches accidental unbounded generation.
+            if (Generated.Count >= 100) throw new InvalidOperationException("Companion generation failed to terminate.");
+            Pawn pawn = Generate == null ? new Pawn { def=request.KindDef.race, kindDef=request.KindDef,
+                Faction=request.Faction, Spawned=false } : Generate(request);
+            Generated.Add(pawn);
+            return pawn;
+        }
         public static Dictionary<XenotypeDef,float> XenotypesAvailableFor(PawnKindDef kind,FactionDef def=null,Faction faction=null) {
             return kind.xenotypes ?? faction?.xenotypes ?? new Dictionary<XenotypeDef,float> {{XenotypeDefOf.Baseliner,1f}};
         }

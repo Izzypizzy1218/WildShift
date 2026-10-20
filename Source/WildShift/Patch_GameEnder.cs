@@ -9,7 +9,7 @@ namespace WildShift
     public static class Patch_GameEnder
     {
         private const int CacheDurationTicks = 120;
-        private static Game cachedGame;
+        private static readonly System.WeakReference<Game> cachedGame = new System.WeakReference<Game>(null);
         private static int cacheExpiresAt = -1;
         private static bool cachedHasLivingColonist;
 
@@ -28,13 +28,15 @@ namespace WildShift
         private static bool HasLivingTransformedColonist()
         {
             Game currentGame = Current.Game;
+            if (currentGame == null) return false;
             int currentTick = Find.TickManager != null ? Find.TickManager.TicksGame : 0;
-            if (cachedGame == currentGame && currentTick <= cacheExpiresAt)
+            Game previousGame;
+            if (cachedGame.TryGetTarget(out previousGame) && previousGame == currentGame && currentTick <= cacheExpiresAt)
             {
                 return cachedHasLivingColonist;
             }
 
-            cachedGame = currentGame;
+            cachedGame.SetTarget(currentGame);
             cacheExpiresAt = currentTick + CacheDurationTicks;
             cachedHasLivingColonist = ScanForLivingTransformedColonist();
             return cachedHasLivingColonist;
@@ -72,7 +74,7 @@ namespace WildShift
 
         public static void InvalidateCache()
         {
-            cachedGame = null;
+            cachedGame.SetTarget(null);
             cacheExpiresAt = -1;
         }
     }

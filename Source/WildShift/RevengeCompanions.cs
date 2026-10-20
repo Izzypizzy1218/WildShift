@@ -40,7 +40,11 @@ namespace WildShift
                     ally = PawnGenerator.GeneratePawn(new PawnGenerationRequest(PawnKindDefOf.Colonist, faction,
                         forceGenerateNewPawn: true, canGeneratePawnRelations: false, mustBeCapableOfViolence: true));
                     if (ally == null || ally.Dead || ally.Destroyed || ally.Downed || !ally.RaceProps.Humanlike) continue;
-                    TransformUtility.AddOrGetShapeshifter(ally, assigned);
+                    // Fresh people follow optional form rules before the
+                    // budget is charged. With customization off, retain the
+                    // original explicit assignment and its random sequence.
+                    bool useCustomRules = WildShiftMod.Settings != null && WildShiftMod.Settings.customRacialFormsEnabled;
+                    TransformUtility.AddOrGetShapeshifter(ally, assigned, useCustomRules);
                     var comp = TransformUtility.TryGetShapeshifterComp(ally);
                     PawnKindDef actual = comp?.assignedKind;
                     if (actual == null || actual.forceDeathOnDowned || actual.combatPower <= 0f

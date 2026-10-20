@@ -55,6 +55,96 @@ namespace WildShift.Tests
             WildShiftMod.Settings.customRacialForms = new List<CustomRacialFormRule>(rules);
         }
 
+        private static void TestRevengeCompanionAssignment()
+        {
+            var savedKinds = new List<PawnKindDef>(DefDatabase<PawnKindDef>.AllDefsListForReading);
+            var oldGenerator = PawnGenerator.Generate;
+            try
+            {
+                // Exercise the complete production companion builder with a
+                // small known animal pool, not a reimplementation of its budget.
+                DefDatabase<PawnKindDef>.AllDefsListForReading.Clear();
+                PawnKindDef leader = Animal("CustomRevengeLeader", true);
+                PawnKindDef fallback = Animal("CustomRevengeFallback", true);
+                PawnKindDef cat = Animal("Cat");
+                PawnKindDef expensive = Animal("Thrumbo", false, 4f);
+                leader.combatPower = 100f;
+                fallback.combatPower = 100f;
+                cat.combatPower = 20f;
+                expensive.combatPower = 5000f;
+                PawnGenerator.Generate = null;
+                Rand.ForceIndex = 0;
+                Rand.Force = true;
+                var companions = new List<Pawn>();
+
+                Rules(Rule("Human", 1f, false, "Cat"));
+                WildShiftMod.Settings.customRacialFormsEnabled = true;
+                PawnGenerator.Generated.Clear();
+                float used = RevengeCompanions.Prepare(300f, leader, Faction.OfPlayer, companions);
+                Check(companions.Count == 3 && used == companions.Count * cat.combatPower,
+                    "actual companion builder charges custom cat power and can add more than one ally");
+                Check(companions.TrueForAll(p => TransformUtility.TryGetShapeshifterComp(p).assignedKind == cat
+                    && TransformUtility.TryGetShapeshifterComp(p).customAssignedKind == cat),
+                    "new revenge companions honor guaranteed custom form with provenance");
+                Check(companions.TrueForAll(p => TransformUtility.TryGetShapeshifterComp(p).enemyRaidParticipant
+                    && !TransformUtility.TryGetShapeshifterComp(p).enemyShiftUsed && !p.Destroyed),
+                    "custom companions retain live enemy-raid participation state");
+
+                WildShiftMod.Settings.customRacialFormsEnabled = false;
+                companions.Clear();
+                PawnGenerator.Generated.Clear();
+                int probabilityCalls = Rand.Calls;
+                int selectionCalls = Rand.RangeCalls;
+                used = RevengeCompanions.Prepare(300f, leader, Faction.OfPlayer, companions);
+                Check(companions.Count == 1 && used == fallback.combatPower
+                    && TransformUtility.TryGetShapeshifterComp(companions[0]).assignedKind == fallback
+                    && TransformUtility.TryGetShapeshifterComp(companions[0]).customAssignedKind == null,
+                    "disabled custom rules preserve the legacy revenge companion form and budget");
+                Check(Rand.Calls == probabilityCalls && Rand.RangeCalls == selectionCalls + 1,
+                    "disabled companion assignment adds no probability or animal-selection rolls");
+
+                WildShiftMod.Settings.customRacialFormsEnabled = true;
+                Rules(Rule("Human", 1f, false, "Thrumbo"));
+                PawnKindDef secondFallback = Animal("CustomRevengeSecondFallback", true);
+                secondFallback.combatPower = 120f;
+                companions.Clear();
+                PawnGenerator.Generated.Clear();
+                used = RevengeCompanions.Prepare(300f, leader, Faction.OfPlayer, companions);
+                Check(used == 0f && companions.Count == 0 && PawnGenerator.Generated.Count == 2,
+                    "unaffordable custom companions terminate after trying each fallback candidate once");
+                Check(PawnGenerator.Generated.TrueForAll(p => p.Destroyed),
+                    "rejected custom companion bodies are destroyed instead of leaked");
+                DefDatabase<PawnKindDef>.AllDefsListForReading.Remove(secondFallback);
+
+                Rules(Rule("Human", 0.5f, false, "Cat"));
+                Rand.Force = false;
+                companions.Clear();
+                PawnGenerator.Generated.Clear();
+                probabilityCalls = Rand.Calls;
+                used = RevengeCompanions.Prepare(300f, leader, Faction.OfPlayer, companions);
+                Check(used == fallback.combatPower && companions.Count == 1
+                    && TransformUtility.TryGetShapeshifterComp(companions[0]).assignedKind == fallback
+                    && Rand.Calls == probabilityCalls + 1,
+                    "failed companion custom roll safely retains the budgeted ordinary fallback");
+
+                Rules(Rule("Human", 1f, false, "MissingRevengeAnimal"));
+                companions.Clear();
+                PawnGenerator.Generated.Clear();
+                used = RevengeCompanions.Prepare(300f, leader, Faction.OfPlayer, companions);
+                Check(used == fallback.combatPower && companions.Count == 1
+                    && TransformUtility.TryGetShapeshifterComp(companions[0]).assignedKind == fallback
+                    && TransformUtility.TryGetShapeshifterComp(companions[0]).customAssignedKind == null,
+                    "missing companion custom animals fall back without invalid provenance");
+            }
+            finally
+            {
+                DefDatabase<PawnKindDef>.AllDefsListForReading.Clear();
+                DefDatabase<PawnKindDef>.AllDefsListForReading.AddRange(savedKinds);
+                PawnGenerator.Generate = oldGenerator;
+                PawnGenerator.Generated.Clear();
+            }
+        }
+
         public static string Run()
         {
             Settings oldSettings = WildShiftMod.Settings;
@@ -257,6 +347,7 @@ namespace WildShift.Tests
                 Pawn tamed = Person("Human");
                 Check(TransformUtility.AddOrGetShapeshifter(tamed, warg).assignedKind == warg,
                     "explicit tamed or purchased animal kind keeps its original form");
+                TestRevengeCompanionAssignment();
                 return "PASS: " + assertions + " custom form assertions (production logic with engine stubs).";
             }
             finally

@@ -15,6 +15,8 @@ namespace WildShift
                 || __instance.Faction != Faction.OfPlayer
                 || __instance.RaceProps == null
                 || !__instance.RaceProps.Animal
+                || !__instance.Spawned
+                || __instance.MentalStateDef != null
                 || !TransformUtility.IsTransformedAnimal(__instance))
             {
                 return;

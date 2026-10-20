@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.3.0-beta.3 — Review fixes (2026-10-20)
+
+- Apply enabled custom race/xenotype form rules to newly generated revenge companions and charge their actual form's combat power to the raid budget. Preserve the old companion assignment when customization is disabled.
+- Respect native spawned and mental-state restrictions when classifying transformed animals as player-controlled, preventing inappropriate command menus during mental breaks.
+- Stop two static caches from retaining retired Game instances after returning to the menu. Preserve cache expiry, explicit invalidation and per-game scenario recovery behavior.
+- Pass 644 logic/native assertions and both version-specific builds. See `Docs/Review-v1.3.0-beta.3.md` for findings, regression coverage and validation limits.
+
 ## v1.3.0-beta.2 — Optional custom race forms (2026-10-20)
 
 - Add an optional mod-settings editor for choosing one or more animal forms and a 0–100% custom assignment probability per humanlike race or xenotype. The feature defaults off and the existing assignment rules remain the default.

@@ -10,7 +10,7 @@
     <OutputType>Library</OutputType>
     <RootNamespace>WildShift</RootNamespace>
     <AssemblyName>WildShift</AssemblyName>
-    <Version>1.3.0-beta.2</Version>
+    <Version>1.3.0-beta.3</Version>
     <LangVersion>7.3</LangVersion>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>

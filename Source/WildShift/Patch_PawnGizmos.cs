@@ -7,15 +7,17 @@ namespace WildShift
     [HarmonyPatch(typeof(Pawn), "GetGizmos")]
     public static class Patch_PawnGizmos
     {
-        private static Game checkedGame;
+        private static readonly System.WeakReference<Game> checkedGame = new System.WeakReference<Game>(null);
         private static bool recoveryCheckCompleted;
 
         public static void Prefix(Pawn __instance)
         {
             Game currentGame = Current.Game;
-            if (checkedGame != currentGame)
+            if (currentGame == null) return;
+            Game previousGame;
+            if (!checkedGame.TryGetTarget(out previousGame) || previousGame != currentGame)
             {
-                checkedGame = currentGame;
+                checkedGame.SetTarget(currentGame);
                 recoveryCheckCompleted = false;
             }
 

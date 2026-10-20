@@ -120,9 +120,11 @@ To build 1.6, supply matching 1.6 game or reference assemblies and `-p:RimWorldV
 
 ## Current version
 
-`v1.3.0-beta.2`
+`v1.3.0-beta.3`
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
+
+See the [beta.3 source review](Docs/Review-v1.3.0-beta.3.md) for corrected companion assignment, mental-state controls and cache lifetime issues, plus current validation results.
 
 See [special training and discovery-letter validation](Docs/SpecialTraining-v1.2.17.md) for automatic species training, existing-save migration and the hive-queen fix.
 
