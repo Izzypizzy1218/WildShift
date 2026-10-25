@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.3.0-beta.4 — Temporary-map retention (2026-10-25)
+
+- Keep a temporary camp/site map when a living player-owned transformed animal holds its original living player colonist. Previously, native map retirement could close a solo shapeshifter's map and report "Caravan lost", followed by a game over.
+- Extend only the native map-retention predicate. Preserve ordinary animal/enemy/empty-map behavior and the native protection for downed or mentally broken colonists; do not expose hidden humans to general pawn enumeration or redefine animal/human classification.
+- Add regression coverage for the native map-retention decision and an isolated temporary-map lifecycle fixture. Native solo departure/reformation still requires returning to human form; this hotfix does not add a new animal-only caravan travel feature. See `Docs/TemporaryMap-v1.3.0-beta.4.md` for verification results and limits.
+
 ## v1.3.0-beta.3 — Review fixes (2026-10-20)
 
 - Apply enabled custom race/xenotype form rules to newly generated revenge companions and charge their actual form's combat power to the raid budget. Preserve the old companion assignment when customization is disabled.

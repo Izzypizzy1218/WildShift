@@ -17,6 +17,7 @@ WildShift is a RimWorld 1.6 / 1.7 beta mod about colonists who can transform int
 - Drop the animal form's worn apparel, equipment, inventory and carried items nearby before returning. Anything that cannot be dropped goes to the original human's inventory; off-map returns keep all items there. Original human clothing remains worn.
 - Preserve Animal Gear / Animal Equipment apparel during return, including inventory fallback when nearby ground cannot accept it. Visuals remain subject to the equipment's species support and textures.
 - Prevent a false game over while a lone colonist is transformed.
+- Keep temporary camp/site maps while a living player-owned animal form still holds its original living colonist. Return to human form before using the native solo caravan departure flow.
 - Remove randomly generated diseases and injuries from temporary animal bodies.
 - Discover latent shapeshifters through successful normal taming, or through medical-bond taming if the animal has no recorded player-inflicted harm. Normal taming does not require a bonded relationship.
 - Select a purchased or already owned latent animal on a map and use **Awaken as human**. Purchases ignore past damage; belongings are automatically placed nearby.
@@ -102,7 +103,7 @@ The optional VEF compatibility hook prevents fixed-female animal components from
 
 The repository uses RimWorld's standard mod layout. Shared definitions, translations and textures remain at the root; `LoadFolders.xml` selects the compiled DLL in `1.6/Assemblies` or `1.7/Assemblies`. When upgrading a manual installation, replace the old WildShift folder instead of merging it: an old root `Assemblies/WildShift.dll` would load twice.
 
-RimWorld 1.7 support is a beta, currently built against **1.7.4982 rev1280 (unstable)**. Both version-specific DLLs include the optional custom form settings. The 1.6 build uses RimRef 1.6.4871 reference assemblies; actual-game validation here uses 1.7. Optional mods such as HAR, Releashed and Animal Apparel require compatible releases of their own; the historical 1.6 integration reports below are not 1.7 validation.
+RimWorld 1.7 support is a beta, currently built against **1.7.4985 rev1269 (unstable)**. Both version-specific DLLs include the optional custom form settings. The 1.6 build uses RimRef 1.6.4871 reference assemblies; actual-game validation here uses 1.7. Optional mods such as HAR, Releashed and Animal Apparel require compatible releases of their own; the historical 1.6 integration reports below are not 1.7 validation.
 
 The preceding beta's startup and native-assembly revalidation on **1.7.4982 rev1280** did not reproduce the earlier intermittent CLR/JIT crash; it is not claimed fixed. See the [2026-10-19 investigation](Docs/Startup-1.7-2026-10-19.md) and `Tests/Run-Startup17Tests.ps1` for repeatable actual-game startup checks.
 
@@ -120,11 +121,13 @@ To build 1.6, supply matching 1.6 game or reference assemblies and `-p:RimWorldV
 
 ## Current version
 
-`v1.3.0-beta.3`
+`v1.3.0-beta.4`
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
 
 See the [beta.3 source review](Docs/Review-v1.3.0-beta.3.md) for corrected companion assignment, mental-state controls and cache lifetime issues, plus current validation results.
+
+See the [temporary-map hotfix](Docs/TemporaryMap-v1.3.0-beta.4.md) for the solo shapeshifter map-removal bug and its validation scope.
 
 See [special training and discovery-letter validation](Docs/SpecialTraining-v1.2.17.md) for automatic species training, existing-save migration and the hive-queen fix.
 

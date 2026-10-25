@@ -62,6 +62,7 @@ internal static class Program
         AuditPatches();
         SetupGame();
         TestNativeControlAndStorage();
+        TestNativeTemporaryMapRetention();
         TestStorageSerialization(scratch);
         TestCustomSettingsSerialization(scratch);
         AccessTools.Method(typeof(Log), "DrainOffThreadMessages").Invoke(null, null);
@@ -232,6 +233,181 @@ internal static class Program
         Check(comp.ReleaseStoredPawn() == human && !comp.HasStoredPawn && human.holdingOwner == null, "Release returns exact original body and clears ownership");
         Check(comp.ReleaseStoredPawn() == null, "Second release cannot duplicate body");
         Check(!(bool)drag.Invoke(null, new object[] { animal }), "Empty animal shell loses drag priority");
+    }
+
+    private static readonly HashSet<MapPawns> temporaryMapFixturePawns = new HashSet<MapPawns>();
+    private static readonly HashSet<Map> temporaryMapFixtures = new HashSet<Map>();
+
+    private static bool NoNearbyCaravanForFixture(Pawn pawn, ref Caravan __result)
+    {
+        if (pawn?.Map == null || !temporaryMapFixtures.Contains(pawn.Map)) return true;
+        __result = null;
+        return false;
+    }
+
+    private static bool NoUnspawnedContainerPawnsForFixture(MapPawns __instance, ref List<Pawn> __result)
+    {
+        if (!temporaryMapFixturePawns.Contains(__instance)) return true;
+        __result = new List<Pawn>();
+        return false;
+    }
+
+    private static bool NoIncomingTransporterForFixture(Map map, ref bool __result)
+    {
+        if (!temporaryMapFixtures.Contains(map)) return true;
+        __result = false;
+        return false;
+    }
+
+    private static void TestNativeTemporaryMapRetention()
+    {
+        // Run the actual private colony predicate, public MapPawns getter and
+        // Site removal method. This object graph has no path grid, containers or
+        // incoming ships: those three ancillary boundaries are fixture-only
+        // prefixes. No production retention/removal result is mocked.
+        var fixtureHarmony = new Harmony("wildshift.tests.temporary-map-boundaries");
+        var colonyPredicate = AccessTools.Method(typeof(MapPawns), "IsValidColonyPawn");
+        var productionHarmony = new Harmony(Owner);
+        var productionPostfixes = Harmony.GetPatchInfo(colonyPredicate)?.Postfixes.Where(p => p.owner == Owner).ToArray()
+            ?? Array.Empty<Patch>();
+        var oldMaps = Current.Game.Maps.ToList();
+        var oldPocketMaps = Find.World.pocketMaps;
+        var site = Bare<Site>();
+        site.parts = new List<SitePart>();
+        site.def = new WorldObjectDef { defName = "RuntimeTemporarySite" };
+        var otherSite = Bare<Site>();
+        otherSite.parts = new List<SitePart>();
+        otherSite.def = site.def;
+        var map = Bare<Map>();
+        map.info = new MapInfo { parent = site, Size = new IntVec3(40, 1, 40) };
+        map.listerThings = new ListerThings(ListerThingsUse.Global);
+        map.mapPawns = new MapPawns(map);
+        var otherMap = Bare<Map>();
+        otherMap.info = new MapInfo { parent = otherSite, Size = new IntVec3(40, 1, 40) };
+        otherMap.listerThings = new ListerThings(ListerThingsUse.Global);
+        otherMap.mapPawns = new MapPawns(otherMap);
+        var mapPawns = (List<Pawn>)AccessTools.Field(typeof(MapPawns), "pawnsSpawned").GetValue(map.mapPawns);
+        var otherMapPawns = (List<Pawn>)AccessTools.Field(typeof(MapPawns), "pawnsSpawned").GetValue(otherMap.mapPawns);
+        var original = Pawn(301, Intelligence.Humanlike, Faction.OfPlayer);
+        var form = Pawn(302, Intelligence.Animal, Faction.OfPlayer);
+        var ordinary = Pawn(303, Intelligence.Animal, Faction.OfPlayer);
+        var comp = Mark(form);
+        var enemyFaction = Bare<Faction>();
+        enemyFaction.def = new FactionDef { defName = "RuntimeTemporaryMapEnemy" };
+        Func<Pawn, bool> valid = p => (bool)colonyPredicate.Invoke(null, new object[] { p });
+        bool productionUnpatched = false;
+        try
+        {
+            AccessTools.Field(typeof(Game), "maps").SetValue(Current.Game, new List<Map> { map, otherMap });
+            Find.World.pocketMaps = new List<PocketMapParent>();
+            temporaryMapFixtures.UnionWith(new[] { map, otherMap });
+            temporaryMapFixturePawns.UnionWith(new[] { map.mapPawns, otherMap.mapPawns });
+            fixtureHarmony.Patch(AccessTools.Method(typeof(CaravanExitMapUtility), "FindCaravanToJoinFor"),
+                prefix: new HarmonyMethod(typeof(Program), nameof(NoNearbyCaravanForFixture)));
+            fixtureHarmony.Patch(AccessTools.PropertyGetter(typeof(MapPawns), "AllPawnsUnspawned"),
+                prefix: new HarmonyMethod(typeof(Program), nameof(NoUnspawnedContainerPawnsForFixture)));
+            fixtureHarmony.Patch(AccessTools.Method(typeof(TransporterUtility), "IncomingTransporterPreventingMapRemoval"),
+                prefix: new HarmonyMethod(typeof(Program), nameof(NoIncomingTransporterForFixture)));
+            Check(comp.TryStore(original), "Temporary-site fixture stores exact native original");
+            AccessTools.Field(typeof(Thing), "mapIndexOrState").SetValue(form, (sbyte)0);
+            AccessTools.Field(typeof(Thing), "mapIndexOrState").SetValue(ordinary, (sbyte)0);
+            mapPawns.Add(form);
+            Check(site.Map == map && otherSite.Map == otherMap, "Native Site lookup resolves distinct registered fixture maps");
+
+            productionHarmony.Unpatch(colonyPredicate, HarmonyPatchType.Postfix, Owner);
+            productionUnpatched = true;
+            Check(valid(original) && !valid(form), "Unpatched native colony predicate accepts human but misses its animal form");
+            Check(!map.mapPawns.AnyPawnBlockingMapRemoval,
+                "Regression reproduced: unpatched native removal getter misses sole transformed colonist");
+            Check(site.ShouldRemoveMapNow(out bool baselineRemoveSite) && baselineRemoveSite,
+                "Regression reproduced: native Site would remove map containing sole transformed colonist");
+            foreach (var patch in productionPostfixes)
+                productionHarmony.Patch(colonyPredicate, postfix: new HarmonyMethod(patch.PatchMethod));
+            productionUnpatched = false;
+
+            Check(valid(form), "Patched native colony predicate accepts living player form with original");
+            Check(map.mapPawns.AnyPawnBlockingMapRemoval, "Actual MapPawns getter retains sole transformed colonist's map");
+            Check(!site.ShouldRemoveMapNow(out bool removeProtectedSite) && !removeProtectedSite,
+                "Actual Site removal method retains protected map and world object");
+            Check(!form.IsColonist && form.RaceProps.Animal, "Retention does not globally relabel animal as human colonist");
+            Check(valid(original), "Native human colonist retention remains true");
+            Check(!valid(ordinary), "Ordinary livestock does not gain colony retention");
+
+            AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(form.health, PawnHealthState.Down);
+            Check(valid(form) && map.mapPawns.AnyPawnBlockingMapRemoval, "Downed living form still retains its temporary map");
+            AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(form.health, PawnHealthState.Mobile);
+            AccessTools.Field(typeof(MentalStateHandler), "curStateInt").SetValue(form.mindState.mentalStateHandler,
+                new MentalState { pawn = form, def = new MentalStateDef { defName = "RuntimeRetentionMentalBreak" } });
+            Check(valid(form) && map.mapPawns.AnyPawnBlockingMapRemoval, "Mental-state form retains map even though direct control is restricted");
+            AccessTools.Field(typeof(MentalStateHandler), "curStateInt").SetValue(form.mindState.mentalStateHandler, null);
+            AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(original.health, PawnHealthState.Down);
+            Check(valid(form), "Downed stored colonist retains native colony eligibility");
+            AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(original.health, PawnHealthState.Mobile);
+
+            AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(form.health, PawnHealthState.Dead);
+            Check(!valid(form) && !map.mapPawns.AnyPawnBlockingMapRemoval, "Dead animal form does not falsely retain map");
+            AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(form.health, PawnHealthState.Mobile);
+            AccessTools.Field(typeof(Thing), "mapIndexOrState").SetValue(form, (sbyte)-2);
+            Check(!valid(form), "Destroyed animal form does not falsely retain map");
+            AccessTools.Field(typeof(Thing), "mapIndexOrState").SetValue(form, (sbyte)0);
+            AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(original.health, PawnHealthState.Dead);
+            Check(!valid(form) && !map.mapPawns.AnyPawnBlockingMapRemoval, "Dead stored human does not falsely retain map");
+            AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(original.health, PawnHealthState.Mobile);
+            AccessTools.Field(typeof(Thing), "mapIndexOrState").SetValue(original, (sbyte)-2);
+            Check(!valid(form), "Destroyed stored original does not gain retention");
+            AccessTools.Field(typeof(Thing), "mapIndexOrState").SetValue(original, (sbyte)-1);
+            AccessTools.Field(typeof(Thing), "factionInt").SetValue(form, enemyFaction);
+            Check(!valid(form) && !map.mapPawns.AnyPawnBlockingMapRemoval, "Hostile animal form does not retain player's map");
+            AccessTools.Field(typeof(Thing), "factionInt").SetValue(form, null);
+            Check(!valid(form), "Released animal form does not retain player's map");
+            AccessTools.Field(typeof(Thing), "factionInt").SetValue(form, Faction.OfPlayer);
+            AccessTools.Field(typeof(Thing), "factionInt").SetValue(original, enemyFaction);
+            Check(!valid(form), "Stored non-player human does not gain colony retention");
+            AccessTools.Field(typeof(Thing), "factionInt").SetValue(original, Faction.OfPlayer);
+            form.guest = Bare<Pawn_GuestTracker>();
+            AccessTools.Field(typeof(Pawn_GuestTracker), "pawn").SetValue(form.guest, form);
+            AccessTools.Field(typeof(Pawn_GuestTracker), "hostFactionInt").SetValue(form.guest, enemyFaction);
+            form.guest.guestStatusInt = GuestStatus.Prisoner;
+            Check(!valid(form), "Captured or hosted animal form cannot retain player map through hidden colonist");
+            form.guest = null;
+            original.guest = Bare<Pawn_GuestTracker>();
+            AccessTools.Field(typeof(Pawn_GuestTracker), "pawn").SetValue(original.guest, original);
+            original.guest.guestStatusInt = GuestStatus.Slave;
+            Check(original.IsSlave && original.IsColonist, "Native secure-slave fixture qualifies as colony pawn");
+            Check(valid(form), "Secure player slave original retains same eligibility as native human");
+            AccessTools.Field(typeof(Pawn_GuestTracker), "releasedInt").SetValue(original.guest, true);
+            Check(!original.IsColonist && !valid(form), "Unsecured slave original does not gain retention through animal form");
+            original.guest = null;
+            Check(comp.ReleaseStoredPawn() == original && !valid(form), "Empty shell loses retention after original is released");
+            Check(comp.TryStore(original) && valid(form), "Restoring original permits valid retention again");
+
+            mapPawns.Clear();
+            otherMapPawns.Add(form);
+            AccessTools.Field(typeof(Thing), "mapIndexOrState").SetValue(form, (sbyte)1);
+            Check(!map.mapPawns.AnyPawnBlockingMapRemoval && otherMap.mapPawns.AnyPawnBlockingMapRemoval,
+                "Transformed colonist retains only its actual map, not other temporary maps");
+            Check(site.ShouldRemoveMapNow(out bool removeDepartedSite) && removeDepartedSite,
+                "Native Site cleanup is allowed after last transformed colonist leaves");
+            otherMapPawns.Clear();
+            Check(!otherMap.mapPawns.AnyPawnBlockingMapRemoval, "No stale retention cache remains when final form leaves");
+            mapPawns.Add(ordinary);
+            Check(!map.mapPawns.AnyPawnBlockingMapRemoval && site.ShouldRemoveMapNow(out _),
+                "Ordinary livestock alone does not block native Site cleanup");
+            Console.WriteLine("Temporary-map native fixture: actual colony predicate, removal getter and Site method; nearby-caravan lookup, unspawned-container enumeration and incoming transporters are modeled absent. This fixture does not execute a full transformation or map lifecycle.");
+        }
+        finally
+        {
+            if (productionUnpatched)
+                foreach (var patch in productionPostfixes)
+                    productionHarmony.Patch(colonyPredicate, postfix: new HarmonyMethod(patch.PatchMethod));
+            foreach (var method in Harmony.GetAllPatchedMethods().Where(m =>
+                Harmony.GetPatchInfo(m).Owners.Contains(fixtureHarmony.Id)).ToArray())
+                fixtureHarmony.Unpatch(method, HarmonyPatchType.All, fixtureHarmony.Id);
+            temporaryMapFixtures.Clear();
+            temporaryMapFixturePawns.Clear();
+            AccessTools.Field(typeof(Game), "maps").SetValue(Current.Game, oldMaps);
+            Find.World.pocketMaps = oldPocketMaps;
+        }
     }
 
     private static void TestStorageSerialization(string scratch)

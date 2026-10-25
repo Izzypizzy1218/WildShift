@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <AssemblyName>WildShiftTemporaryMapValidation</AssemblyName>
+    <LangVersion>7.3</LangVersion>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <RimWorldDir Condition="'$(RimWorldDir)' == ''">$(MSBuildProgramFiles32)\Steam\steamapps\common\RimWorld</RimWorldDir>
+    <HarmonyPath Condition="'$(HarmonyPath)' == ''">$(MSBuildProgramFiles32)\Steam\steamapps\workshop\content\294100\2009463077\1.7\Assemblies\0Harmony.dll</HarmonyPath>
+    <WildShiftPath Condition="'$(WildShiftPath)' == ''">$(MSBuildThisFileDirectory)..\..\1.7\Assemblies\WildShift.dll</WildShiftPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp" HintPath="$(RimWorldDir)\Assembly-CSharp.dll" Private="false" />
+    <Reference Include="UnityStubs" HintPath="$(RimWorldDir)\UnityStubs.dll" Private="false" />
+    <Reference Include="0Harmony" HintPath="$(HarmonyPath)" Private="false" />
+    <Reference Include="WildShift" HintPath="$(WildShiftPath)" Private="false" />
+    <Compile Include="TemporaryMapRegression.cs" />
+  </ItemGroup>
+</Project>
