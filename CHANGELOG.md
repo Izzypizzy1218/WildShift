@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.3.0-beta.5 — Caravan and form-state review (2026-10-25)
+
+- Preserve an existing player caravan when its last ordinary human dies and a living transformed colonist remains. Prevent false all-owners-downed or mental-break travel blocks while a healthy, sane form survives. Keep native animal trade, negotiator and caravan-formation ownership rules.
+- Prevent training decay on every active transformed animal, including forms without special training. Previously these forms could lose tameness and player ownership, hiding the return command while the original human remained stored. Ordinary livestock retains native decay.
+- Restore the animal's drafted state when returning to a player human on a map, provided the returned human is alive, upright and outside a mental state. Off-map returns remain undrafted.
+- Pass 498 logic/stub assertions and 224 native 1.7 assertions, both version-specific builds, actual Core-only three-defect reproduction/correction with full save/reload, and all-DLC temporary-site lifecycle and startup checks. See `Docs/Review-v1.3.0-beta.5.md` for evidence and limits; actual 1.6 gameplay is not claimed.
+
 ## v1.3.0-beta.4 — Temporary-map retention (2026-10-25)
 
 - Keep a temporary camp/site map when a living player-owned transformed animal holds its original living player colonist. Previously, native map retirement could close a solo shapeshifter's map and report "Caravan lost", followed by a game over.

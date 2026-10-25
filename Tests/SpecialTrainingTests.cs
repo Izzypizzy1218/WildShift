@@ -80,7 +80,15 @@ namespace WildShift.Tests
             Check(destroyed.training.calls == 0, "destroyed pawn ignored");
             Check(!Patch_AnimalFormTrainingDecay.Prefix(form.training), "special-capable transformed training retained");
             Check(Patch_AnimalFormTrainingDecay.Prefix(ordinary.training), "ordinary decay remains native");
-            var noSkills = Form(); Check(Patch_AnimalFormTrainingDecay.Prefix(noSkills.training), "non-special form decay remains native");
+            var noSkills = Form();
+            Check(!Patch_AnimalFormTrainingDecay.Prefix(noSkills.training), "non-special transformed form retains tameness and training");
+            noSkills.RaceProps.specialTrainables = null;
+            Check(!Patch_AnimalFormTrainingDecay.Prefix(noSkills.training), "missing special-trainable list does not permit transformed decay");
+            AnimalFormTraining.CompleteSpecialTraining(noSkills);
+            Check(noSkills.training.calls == 0, "decay protection does not grant unrelated training");
+            var plainNoSkills = Form(); plainNoSkills.transformed = false;
+            Check(Patch_AnimalFormTrainingDecay.Prefix(plainNoSkills.training), "ordinary non-special animal keeps native decay");
+            Check(Patch_AnimalFormTrainingDecay.Prefix(new Pawn_TrainingTracker()), "tracker without a pawn keeps native handling");
             var human = Form(first); human.RaceProps.Animal = false;
             AnimalFormTraining.CompleteSpecialTraining(human);
             Check(human.training.calls == 0 && Patch_AnimalFormTrainingDecay.Prefix(human.training), "human untouched");

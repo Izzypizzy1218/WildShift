@@ -338,6 +338,7 @@ namespace WildShift
             Rot4 rotation = animal.Rotation;
             Faction faction = animal.Faction;
             bool wasSelected = Find.Selector != null && Find.Selector.IsSelected(animal);
+            bool wasDrafted = animal.Drafted;
 
             // Unload before releasing the preserved human or deleting this
             // body. Native drops can fail silently; leave the form for retry.
@@ -398,6 +399,13 @@ namespace WildShift
             if (human.jobs != null)
             {
                 human.jobs.StopAll(false);
+            }
+
+            // Despawning removes the original draft controller. Restore the
+            // active form's order only after its human has safely respawned.
+            if (human.Spawned && human.Faction == Faction.OfPlayer && human.drafter != null)
+            {
+                human.drafter.Drafted = wasDrafted && !human.Dead && !human.Downed && !human.InMentalState;
             }
 
             if (wasSelected)

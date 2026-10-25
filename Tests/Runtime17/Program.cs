@@ -55,6 +55,14 @@ internal static class Program
         Console.WriteLine("Game assembly: " + typeof(Pawn).Assembly.Location);
         Console.WriteLine("Mod assembly: " + typeof(TransformUtility).Assembly.Location);
         AuditXml(gameDir, modDir);
+        // Register the unrelated effect boundaries before production PatchAll
+        // can JIT the native death method and inline RemovePawn/Strip. The
+        // ownership decision and all production ownership patches stay real.
+        var caravanFixtureHarmony = new Harmony("wildshift.tests.caravan-survival-boundaries");
+        caravanFixtureHarmony.Patch(AccessTools.Method(typeof(Caravan), "RemovePawn"),
+            prefix: new HarmonyMethod(typeof(Program), nameof(ProbeCaravanRemove)));
+        caravanFixtureHarmony.Patch(AccessTools.Method(typeof(Pawn), "Strip", new[] { typeof(bool) }),
+            prefix: new HarmonyMethod(typeof(Program), nameof(ProbeMemberStrip)));
         var harmony = new Harmony(Owner);
         harmony.PatchAll(typeof(TransformUtility).Assembly);
         AnimalModCompatibility.Install(harmony);
@@ -63,6 +71,7 @@ internal static class Program
         SetupGame();
         TestNativeControlAndStorage();
         TestNativeTemporaryMapRetention();
+        TestNativeCaravanSurvival();
         TestStorageSerialization(scratch);
         TestCustomSettingsSerialization(scratch);
         AccessTools.Method(typeof(Log), "DrainOffThreadMessages").Invoke(null, null);
@@ -407,6 +416,230 @@ internal static class Program
             temporaryMapFixturePawns.Clear();
             AccessTools.Field(typeof(Game), "maps").SetValue(Current.Game, oldMaps);
             Find.World.pocketMaps = oldPocketMaps;
+        }
+    }
+
+    private static readonly HashSet<Caravan> caravanOwnerFixtures = new HashSet<Caravan>();
+    private static Caravan caravanDeathProbe;
+    private static Pawn caravanDeathMember;
+    private static bool ownerProbeThrows;
+    private static string caravanDeathBoundary;
+
+    private sealed class CaravanDeathProbeException : Exception
+    {
+        public readonly string Path;
+        public CaravanDeathProbeException(string path) { Path = path; }
+    }
+
+    private static void ProbeCaravanRemove(Caravan __instance, Pawn p)
+    {
+        if (__instance == caravanDeathProbe && p == caravanDeathMember)
+        {
+            caravanDeathBoundary = "lost";
+            throw new CaravanDeathProbeException("lost");
+        }
+    }
+
+    private static void ProbeMemberStrip(Pawn __instance)
+    {
+        if (__instance == caravanDeathMember)
+        {
+            caravanDeathBoundary = "survived";
+            throw new CaravanDeathProbeException("survived");
+        }
+    }
+
+    private static void ThrowDuringOwnerProbe(Caravan __instance)
+    {
+        if (ownerProbeThrows && caravanOwnerFixtures.Contains(__instance))
+            throw new CaravanDeathProbeException("owner-exception");
+    }
+
+    private static string ProbeNativeMemberDeath(Caravan caravan, Pawn member)
+    {
+        caravanDeathProbe = caravan;
+        caravanDeathMember = member;
+        caravanDeathBoundary = "before-owner-decision";
+        try { caravan.Notify_MemberDied(member); return "no-branch"; }
+        catch (CaravanDeathProbeException error) { return error.Path; }
+        catch (Exception error)
+        {
+            throw new InvalidOperationException("Native caravan death failed at fixture boundary: " + caravanDeathBoundary, error);
+        }
+        finally { caravanDeathProbe = null; caravanDeathMember = null; }
+    }
+
+    private static bool NativeCaravanFlag(Caravan caravan, string name)
+    {
+        // Invoke the patched entry rather than let the console host JIT inline
+        // the game's tiny original getter into this unrelated test assembly.
+        try { return (bool)AccessTools.PropertyGetter(typeof(Caravan), name).Invoke(caravan, null); }
+        catch (TargetInvocationException error) when (error.InnerException != null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error.InnerException).Throw();
+            throw;
+        }
+    }
+
+    private static Caravan CaravanFixture(params Pawn[] pawns)
+    {
+        var caravan = new Caravan();
+        AccessTools.Field(typeof(WorldObject), "factionInt").SetValue(caravan, Faction.OfPlayer);
+        caravanOwnerFixtures.Add(caravan);
+        Find.WorldObjects.AllWorldObjects.Add(caravan);
+        Find.WorldObjects.Caravans.Add(caravan);
+        ((HashSet<WorldObject>)AccessTools.Field(typeof(WorldObjectsHolder), "worldObjectsHashSet")
+            .GetValue(Find.WorldObjects)).Add(caravan);
+        // Establish this isolated owner's real ThingOwner graph without the
+        // unrelated UI/world notifications required by Caravan.AddPawn.
+        foreach (Pawn pawn in pawns)
+        {
+            pawn.inventory = new Pawn_InventoryTracker(pawn);
+            caravan.pawns.InnerListForReading.Add(pawn);
+            pawn.holdingOwner = caravan.pawns;
+            if (pawn.kindDef == null)
+                pawn.kindDef = new PawnKindDef { defName = "RuntimeCaravanKind" + pawn.thingIDNumber, race = pawn.def };
+        }
+        return caravan;
+    }
+
+    private static void TestNativeCaravanSurvival()
+    {
+        var fixtureHarmony = new Harmony("wildshift.tests.caravan-survival-boundaries");
+        var ownerMethod = AccessTools.Method(typeof(Caravan), "IsOwner");
+        var deathMethod = AccessTools.Method(typeof(Caravan), "Notify_MemberDied");
+        var productionHarmony = new Harmony(Owner);
+        var deathPrefixes = Harmony.GetPatchInfo(deathMethod)?.Prefixes.Where(p => p.owner == Owner).ToArray()
+            ?? Array.Empty<Patch>();
+        bool productionUnpatched = false;
+        var original = Pawn(121, Intelligence.Humanlike, Faction.OfPlayer);
+        original.kindDef = new PawnKindDef { defName = "RuntimeCaravanOriginal", race = original.def };
+        var form = Pawn(122, Intelligence.Animal, Faction.OfPlayer);
+        var ordinary = Pawn(123, Intelligence.Animal, Faction.OfPlayer);
+        var member = Pawn(124, Intelligence.Humanlike, Faction.OfPlayer);
+        var comp = Mark(form);
+        Check(comp.TryStore(original), "Native caravan fixture preserves actual human in animal form");
+        var previousWorldObjects = Find.World.worldObjects;
+        Find.World.worldObjects = new WorldObjectsHolder();
+        var caravan = CaravanFixture(member, form, ordinary);
+        var enemy = Bare<Faction>();
+        enemy.def = new FactionDef { defName = "RuntimeCaravanEnemy" };
+        try
+        {
+            Check(caravan.Spawned, "Native caravan spawned lookup resolves registered fixture world object");
+            // The native loss branch and production surviving-owner branch
+            // stop before stripping/removal/world/UI effects which require a
+            // complete running game (tested separately).
+            fixtureHarmony.Patch(ownerMethod,
+                prefix: new HarmonyMethod(typeof(Program), nameof(ThrowDuringOwnerProbe)));
+            AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(member.health, PawnHealthState.Dead);
+
+            foreach (var patch in deathPrefixes) productionHarmony.Unpatch(deathMethod, patch.PatchMethod);
+            productionUnpatched = true;
+            Check(ProbeNativeMemberDeath(caravan, member) == "lost",
+                "Native unmodified caravan death decision loses living animal-form colonist");
+            foreach (var patch in deathPrefixes) productionHarmony.Patch(deathMethod, prefix: new HarmonyMethod(patch.PatchMethod));
+            productionUnpatched = false;
+            Check(ProbeNativeMemberDeath(caravan, member) == "survived",
+                "Native caravan death decision preserves living transformed colonist after last human dies");
+            Check(!caravan.IsOwner(form) && !CaravanUtility.IsOwner(form, Faction.OfPlayer),
+                "Survival fix does not grant global caravan/formation ownership to animal form");
+            var negotiatorOwner = AccessTools.Method(typeof(BestCaravanPawnUtility), "IsConsciousOwner");
+            Check(!(bool)negotiatorOwner.Invoke(null, new object[] { form, caravan }),
+                "Native negotiator selection does not gain animal owner through survival fix");
+
+            caravan.pawns.InnerListForReading.Remove(member);
+            member.holdingOwner = null;
+            var ownerUtility = typeof(TransformUtility).Assembly.GetType("WildShift.TransformedCaravanOwnerUtility", true);
+            Check((bool)AccessTools.Method(ownerUtility, "IsLivingFormOwner").Invoke(null, new object[] { caravan, form }),
+                "Production owner helper recognizes living original of active form");
+            Check(!NativeCaravanFlag(caravan, "AllOwnersDowned"), "Awake mobile form prevents false all-owners-downed immobilization");
+            Check(!NativeCaravanFlag(caravan, "AllOwnersHaveMentalBreak"), "Awake mobile form prevents false all-owners-mental-break immobilization");
+            AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(form.health, PawnHealthState.Down);
+            Check(NativeCaravanFlag(caravan, "AllOwnersDowned"), "Actually downed form retains native caravan immobilization");
+            AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(form.health, PawnHealthState.Mobile);
+            AccessTools.Field(typeof(MentalStateHandler), "curStateInt").SetValue(form.mindState.mentalStateHandler,
+                new MentalState { pawn = form, def = new MentalStateDef { defName = "RuntimeCaravanMentalBreak" } });
+            Check(NativeCaravanFlag(caravan, "AllOwnersHaveMentalBreak"), "Actual animal mental break retains native caravan immobilization");
+            AccessTools.Field(typeof(MentalStateHandler), "curStateInt").SetValue(form.mindState.mentalStateHandler, null);
+
+            ownerProbeThrows = true;
+            bool exceptionObserved = false;
+            try { exceptionObserved = ProbeNativeMemberDeath(caravan, member) == "owner-exception"; }
+            finally { ownerProbeThrows = false; }
+            Check(exceptionObserved && !caravan.IsOwner(form),
+                "Exceptional native owner callback propagates and cannot change subsequent trade ownership");
+            Check(!NativeCaravanFlag(caravan, "AllOwnersDowned"), "Normal mobility check works after callback exception");
+
+            foreach (Pawn candidate in new[] { form, ordinary })
+                candidate.inventory = new Pawn_InventoryTracker(candidate);
+            AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(member.health, PawnHealthState.Mobile);
+            caravan.pawns.InnerListForReading.Add(member);
+            member.holdingOwner = caravan.pawns;
+            var seller = Bare<Settlement_TraderTracker>();
+            var caravanSeller = new Caravan_TraderTracker(caravan);
+            Check(seller.ColonyThingsWillingToBuy(member).Contains(form)
+                && caravanSeller.ColonyThingsWillingToBuy(member).Contains(form),
+                "Actual native settlement and caravan trade still offer transformed animal for sale");
+            Check(!seller.ColonyThingsWillingToBuy(member).Contains(member),
+                "Native trade still excludes ordinary human owner");
+            caravan.pawns.InnerListForReading.Remove(member);
+            member.holdingOwner = null;
+
+            AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(form.health, PawnHealthState.Dead);
+            Check(NativeCaravanFlag(caravan, "AllOwnersDowned"), "Dead form cannot preserve caravan ownership");
+            AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(form.health, PawnHealthState.Mobile);
+            AccessTools.Field(typeof(Thing), "mapIndexOrState").SetValue(form, (sbyte)-2);
+            Check(NativeCaravanFlag(caravan, "AllOwnersDowned"), "Destroyed form cannot preserve caravan ownership");
+            AccessTools.Field(typeof(Thing), "mapIndexOrState").SetValue(form, (sbyte)-1);
+            AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(original.health, PawnHealthState.Dead);
+            Check(NativeCaravanFlag(caravan, "AllOwnersDowned"), "Dead stored original cannot preserve caravan ownership");
+            caravan.pawns.InnerListForReading.Add(member);
+            member.holdingOwner = caravan.pawns;
+            AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(member.health, PawnHealthState.Dead);
+            Check(ProbeNativeMemberDeath(caravan, member) == "lost",
+                "Native loss decision remains intact when stored human is also dead");
+            caravan.pawns.InnerListForReading.Remove(member);
+            member.holdingOwner = null;
+            AccessTools.Field(typeof(Pawn_HealthTracker), "healthState").SetValue(original.health, PawnHealthState.Mobile);
+            AccessTools.Field(typeof(Thing), "factionInt").SetValue(form, null);
+            Check(NativeCaravanFlag(caravan, "AllOwnersDowned"), "Released form cannot preserve player caravan");
+            AccessTools.Field(typeof(Thing), "factionInt").SetValue(form, Faction.OfPlayer);
+            AccessTools.Field(typeof(Thing), "factionInt").SetValue(original, enemy);
+            Check(NativeCaravanFlag(caravan, "AllOwnersDowned"), "Non-player stored original cannot preserve player caravan");
+            AccessTools.Field(typeof(Thing), "factionInt").SetValue(original, Faction.OfPlayer);
+            original.guest = Bare<Pawn_GuestTracker>();
+            AccessTools.Field(typeof(Pawn_GuestTracker), "pawn").SetValue(original.guest, original);
+            original.guest.guestStatusInt = GuestStatus.Slave;
+            Check(NativeCaravanFlag(caravan, "AllOwnersDowned"), "Native slave ownership restriction is preserved for stored original");
+            original.guest.guestStatusInt = GuestStatus.Prisoner;
+            AccessTools.Field(typeof(Pawn_GuestTracker), "hostFactionInt").SetValue(original.guest, enemy);
+            Check(NativeCaravanFlag(caravan, "AllOwnersDowned"), "Hosted/prisoner stored original cannot preserve player caravan");
+            original.guest = null;
+            form.guest = Bare<Pawn_GuestTracker>();
+            AccessTools.Field(typeof(Pawn_GuestTracker), "pawn").SetValue(form.guest, form);
+            AccessTools.Field(typeof(Pawn_GuestTracker), "hostFactionInt").SetValue(form.guest, enemy);
+            form.guest.guestStatusInt = GuestStatus.Prisoner;
+            Check(NativeCaravanFlag(caravan, "AllOwnersDowned"), "Hosted/captured animal form cannot preserve player caravan");
+            form.guest = null;
+            Check(comp.ReleaseStoredPawn() == original && NativeCaravanFlag(caravan, "AllOwnersDowned"),
+                "Empty shell and ordinary livestock cannot substitute for caravan owners");
+            Check(comp.TryStore(original) && !NativeCaravanFlag(caravan, "AllOwnersDowned"),
+                "Restored actual original re-enables living-owner protection");
+            Console.WriteLine("Caravan native fixture: real spawned lookup, native loss branch, production survivor branch, mobility getters and trade APIs; fixture stops before Strip/RemovePawn effects. Full caravan death/removal lifecycle is tested separately in the engine fixture.");
+        }
+        finally
+        {
+            if (productionUnpatched)
+                foreach (var patch in deathPrefixes)
+                    productionHarmony.Patch(deathMethod, prefix: new HarmonyMethod(patch.PatchMethod));
+            foreach (var method in Harmony.GetAllPatchedMethods().Where(m => Harmony.GetPatchInfo(m).Owners.Contains(fixtureHarmony.Id)).ToArray())
+                fixtureHarmony.Unpatch(method, HarmonyPatchType.All, fixtureHarmony.Id);
+            caravanOwnerFixtures.Clear();
+            caravanDeathProbe = null;
+            caravanDeathMember = null;
+            ownerProbeThrows = false;
+            Find.World.worldObjects = previousWorldObjects;
         }
     }
 

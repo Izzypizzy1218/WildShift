@@ -66,12 +66,13 @@ namespace WildShift
         public static bool Prefix(Pawn_TrainingTracker __instance)
         {
             Pawn animal = __instance.pawn;
-            // This native method only maintains training decay. A human mind
-            // in a special-capable form retains its training without upkeep.
+            // This native method only maintains training decay. Every human
+            // mind retains its tameness/training, including ordinary forms and
+            // games without Odyssey special trainables. Otherwise native decay
+            // can eventually SetFaction(null) and strand the preserved human.
             // No repeated completion, definition scan or allocation per tick.
             return animal == null || animal.RaceProps == null
-                || !animal.RaceProps.Animal || animal.RaceProps.specialTrainables.NullOrEmpty()
-                || !TransformUtility.IsTransformedAnimal(animal);
+                || !animal.RaceProps.Animal || !TransformUtility.IsTransformedAnimal(animal);
         }
     }
 }

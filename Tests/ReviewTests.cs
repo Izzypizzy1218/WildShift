@@ -4,6 +4,8 @@ namespace WildShift.Tests
     {
         private static void RunReviewTests()
         {
+            RunReturnDraftTests();
+
             Reset(); Pawn originalHuman; Pawn form=Form(out originalHuman);
             var caravanOwner=new ThingOwner(); caravanOwner.TryAddOrTransfer(form,false);
             Find.WorldPawns.PassToWorld(form,PawnDiscardDecideMode.KeepForever);
@@ -67,6 +69,63 @@ namespace WildShift.Tests
                 EnemyShapeshifterUtility.IsCombatForm(dead);
             }
             Check(TransformUtility.transformedLookups==reads,"30000 ordinary/dead animal checks do not look up transformed hediffs");
+        }
+
+        private static void RunReturnDraftTests()
+        {
+            var map=new Map(); Pawn human;
+            Reset(); var animal=Form(out human,map); animal.drafter.Drafted=true;
+            Check(TransformUtility.RevertToHuman(animal)==human && human.Drafted,"drafted form returns to a drafted human");
+
+            Reset(); animal=Form(out human,map);
+            Check(TransformUtility.RevertToHuman(animal)==human && !human.Drafted,"ordinary undrafted return stays undrafted");
+
+            Reset(); animal=Form(out human,map); animal.drafter.Drafted=true; human.Downed=true;
+            Check(TransformUtility.RevertToHuman(animal)==human && !human.Drafted,"downed stored human is not drafted on return");
+
+            Reset(); animal=Form(out human,map); animal.drafter.Drafted=true; human.InMentalState=true;
+            Check(TransformUtility.RevertToHuman(animal)==human && !human.Drafted,"mentally broken stored human is not drafted on return");
+
+            Reset(); animal=Form(out human,map); animal.drafter.Drafted=true;
+            animal.Faction=new Faction { hostile=true };
+            Check(TransformUtility.RevertToHuman(animal)==human && !human.Drafted,"enemy return does not gain a player draft order");
+
+            Reset(); animal=Form(out human); animal.drafter.Drafted=true; human.drafter=null;
+            var owner=new ThingOwner(); owner.TryAddOrTransfer(animal,false);
+            Check(TransformUtility.RevertToHuman(animal)==human && owner.Contains(human)
+                && !human.Spawned && human.drafter==null,"holder return does not create an off-map draft controller");
+
+            Reset(); animal=Form(out human); animal.drafter.Drafted=true; human.drafter=null;
+            Find.WorldPawns.PassToWorld(animal,PawnDiscardDecideMode.KeepForever);
+            Check(TransformUtility.RevertToHuman(animal)==human && WorldPawnsUtility.IsWorldPawn(human)
+                && !human.Spawned && human.drafter==null,"world return does not create an off-map draft controller");
+
+            Reset(); animal=Form(out human,map); animal.drafter.Drafted=true;
+            GenSpawn.FailBefore=p=>p==human;
+            Check(TransformUtility.RevertToHuman(animal)==null && animal.Drafted
+                && animal.comp.StoredPawn==human && !human.Drafted,"failed placement keeps the active form drafted and the original stored");
+            GenSpawn.FailBefore=null;
+            Check(TransformUtility.RevertToHuman(animal)==human && human.Drafted,"return retry restores draft after placement recovers");
+
+            Reset(); animal=Form(out human,map); animal.drafter.Drafted=true;
+            GenSpawn.FailAfter=p=>p==human;
+            Check(TransformUtility.RevertToHuman(animal)==human && human.Drafted,
+                "committed spawn restores draft even when a spawn callback throws");
+
+            Reset(); animal=Form(out human); animal.drafter.Drafted=true; human.drafter=null;
+            owner=new ThingOwner(); owner.TryAddOrTransfer(animal,false); owner.Reject=p=>p==human;
+            Check(TransformUtility.RevertToHuman(animal)==null && animal.Drafted
+                && animal.comp.StoredPawn==human && human.drafter==null,"holder rejection preserves active form draft and stored original");
+
+            Reset(); animal=Form(out human,map); animal.drafter.Drafted=true;
+            float deathChance=WildShiftMod.Settings.deathChance; WildShiftMod.Settings.deathChance=0;
+            Check(!Patch_TransformedDeath.Prefix(animal,null) && human.Spawned && !human.Dead
+                && human.Drafted,"animal death keeps the surviving human's draft order");
+            WildShiftMod.Settings.deathChance=deathChance;
+
+            Reset(); animal=Form(out human,map); animal.drafter.Drafted=true;
+            Check(!Patch_TransformedDeath.Prefix(animal,new DamageInfo(DamageDefOf.ExecutionCut,100))
+                && human.Dead && animal.Destroyed,"draft restoration does not bypass slaughter death");
         }
     }
 }

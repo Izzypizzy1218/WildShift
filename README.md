@@ -7,17 +7,18 @@ WildShift is a RimWorld 1.6 / 1.7 beta mod about colonists who can transform int
 - Transform a shapeshifter into one eligible animal form before or after drafting.
 - Keep transformed animals visible and selectable in the colonist bar.
 - Draft and directly control the transformed animal.
-- Enter animal form with the species' supported special training and required prerequisites completed. Special-capable forms retain their training, including after loading existing saves; hive queens spew eggs and sludge only when commanded.
+- Enter animal form with the species' supported special training and required prerequisites completed. All active transformed forms retain tameness and training; ordinary livestock keeps native training decay. Hive queens spew eggs and sludge only when commanded.
 - Use the normal draft hotkey (`R`) for transformed animals.
 - Use the single native melee attack command (`H` by default); transformed forms do not add a second attack button. Apparel skills such as NewRatkin's shield-facing command remain available.
 - Use the native right-click movement, attack and interaction menus for transformed animals, including mixed selections with human colonists. Use the explicit attack command for deliberate attacks on colony objects.
 - Drag-select player-owned transformed animals together with colonists; ordinary livestock retain the normal selection rules.
 - Keep one grouped draft button on transformed animals when Draftable Animals - Releashed is active, including attack-trained forms and its no-training setting. See `Docs/DraftableAnimals-v1.2.23.md` for the tested 1.6 binary and the incompatible legacy 1.5 download.
-- Return to the stored human body with the revert command.
+- Return to the stored human body with the revert command. Preserve the animal's drafted state when the human returns safely to a map and remains able to be drafted.
 - Drop the animal form's worn apparel, equipment, inventory and carried items nearby before returning. Anything that cannot be dropped goes to the original human's inventory; off-map returns keep all items there. Original human clothing remains worn.
 - Preserve Animal Gear / Animal Equipment apparel during return, including inventory fallback when nearby ground cannot accept it. Visuals remain subject to the equipment's species support and textures.
 - Prevent a false game over while a lone colonist is transformed.
 - Keep temporary camp/site maps while a living player-owned animal form still holds its original living colonist. Return to human form before using the native solo caravan departure flow.
+- Keep an existing caravan alive when its last ordinary human dies but a living transformed colonist remains. Healthy, sane forms also prevent false all-owners-downed or mental-break travel blocks; normal animal trade classification remains intact.
 - Remove randomly generated diseases and injuries from temporary animal bodies.
 - Discover latent shapeshifters through successful normal taming, or through medical-bond taming if the animal has no recorded player-inflicted harm. Normal taming does not require a bonded relationship.
 - Select a purchased or already owned latent animal on a map and use **Awaken as human**. Purchases ignore past damage; belongings are automatically placed nearby.
@@ -121,13 +122,15 @@ To build 1.6, supply matching 1.6 game or reference assemblies and `-p:RimWorldV
 
 ## Current version
 
-`v1.3.0-beta.4`
+`v1.3.0-beta.5`
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
 
 See the [beta.3 source review](Docs/Review-v1.3.0-beta.3.md) for corrected companion assignment, mental-state controls and cache lifetime issues, plus current validation results.
 
 See the [temporary-map hotfix](Docs/TemporaryMap-v1.3.0-beta.4.md) for the solo shapeshifter map-removal bug and its validation scope.
+
+See the [beta.5 gameplay review](Docs/Review-v1.3.0-beta.5.md) for caravan survival, training decay and draft-state fixes, with actual 1.7 engine regressions.
 
 See [special training and discovery-letter validation](Docs/SpecialTraining-v1.2.17.md) for automatic species training, existing-save migration and the hive-queen fix.
 

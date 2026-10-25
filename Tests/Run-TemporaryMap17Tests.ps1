@@ -68,17 +68,17 @@ $profile=Join-Path $Output 'profile'
 $config=Join-Path $profile 'Config'
 $null=New-Item -ItemType Directory -Force -Path $config
 $mods=@('brrainz.harmony','ludeon.rimworld')
-$dlcs=@()
-if (!$CoreOnly) {
-    foreach ($name in @('Royalty','Ideology','Biotech','Anomaly','Odyssey')) {
-        $path=Join-Path $GameDir ('Data\'+$name)
-        if (Test-Path -LiteralPath (Join-Path $path 'About\About.xml')) { $dlcs+=PackageId $path }
-    }
+$installedDlcs=@()
+foreach ($name in @('Royalty','Ideology','Biotech','Anomaly','Odyssey')) {
+    $path=Join-Path $GameDir ('Data\'+$name)
+    if (Test-Path -LiteralPath (Join-Path $path 'About\About.xml')) { $installedDlcs+=PackageId $path }
 }
+$dlcs=@()
+if (!$CoreOnly) { $dlcs=$installedDlcs }
 $mods+=$dlcs
 $mods+=@('wildshift.mod','wildshift.tests.temporarymap17')
 $li=($mods | ForEach-Object { '<li>'+[Security.SecurityElement]::Escape($_)+'</li>' }) -join ''
-$dlcLi=($dlcs | ForEach-Object { '<li>'+[Security.SecurityElement]::Escape($_)+'</li>' }) -join ''
+$dlcLi=($installedDlcs | ForEach-Object { '<li>'+[Security.SecurityElement]::Escape($_)+'</li>' }) -join ''
 ('<ModsConfigData><version>'+[Security.SecurityElement]::Escape($version)+'</version><activeMods>'+$li+'</activeMods><knownExpansions>'+$dlcLi+'</knownExpansions></ModsConfigData>') | Set-Content -LiteralPath (Join-Path $config 'ModsConfig.xml') -Encoding utf8
 '<PrefsData><langFolderName>English</langFolderName><devMode>True</devMode><screenWidth>1280</screenWidth><screenHeight>720</screenHeight><fullscreen>False</fullscreen><runInBackground>True</runInBackground></PrefsData>' | Set-Content -LiteralPath (Join-Path $config 'Prefs.xml') -Encoding utf8
 $userConfig=Join-Path ([Environment]::GetFolderPath('UserProfile')) 'AppData\LocalLow\Ludeon Studios\RimWorld by Ludeon Studios\Config'
