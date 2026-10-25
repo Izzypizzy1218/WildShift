@@ -50,7 +50,7 @@ namespace WildShift.Tests
             bool state; Patch_MedicalBondAwakening.Prefix(new Pawn(),animal,out state);
             // This models DoTend's successful medical-bond recruitment boundary.
             if(recruit) animal.SetFaction(Faction.OfPlayer);
-            Patch_MedicalBondAwakening.Postfix(animal,state); return animal.Destroyed;
+            Patch_MedicalBondAwakening.Postfix(animal,state); return AnimalFormStorage.IsStored(animal);
         }
         private static void RunMedicalAwakeningTests()
         {
@@ -85,7 +85,7 @@ namespace WildShift.Tests
             animal=LatentAnimal(); Check(MedicalRecruit(animal),"old saves without harm history remain loadable");
             Reset(); animal=LatentAnimal(); Harm(animal,new Pawn()); bool normal;
             Patch_Taming.Prefix(animal,out normal); animal.SetFaction(Faction.OfPlayer); Patch_Taming.Postfix(animal,normal);
-            Check(animal.Destroyed,"normal taming remains allowed after player harm without any bond check");
+            Check(AnimalFormStorage.IsStored(animal),"normal taming remains allowed after player harm without any bond check");
             Reset(); animal=LatentAnimal(); Patch_Taming.Prefix(animal,out normal); Patch_Taming.Postfix(animal,normal);
             Check(!animal.Destroyed,"failed normal taming does not reveal");
             Reset(); animal=LatentAnimal(); Check(!MedicalRecruit(animal,false),"treatment without native recruitment does not reveal");

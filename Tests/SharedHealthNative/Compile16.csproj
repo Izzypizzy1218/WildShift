@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NativeRefs>C:/Users/집/.nuget/packages/krafs.rimworld.ref/1.6.4871/ref/net472</NativeRefs>
+    <WildShiftPath Condition="'$(WildShiftPath)' == ''">$(MSBuildThisFileDirectory)..\..\1.6\Assemblies\WildShift.dll</WildShiftPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Compile16Api.cs" />
+    <Reference Include="WildShift" HintPath="$(WildShiftPath)" Private="false" />
+    <Reference Include="Assembly-CSharp" HintPath="$(NativeRefs)/Assembly-CSharp.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(NativeRefs)/UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.IMGUIModule" HintPath="$(NativeRefs)/UnityEngine.IMGUIModule.dll" Private="false" />
+    <Reference Include="0Harmony" HintPath="C:/Program Files (x86)/Steam/steamapps/workshop/content/294100/2009463077/1.6/Assemblies/0Harmony.dll" Private="false" />
+  </ItemGroup>
+</Project>

@@ -8,6 +8,7 @@ namespace WildShift
     {
         public static HediffDef WildShift_Shapeshifter;
         public static HediffDef WildShift_Transformed;
+        public static HediffDef WildShift_SharedFormDrugEffect;
         public static HediffDef WildShift_FieldShapeshifterMarker;
         public static AbilityDef WildShift_Shift;
         public static ThinkTreeDef WildShift_TransformedDrafted;

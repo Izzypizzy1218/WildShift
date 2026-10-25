@@ -12,7 +12,7 @@ namespace WildShift
         }
     }
 
-    public class HediffComp_Shapeshifter : HediffComp
+    public class HediffComp_Shapeshifter : HediffComp, IThingHolder
     {
         public PawnKindDef assignedKind;
         public PawnKindDef customAssignedKind;
@@ -22,6 +22,20 @@ namespace WildShift
         public bool enemyShiftUsed;
         private int lastShiftTick = -999999;
         private bool legacyAbilitiesRemoved;
+        private AnimalFormStorage formStorage;
+
+        public AnimalFormStorage FormStorage
+        {
+            get
+            {
+                if (formStorage == null) formStorage = new AnimalFormStorage(ParentPawn);
+                return formStorage;
+            }
+        }
+
+        public IThingHolder ParentHolder { get { return ParentPawn; } }
+        public ThingOwner GetDirectlyHeldThings() { return FormStorage.GetDirectlyHeldThings(); }
+        public void GetChildHolders(List<IThingHolder> outChildren) { FormStorage.GetChildHolders(outChildren); }
 
         private Pawn ParentPawn
         {
@@ -50,6 +64,7 @@ namespace WildShift
             Scribe_Defs.Look(ref assignedKind, "assignedKind");
             Scribe_Defs.Look(ref customAssignedKind, "customAssignedKind");
             Scribe_Deep.Look(ref geneticForm, "geneticForm");
+            Scribe_Deep.Look(ref formStorage, "animalFormStorage", ParentPawn);
             Scribe_Values.Look(ref saleRevengeRolled, "saleRevengeRolled", false);
             Scribe_Values.Look(ref enemyRaidParticipant, "enemyRaidParticipant", false);
             Scribe_Values.Look(ref enemyShiftUsed, "enemyShiftUsed", false);

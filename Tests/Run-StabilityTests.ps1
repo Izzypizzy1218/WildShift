@@ -2,16 +2,20 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $source = Get-Content "$PSScriptRoot/StabilityTests.cs" -Raw
 $source += @'
-namespace WildShift { public static class GeneticsCompatibility { public static void Remember(Verse.Pawn animal, Verse.Pawn human) { } } }
+namespace WildShift { public static class GeneticsCompatibility { public static void Remember(Verse.Pawn animal, Verse.Pawn human) { } public static void Restore(Verse.Pawn animal, object state) { } } }
 namespace WildShift { public static class SoldShapeshifterRevenge { public static bool IsPackAnimal(Verse.Pawn pawn) { return false; } public static bool IsRevengePawn(Verse.Pawn pawn) { return false; } } }
 '@
 # Compile production implementations against fault-injecting engine stubs.
-foreach ($name in @('FormTransferUtility', 'Patch_TransformedColonistBar', 'Patch_TransformedDeath', 'AnimalModCompatibility', 'EnemyShapeshifterUtility', 'MapComponent_EnemyShapeshifters', 'Patch_EnemyShapeshifters', 'Patch_TransformedAnimalDraftThinkTree')) {
+foreach ($name in @('FormTransferUtility', 'AnimalFormStorage', 'Patch_TransformedColonistBar', 'Patch_TransformedDeath', 'AnimalModCompatibility', 'EnemyShapeshifterUtility', 'MapComponent_EnemyShapeshifters', 'Patch_EnemyShapeshifters', 'Patch_TransformedAnimalDraftThinkTree')) {
     $source += "`n" + ((Get-Content "$root/Source/WildShift/$name.cs" -Raw) -replace '(?m)^using [^;]+;\r?\n', '')
 }
 $source += "`n" + ((Get-Content "$root/Source/WildShift/FormPossessions.cs" -Raw) -replace '(?m)^using [^;]+;\r?\n', '')
 $source += "`n" + (Get-Content "$PSScriptRoot/FormPossessionsTests.cs" -Raw)
 $transform = Get-Content "$root/Source/WildShift/TransformUtility.cs" -Raw
+$healthStart = $transform.IndexOf('        public static void ClearGeneratedAnimalHealth(')
+$healthEnd = $transform.IndexOf('        public static void EnsureTransformedAnimalControl(', $healthStart)
+if ($healthStart -lt 0 -or $healthEnd -le $healthStart) { throw 'Cannot locate production generated health cleanup methods.' }
+$source += "`nnamespace WildShift { public static partial class TransformUtility {`n" + $transform.Substring($healthStart, $healthEnd - $healthStart) + "`n} }"
 $attackStart = $transform.IndexOf('        public static bool TryOrderMeleeAttack(')
 $attackEnd = $transform.IndexOf('        public static HediffComp_Transformed TryGetTransformedComp(', $attackStart)
 if ($attackStart -lt 0 -or $attackEnd -le $attackStart) { throw 'Cannot locate production melee order method.' }
@@ -37,6 +41,7 @@ if ($start -lt 0 -or $end -le $start) { throw 'Cannot locate production reversio
 $source += "`nnamespace WildShift { public static partial class TransformUtility {`n" + $transform.Substring($start, $end - $start) + "`n} }"
 $source += "`n" + (Get-Content "$PSScriptRoot/EnemyTests.cs" -Raw)
 $source += "`n" + (Get-Content "$PSScriptRoot/ReviewTests.cs" -Raw)
+$source += "`n" + (Get-Content "$PSScriptRoot/AnimalFormStorageTests.cs" -Raw)
 $source += "`n" + ((Get-Content "$root/Source/WildShift/ThinkNode_ConditionalEnemyDutyReady.cs" -Raw) -replace '(?m)^using [^;]+;\r?\n', '')
 Add-Type -TypeDefinition $source
 [WildShift.Tests.StabilityTests]::Run()

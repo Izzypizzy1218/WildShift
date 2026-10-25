@@ -166,7 +166,8 @@ namespace WildShiftReviewValidation
             TickNative(600);
             Check(caravan.Spawned && caravan.ContainsPawn(form), "surviving caravan remains after further native ticks");
             Pawn restored = TransformUtility.RevertToHuman(form, false);
-            Check(restored == original && form.Destroyed && caravan.ContainsPawn(original) && !original.Spawned
+            Check(restored == original && AnimalFormStorage.IsStored(form) && !form.Destroyed
+                && TransformUtility.TryGetTransformedComp(form).StoredPawn == null && caravan.ContainsPawn(original) && !original.Spawned
                 && WorldPawnsUtility.IsWorldPawn(original), "off-map production return replaces form with the exact world-registered human");
             Check(!original.Drafted && original.inventory.innerContainer.TotalStackCountOfDef(ThingDefOf.Silver) == 17,
                 "off-map return stays undrafted and preserves the exact inventory");

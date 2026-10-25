@@ -198,7 +198,7 @@ try {
     if (@(Get-Process -Name 'RimWorld', 'RimWorldWin64' -ErrorAction SilentlyContinue).Count) {
         throw 'RimWorld started during preflight; refusing concurrent launch.'
     }
-    $bootProcess = Start-Process -FilePath $executable -ArgumentList $launchArguments -WorkingDirectory $GameDir -WindowStyle Hidden `
+    $bootProcess = Start-Process -FilePath $executable -ArgumentList $launchArguments -WorkingDirectory $GameDir -Environment @{SteamAppId='294100';SteamGameId='294100'} -WindowStyle Hidden `
         -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
     $result.ProcessId = $bootProcess.Id
     $bootProcess.Id | Set-Content -LiteralPath (Join-Path $Output 'pid.txt') -Encoding ASCII

@@ -96,7 +96,7 @@ function RunPhase([int]$number,[bool]$quickTest) {
     if ($quickTest) { $arguments+='-quicktest' }
     $process=$null
     try {
-        $process=Start-Process -FilePath (Join-Path $GameDir 'RimWorld.exe') -ArgumentList $arguments -WorkingDirectory $GameDir -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+        $process=Start-Process -FilePath (Join-Path $GameDir 'RimWorld.exe') -ArgumentList $arguments -WorkingDirectory $GameDir -Environment @{SteamAppId='294100';SteamGameId='294100'} -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
         $process.Id | Set-Content -LiteralPath (Join-Path $Output ('phase-'+$number+'-pid.txt'))
         $timer=[Diagnostics.Stopwatch]::StartNew()
         while (!$process.WaitForExit(1000)) { if ($timer.Elapsed.TotalSeconds -gt $TimeoutSeconds) { throw "Phase $number timed out after $TimeoutSeconds seconds." } }

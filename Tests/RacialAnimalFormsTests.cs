@@ -22,8 +22,9 @@ namespace Verse
             bool canGeneratePawnRelations=true, bool mustBeCapableOfViolence=false)
         { KindDef = kind; Faction = faction; ForceGenerateNewPawn = forceGenerateNewPawn; FixedGender = fixedGender; ForcedXenotype=forcedXenotype; }
     }
-    public class Pawn
+    public class Pawn : IThingHolder
     {
+        public ThingOwner GetDirectlyHeldThings() { return null; }
         public ThingDef def; public PawnKindDef kindDef; public Genes genes; public Gender gender;
         public RaceProperties RaceProps { get { return def.race; } }
         public Health health = new Health(); public Abilities abilities; public object drafter;

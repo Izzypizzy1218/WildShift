@@ -68,4 +68,7 @@
   <WildShift_CustomFormsSelected>선택: {0}개 (현재 사용 불가: {1}개)</WildShift_CustomFormsSelected>
   <WildShift_CustomFormsClear>선택 모두 해제</WildShift_CustomFormsClear>
   <WildShift_CustomFormsApply>적용</WildShift_CustomFormsApply>
+  <WildShift_ShiftCachedKindMismatch>보존된 동물 형상이 배정된 종과 달라 변신할 수 없습니다. 기존 형상을 삭제하지 않고 보존했습니다.</WildShift_ShiftCachedKindMismatch>
+  <WildShift_ReturnFormStorageBlocked>보존된 동물 형상 보관함이 이미 사용 중이어서 복귀할 수 없습니다. 두 몸은 모두 보존되었습니다.</WildShift_ReturnFormStorageBlocked>
+  <WildShift_ShiftCachedFormUnavailable>보존된 동물 형상을 안전하게 준비할 수 없어 변신하지 못했습니다. 형상과 개조 상태는 보존됩니다.</WildShift_ShiftCachedFormUnavailable>
 </LanguageData>

@@ -68,4 +68,7 @@
   <WildShift_CustomFormsSelected>Selected: {0} (currently unavailable: {1})</WildShift_CustomFormsSelected>
   <WildShift_CustomFormsClear>Clear selection</WildShift_CustomFormsClear>
   <WildShift_CustomFormsApply>Apply</WildShift_CustomFormsApply>
+  <WildShift_ShiftCachedKindMismatch>The preserved animal form does not match the assigned species. Transformation was cancelled without discarding it.</WildShift_ShiftCachedKindMismatch>
+  <WildShift_ReturnFormStorageBlocked>The preserved animal form storage is already occupied. Return was cancelled without discarding either body.</WildShift_ReturnFormStorageBlocked>
+  <WildShift_ShiftCachedFormUnavailable>The preserved animal form could not be prepared safely. Its body and modifications have been preserved.</WildShift_ShiftCachedFormUnavailable>
 </LanguageData>

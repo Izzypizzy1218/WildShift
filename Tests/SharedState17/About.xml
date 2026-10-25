@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+  <name>WildShift Shared State Validation (TEST ONLY)</name>
+  <author>WildShift regression fixture</author>
+  <packageId>wildshift.tests.sharedstate17</packageId>
+  <supportedVersions><li>1.7</li></supportedVersions>
+  <modDependencies>
+    <li><packageId>brrainz.harmony</packageId><displayName>Harmony</displayName></li>
+    <li><packageId>wildshift.mod</packageId><displayName>WildShift</displayName></li>
+    <li><packageId>ludeon.rimworld.biotech</packageId><displayName>Biotech</displayName></li>
+  </modDependencies>
+  <loadAfter><li>brrainz.harmony</li><li>wildshift.mod</li></loadAfter>
+  <description>Isolated native shared-state quicktest fixture. Never include this helper in a release or enable it in a real colony.</description>
+</ModMetaData>

@@ -14,6 +14,7 @@ namespace WildShift
     public static class WildShiftDefOf
     {
         public static object WildShift_FieldShapeshifterMarker = new object();
+        public static object WildShift_Transformed = new object();
         public static ThinkTreeDef WildShift_TransformedDrafted = new ThinkTreeDef();
         public static ThinkTreeDef WildShift_TransformedEnemy = new ThinkTreeDef();
         public static ThinkTreeDef WildShift_TransformedEnemyConstant = new ThinkTreeDef();

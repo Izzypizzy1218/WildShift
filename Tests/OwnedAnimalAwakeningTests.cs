@@ -58,7 +58,7 @@ namespace WildShift.Tests
             var command=OwnedAnimalAwakening.GetCommand(animal);
             Check(command!=null && !command.disabled,"previously purchased marked animal receives enabled awakening command");
             command.action();
-            Check(animal.Destroyed && human.Spawned && human.shifter!=null,"manual command safely reveals human with shapeshifter state");
+            Check(AnimalFormStorage.IsStored(animal) && human.Spawned && human.shifter!=null,"manual command safely reveals human with shapeshifter state");
             Reset(); animal=LatentAnimal(); Check(OwnedAnimalAwakening.GetCommand(animal)==null,"wild animal receives no ownership shortcut");
             animal.Faction=new Faction(); Check(OwnedAnimalAwakening.GetCommand(animal)==null,"trader-owned animal receives no command");
             animal.Faction=Faction.OfPlayer; animal.health.hediffSet.latent=false;
@@ -92,12 +92,12 @@ namespace WildShift.Tests
             var belongings=new [] { animal.inventory.innerContainer[0],animal.equipment.AllEquipmentListForReading[0],animal.apparel.WornApparel[0],animal.carryTracker.CarriedThing };
             Check(!OwnedAnimalAwakening.GetCommand(animal).disabled,"cargo and all equipment allow immediate command use");
             OwnedAnimalAwakening.TryAwaken(animal);
-            Check(animal.Destroyed && TestDrops.Ground.Count==4 && belongings.All(t=>TestDrops.Ground.Contains(t)),"all original items preserved on ground exactly once");
+            Check(AnimalFormStorage.IsStored(animal) && TestDrops.Ground.Count==4 && belongings.All(t=>TestDrops.Ground.Contains(t)),"all original items preserved on ground exactly once");
             Reset(); animal=OwnedLatentAnimal(); animal.inventory=new TestInventory { Fail=true }; animal.inventory.innerContainer.Add(new Thing());
             human=new Pawn(); PawnGenerator.Generate=()=>human; OwnedAnimalAwakening.TryAwaken(animal);
             Check(!animal.Destroyed && animal.Spawned && animal.inventory.innerContainer.Count==1 && human.Destroyed,"failed drop retains animal and item and removes generated human");
             animal.inventory.Fail=false; PawnGenerator.Generate=()=>new Pawn(); OwnedAnimalAwakening.TryAwaken(animal);
-            Check(animal.Destroyed && TestDrops.Ground.Count==1,"failed drop can safely retry without item duplication");
+            Check(AnimalFormStorage.IsStored(animal) && TestDrops.Ground.Count==1,"failed drop can safely retry without item duplication");
             Reset(); animal=OwnedLatentAnimal(); animal.inventory=new TestInventory { Throws=true }; animal.inventory.innerContainer.Add(new Thing());
             OwnedAnimalAwakening.TryAwaken(animal); Check(!animal.Destroyed && animal.inventory.innerContainer.Count==1,"drop exception preserves animal and belongings");
             Reset(); animal=OwnedLatentAnimal(); animal.inventory=new TestInventory(); var cargo=new Thing(); animal.inventory.innerContainer.Add(cargo);
@@ -107,11 +107,11 @@ namespace WildShift.Tests
             OwnedAnimalAwakening.TryAwaken(animal);
             Check(!animal.Destroyed && animal.Spawned && human.Destroyed,"manual placement failure preserves purchased animal");
             GenSpawn.FailBefore=null; PawnGenerator.Generate=()=>new Pawn(); OwnedAnimalAwakening.TryAwaken(animal);
-            Check(animal.Destroyed,"manual awakening can retry after placement failure");
+            Check(AnimalFormStorage.IsStored(animal),"manual awakening can retry after placement failure");
             Reset(); animal=OwnedLatentAnimal(); int generated=0; command=OwnedAnimalAwakening.GetCommand(animal);
             PawnGenerator.Generate=()=>{generated++; OwnedAnimalAwakening.TryAwaken(animal); return new Pawn();};
             LongEventHandler.Defer=true; command.action(); command.action(); LongEventHandler.Flush();
-            Check(generated==1 && animal.Destroyed,"duplicate queued clicks and reentrant callbacks generate one human");
+            Check(generated==1 && AnimalFormStorage.IsStored(animal),"duplicate queued clicks and reentrant callbacks generate one human");
             Reset(); animal=OwnedLatentAnimal(); var vanilla=new Gizmo(); IEnumerable<Gizmo> gizmos=new [] { vanilla };
             Patch_OwnedAnimalAwakeningGizmos.Postfix(animal,ref gizmos); var result=gizmos.ToList();
             Check(result.Count==2 && result[0]==vanilla && result[1] is Command_Action,"postfix preserves existing gizmos and appends command");

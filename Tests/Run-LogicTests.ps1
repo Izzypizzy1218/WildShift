@@ -11,8 +11,19 @@ $source = Get-Content "$PSScriptRoot/RacialAnimalFormsTests.cs" -Raw
 # Optional integrations are exercised against the actual game/mod assemblies in
 # Compatibility-v1.2.18. These unit tests continue to cover the no-mod path.
 $source += @'
-namespace Verse { public static class Scribe_Deep { public static void Look<T>(ref T v, string k) { } } }
+namespace Verse {
+ public static class Scribe_Deep { public static void Look<T>(ref T v, string k, params object[] args) { } }
+ public interface IThingHolder { ThingOwner GetDirectlyHeldThings(); }
+ public class ThingOwner { }
+}
 namespace WildShift {
+ // Body storage has its own production/fault/native tests. Selection tests
+ // keep it as a boundary rather than modeling native ownership here.
+ public sealed class AnimalFormStorage {
+  public AnimalFormStorage(Verse.Pawn pawn) { }
+  public Verse.ThingOwner GetDirectlyHeldThings() { return null; }
+  public void GetChildHolders(System.Collections.Generic.List<Verse.IThingHolder> holders) { }
+ }
  public sealed class GeneticFormState { }
  public static class GeneticsCompatibility {
   public static System.Collections.Generic.HashSet<string> ExcludedNames = new System.Collections.Generic.HashSet<string>();

@@ -153,8 +153,10 @@ namespace WildShiftTemporaryMapValidation
             Pawn returned = TransformUtility.RevertToHuman(form, false);
             Check(returned == human && human.Spawned && human.GetUniqueLoadID() == originalId,
                 "production reversion restores that same saved human to the temporary map");
-            Check(form.Destroyed && human.inventory.innerContainer.TotalStackCountOfDef(ThingDefOf.Silver) == 17,
-                "return removes the empty form without duplicating or losing inventory");
+            Check(AnimalFormStorage.IsStored(form) && !form.Destroyed
+                && TransformUtility.TryGetTransformedComp(form).StoredPawn == null
+                && human.inventory.innerContainer.TotalStackCountOfDef(ThingDefOf.Silver) == 17,
+                "return preserves the inactive form without duplicating or losing inventory");
 
             Caravan caravan = CaravanExitMapUtility.ExitMapAndCreateCaravan(new[] { human }, Faction.OfPlayer,
                 camp.Tile, camp.Tile, PlanetTile.Invalid, false);

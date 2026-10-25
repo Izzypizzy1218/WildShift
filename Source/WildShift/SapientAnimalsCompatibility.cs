@@ -81,6 +81,8 @@ namespace WildShift
                 // to the same comp, preserving the original pawn and its identity.
                 if (TransformUtility.TryGetTransformedComp(__result) != __state.storage)
                 { Log.Error("[WildShift] B&S did not migrate transformed storage as expected."); return; }
+                SharedFormIdentity.Initialize(__result);
+                SharedFormHealth.Initialize(__result);
                 TransformUtility.EnsureTransformedAnimalControl(__result, true);
                 if (__state.drafted && __result.drafter != null) __result.drafter.Drafted = true;
                 var owner = TransformUtility.TryGetShapeshifterComp(__state.storage.StoredPawn);

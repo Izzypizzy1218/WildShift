@@ -72,6 +72,7 @@ internal static class Program
         TestNativeControlAndStorage();
         TestNativeTemporaryMapRetention();
         TestNativeCaravanSurvival();
+        TestSharedPersonalIdentity(scratch);
         TestStorageSerialization(scratch);
         TestCustomSettingsSerialization(scratch);
         AccessTools.Method(typeof(Log), "DrainOffThreadMessages").Invoke(null, null);
@@ -641,6 +642,83 @@ internal static class Program
             ownerProbeThrows = false;
             Find.World.worldObjects = previousWorldObjects;
         }
+    }
+
+    private static void TestSharedPersonalIdentity(string scratch)
+    {
+        var skillDef = new SkillDef { defName = "RuntimeSharedSkill", label = "runtime shared skill" };
+        DefDatabase<SkillDef>.Add(skillDef);
+        // The console does not run LoadedModManager's real loader. Register
+        // the already loaded mod assembly so native Scribe can resolve Class
+        // attributes exactly as the complete game does, without patching it.
+        var consoleMod = Bare<ModContentPack>();
+        consoleMod.assemblies = new ModAssemblyHandler(consoleMod);
+        consoleMod.assemblies.loadedAssemblies.Add(typeof(SharedPawnSkillTracker).Assembly);
+        LoadedModManager.RunningModsListForReading.Add(consoleMod);
+        GenTypes.ClearCache();
+        var human = Pawn(201, Intelligence.Humanlike, Faction.OfPlayer);
+        human.skills = new Pawn_SkillTracker(human);
+        SkillRecord record = human.skills.GetSkill(skillDef);
+        record.levelInt = 8;
+        record.passion = Passion.Major;
+        record.xpSinceLastLevel = 100f;
+        // This isolated graph has no backstories/work definitions. Model only
+        // those eligibility caches; native learning and serialization stay real.
+        AccessTools.Field(typeof(SkillRecord), "cachedTotallyDisabled").SetValue(record, BoolUnknown.False);
+        AccessTools.Field(typeof(SkillRecord), "cachedPermanentlyDisabled").SetValue(record, BoolUnknown.False);
+        AccessTools.Field(typeof(SkillRecord), "aptitudeCached").SetValue(record, (int?)0);
+        var animal = Pawn(202, Intelligence.Animal, Faction.OfPlayer);
+        var comp = Mark(animal);
+        Check(comp.TryStore(human), "Shared identity fixture retains actual original");
+        SharedFormIdentity.Initialize(animal);
+        Check(SharedFormIdentity.HumanFor(animal) == human && SharedFormIdentity.ActiveFormFor(human) == animal,
+            "Both directions resolve the one active person without a global pawn scan");
+        Check(animal.skills is SharedPawnSkillTracker && animal.skills != human.skills,
+            "Animal has a distinct skill proxy rather than sharing the human tracker owner");
+        Check(animal.skills.GetSkill(skillDef) == record && record.Pawn == human,
+            "Skill consumers read the actual human-owned record");
+        Check(animal.skills.GetSkill(skillDef).Level == 8 && animal.skills.PassionCount == 2,
+            "Native skill level and public skill list show original level and passion");
+        animal.skills.Learn(skillDef, 50f, direct: false, ignoreLearnRate: true);
+        Check(record.xpSinceLastLevel == 150f && record.xpSinceMidnight == 50f,
+            "Native animal learning updates original experience exactly once");
+        record.passion = Passion.Minor;
+        Check(animal.skills.PassionCount == 1, "Changes to original passion are immediately visible on the form");
+        Pawn_SkillTracker proxy = animal.skills;
+        string path = Path.Combine(scratch, "shared-skill-proxy.xml");
+        Scribe.saver.InitSaving(path, "SharedSkills");
+        Scribe_Deep.Look(ref proxy, "proxy", animal);
+        Scribe.saver.FinalizeSaving();
+        XElement node = XDocument.Load(path).Root.Element("proxy");
+        Check(node.Attribute("Class")?.Value == typeof(SharedPawnSkillTracker).FullName,
+            "Native deep saver records the proxy's concrete type");
+        Check(node.Element("skills") == null && node.Element("bodySkills") != null,
+            "Proxy serialization excludes human skill records and preserves only animal-local fallback");
+        Pawn_SkillTracker loaded = null;
+        Scribe.loader.InitLoading(path);
+        Scribe_Deep.Look(ref loaded, "proxy", animal);
+        Scribe.loader.FinalizeLoading();
+        Check(loaded is SharedPawnSkillTracker && loaded.GetSkill(skillDef) == record,
+            "Native proxy reload binds to the same original record without copying it");
+        Check(record.xpSinceLastLevel == 150f, "Proxy reload cannot overwrite or duplicate original experience");
+        SharedFormIdentity.Initialize(animal);
+        Check(animal.skills == proxy, "Repeated identity initialization retains one proxy");
+        comp.ReleaseStoredPawn();
+        Check(SharedFormIdentity.ActiveFormFor(human) == null && SharedFormIdentity.HumanFor(animal) == null,
+            "Released or inactive forms are rejected by weak identity lookups");
+        var sapient = Pawn(204, Intelligence.Humanlike, Faction.OfPlayer);
+        sapient.skills = proxy;
+        var sapientComp = Mark(sapient);
+        Check(sapientComp.TryStore(human), "Sapient replacement fixture owns the same actual original");
+        SharedFormIdentity.Initialize(sapient);
+        Check(sapient.skills != proxy && sapient.skills.GetSkill(skillDef) == record
+            && SharedFormIdentity.ActiveFormFor(human) == sapient,
+            "Migrated humanlike form gets a correctly bound proxy and identity lookup");
+        sapientComp.ReleaseStoredPawn();
+        var ordinary = Pawn(203, Intelligence.Animal, Faction.OfPlayer);
+        SharedFormIdentity.Initialize(ordinary);
+        Check(ordinary.skills == null, "Ordinary livestock does not acquire personal skill state");
+        LoadedModManager.RunningModsListForReading.Remove(consoleMod);
     }
 
     private static void TestStorageSerialization(string scratch)

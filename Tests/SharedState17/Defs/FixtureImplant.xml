@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <HediffDef>
+    <defName>WildShift_TestStatefulAnimalImplant</defName>
+    <label>stateful validation leg</label>
+    <description>TEST ONLY implant with serialized custom component state.</description>
+    <hediffClass>Hediff_AddedPart</hediffClass>
+    <isBad>false</isBad>
+    <scenarioCanAdd>false</scenarioCanAdd>
+    <addedPartProps><partEfficiency>1.2</partEfficiency><solid>true</solid></addedPartProps>
+    <comps><li Class="WildShiftSharedStateValidation.FixtureImplantProperties" /></comps>
+  </HediffDef>
+</Defs>

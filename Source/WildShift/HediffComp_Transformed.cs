@@ -19,6 +19,7 @@ namespace WildShift
         private bool generatedHealthSanitized;
         public bool enemyCombatForm;
         public bool enemyReturnPending;
+        public PawnKindDef sourceKind;
 
         public HediffComp_Transformed()
         {
@@ -90,6 +91,7 @@ namespace WildShift
             Scribe_Values.Look(ref generatedHealthSanitized, "generatedHealthSanitized", false);
             Scribe_Values.Look(ref enemyCombatForm, "enemyCombatForm", false);
             Scribe_Values.Look(ref enemyReturnPending, "enemyReturnPending", false);
+            Scribe_Defs.Look(ref sourceKind, "sourceKind");
             if (storedPawns == null)
             {
                 storedPawns = new ThingOwner<Pawn>(this, false, LookMode.Deep);
@@ -98,18 +100,21 @@ namespace WildShift
             if (Scribe.mode == LoadSaveMode.PostLoadInit)
             {
                 Pawn animal = parent != null ? parent.pawn : null;
-                if (!generatedHealthSanitized)
+                if (!generatedHealthSanitized && HasStoredPawn)
                 {
                     TransformUtility.ClearGeneratedAnimalHealth(animal, WildShiftDefOf.WildShift_Transformed);
                 }
 
                 generatedHealthSanitized = true;
-                TransformUtility.EnsureTransformedAnimalControl(animal, true);
+                if (HasStoredPawn) TransformUtility.EnsureTransformedAnimalControl(animal, true);
                 // Inspect only after native and optional-mod post-load work has
                 // completed. The normal unresolved tree is a cheap no-op.
                 if (animal != null)
                     LongEventHandler.ExecuteWhenFinished(delegate
                     {
+                        if (!HasStoredPawn) return;
+                        SharedFormIdentity.Initialize(animal);
+                        SharedFormHealth.Initialize(animal);
                         AnimalFormTraining.CompleteSpecialTraining(animal);
                         AnimalApparelGraphics.RefreshIfOutOfSync(animal);
                     });

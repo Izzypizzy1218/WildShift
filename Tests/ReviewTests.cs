@@ -5,6 +5,7 @@ namespace WildShift.Tests
         private static void RunReviewTests()
         {
             RunReturnDraftTests();
+            RunAnimalFormStorageTests();
 
             Reset(); Pawn originalHuman; Pawn form=Form(out originalHuman);
             var caravanOwner=new ThingOwner(); caravanOwner.TryAddOrTransfer(form,false);
@@ -32,7 +33,7 @@ namespace WildShift.Tests
             Reset(); animal=new Pawn(); GenSpawn.Spawn(animal,new IntVec3(),map);
             human=new Pawn(); PawnGenerator.Generate=()=>human; GenSpawn.FailAfter=p=>p==human;
             TamingTestBridge.Run(animal);
-            Check(human.Spawned && !human.Destroyed && animal.Destroyed,"post-registration exception commits tamed human once");
+            Check(human.Spawned && !human.Destroyed && AnimalFormStorage.IsStored(animal),"post-registration exception commits tamed human once and preserves original form");
             Reset(); animal=new Pawn(); GenSpawn.Spawn(animal,new IntVec3(),map);
             PawnGenerator.Generate=()=>{throw new Exception("injected generator failure");};
             TamingTestBridge.Run(animal);

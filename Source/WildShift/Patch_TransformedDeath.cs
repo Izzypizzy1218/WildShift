@@ -11,7 +11,7 @@ namespace WildShift
         // VERIFY: RimWorld 1.6 Pawn.Kill still has a DamageInfo? parameter named "dinfo".
         public static bool Prefix(Pawn __instance, DamageInfo? dinfo)
         {
-            if (FormTransferUtility.IsReturning(__instance)) return false;
+            if (FormTransferUtility.IsReturning(__instance) || AnimalFormStorage.IsStored(__instance)) return false;
             HediffComp_Transformed transformed = TransformUtility.TryGetTransformedComp(__instance);
             if (transformed == null)
             {
@@ -33,7 +33,7 @@ namespace WildShift
             // ordinary combat damage, so the stored human must die as well.
             bool executedBySlaughter = dinfo.HasValue && dinfo.Value.Def == DamageDefOf.ExecutionCut;
             float deathChance = WildShiftMod.Settings != null ? WildShiftMod.Settings.deathChance : 0.2f;
-            bool humanDies = executedBySlaughter || Rand.Chance(deathChance);
+            bool humanDies = executedBySlaughter || SharedFormHealth.IsSharedLethalDeath(__instance) || Rand.Chance(deathChance);
             Pawn human = TransformUtility.RevertToHuman(__instance, !humanDies);
             if (human == null)
             {
@@ -47,13 +47,13 @@ namespace WildShift
             if (humanDies)
             {
                 human.Kill(dinfo);
-                return !__instance.Destroyed && !transformed.HasStoredPawn;
+                return !__instance.Destroyed && !AnimalFormStorage.IsStored(__instance) && !transformed.HasStoredPawn;
             }
 
             ApplySpilloverDamage(human, dinfo);
             // If emergency cleanup retained possessions, let native death
             // preserve them on/in the corpse instead of leaving a living shell.
-            return !__instance.Destroyed && !transformed.HasStoredPawn;
+            return !__instance.Destroyed && !AnimalFormStorage.IsStored(__instance) && !transformed.HasStoredPawn;
         }
 
         private static void ApplySpilloverDamage(Pawn human, DamageInfo? dinfo)

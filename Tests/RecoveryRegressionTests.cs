@@ -20,7 +20,7 @@ namespace Verse
         public static void Look(ref Pawn value,string key)
         { if(Scribe.mode==LoadSaveMode.Saving) { RecoverySave.ReferencedPawns++; RecoverySave.Node[key]=value; } else value=(Pawn)RecoverySave.Node[key]; }
     }
-    public static class Scribe_Deep
+    public static partial class Scribe_Deep
     {
         public static void Look(ref Pawn value,string key)
         {
@@ -67,7 +67,7 @@ namespace WildShift.Tests
         {
             Reset(); var neutralSource=OwnedLatentAnimal(); var neutralHuman=new Pawn {Faction=null}; PawnGenerator.Generate=()=>neutralHuman;
             OwnedAnimalAwakening.TryAwaken(neutralSource);
-            Check(neutralHuman.Faction==Faction.OfPlayer && neutralHuman.Spawned && neutralSource.Destroyed,"independently generated awakening race joins colony before placement");
+            Check(neutralHuman.Faction==Faction.OfPlayer && neutralHuman.Spawned && AnimalFormStorage.IsStored(neutralSource),"independently generated awakening race joins colony before placement");
             Reset(); neutralSource=OwnedLatentAnimal(); neutralHuman=new Pawn(); PawnGenerator.Generate=()=>neutralHuman; AnimalFormGender.mismatch=true;
             OwnedAnimalAwakening.TryAwaken(neutralSource);
             Check(!neutralSource.Destroyed && neutralHuman.Destroyed,"foreign race replacement rolls back candidate and preserves animal");
@@ -84,6 +84,10 @@ namespace WildShift.Tests
 
             Reset(); var source=OwnedLatentAnimal(); var humans=new List<Pawn>();
             PawnGenerator.Generate=()=>{var p=new Pawn(); humans.Add(p); return p;};
+            // Legacy saves can already contain a committed human whose old
+            // animal still needs destruction. Keep that migration path covered.
+            var committedHuman=PawnGenerator.Generate(); GenSpawn.Spawn(committedHuman,new IntVec3(),source.Map);
+            Current.Game.GetComponent<GameComponent_AwakeningRecovery>().Complete(source);
             Pawn.DestroyFailBefore=p=>p==source;
             OwnedAnimalAwakening.TryAwaken(source); OwnedAnimalAwakening.TryAwaken(source);
             Check(humans.Count==1 && humans[0].Spawned && source.Spawned && !source.Destroyed,"original cleanup failure plus repeat click keeps exactly one human");
@@ -101,7 +105,10 @@ namespace WildShift.Tests
             Check(source.Destroyed && humans.Count==1,"obsolete source resurrection cannot grant a new identity");
 
             Reset(); source=OwnedLatentAnimal(); int generated=0;
-            PawnGenerator.Generate=()=>{generated++; return new Pawn();}; Pawn.DestroyNoop=p=>p==source;
+            PawnGenerator.Generate=()=>{generated++; return new Pawn();};
+            committedHuman=PawnGenerator.Generate(); GenSpawn.Spawn(committedHuman,new IntVec3(),source.Map);
+            Current.Game.GetComponent<GameComponent_AwakeningRecovery>().Complete(source);
+            Pawn.DestroyNoop=p=>p==source;
             OwnedAnimalAwakening.TryAwaken(source); OwnedAnimalAwakening.TryAwaken(source);
             Check(generated==1 && !source.Destroyed,"silent destruction rejection also blocks duplication");
             Pawn.DestroyNoop=null; Pawn.DestroyFailAfter=p=>p==source; OwnedAnimalAwakening.TryAwaken(source);
@@ -117,7 +124,7 @@ namespace WildShift.Tests
             source.inventory.Fail=false; OwnedAnimalAwakening.TryAwaken(source);
             Check(humans.Count==1 && !source.Destroyed,"rollback lock survives reload while destruction still fails");
             Pawn.DestroyFailBefore=null; OwnedAnimalAwakening.TryAwaken(source);
-            Check(humans.Count==2 && humans[0].Destroyed && humans[1].Spawned && source.Destroyed,"rollback recovery destroys old candidate before allowing one successful retry");
+            Check(humans.Count==2 && humans[0].Destroyed && humans[1].Spawned && AnimalFormStorage.IsStored(source),"rollback recovery destroys old candidate before allowing one successful retry");
 
             Reset(); source=OwnedLatentAnimal(); generated=0;
             PawnGenerator.Generate=()=>{generated++; return new Pawn();}; GenSpawn.FailBefore=p=>p!=source; Pawn.DestroyFailBefore=p=>p!=source;
@@ -126,7 +133,7 @@ namespace WildShift.Tests
             OwnedAnimalAwakening.TryAwaken(source);
             Check(generated==1 && !source.Destroyed,"detached rollback survives reload without a new generation");
             GenSpawn.FailBefore=null; Pawn.DestroyFailBefore=null; OwnedAnimalAwakening.TryAwaken(source);
-            Check(generated==2 && source.Destroyed,"detached candidate cleanup can recover and retry");
+            Check(generated==2 && AnimalFormStorage.IsStored(source),"detached candidate cleanup can recover and retry");
 
             Reset(); source=OwnedLatentAnimal(); var externalCandidate=new Pawn();
             Find.WorldPawns.PassToWorld(externalCandidate,PawnDiscardDecideMode.KeepForever);
@@ -145,7 +152,7 @@ namespace WildShift.Tests
             Reset(); source=OwnedLatentAnimal(); generated=0;
             PawnGenerator.Generate=()=>{generated++; TamingTestBridge.Run(source); OwnedAnimalAwakening.TryAwaken(source); return new Pawn();};
             TamingTestBridge.Run(source);
-            Check(generated==1 && source.Destroyed,"normal taming and manual reentry share one awakening lock");
+            Check(generated==1 && AnimalFormStorage.IsStored(source),"normal taming and manual reentry share one awakening lock");
             Reset(); source=LatentAnimal(); generated=0;
             PawnGenerator.Generate=()=>{generated++; TamingTestBridge.Run(source); return new Pawn();};
             Check(MedicalRecruit(source) && generated==1,"medical revelation also uses the shared lock");

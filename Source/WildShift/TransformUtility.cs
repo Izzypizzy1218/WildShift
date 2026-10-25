@@ -138,10 +138,19 @@ namespace WildShift
             bool wasSelected = Find.Selector != null && Find.Selector.IsSelected(human);
             bool wasDrafted = human.Drafted;
 
+            HediffComp_Shapeshifter shifter = TryGetShapeshifterComp(human);
+            AnimalFormStorage storage = shifter != null ? shifter.FormStorage : null;
+            bool reused = storage != null && storage.HasStoredForm;
+            if (reused && !storage.Matches(kind))
+            {
+                Messages.Message("WildShift_ShiftCachedKindMismatch".Translate(), human, MessageTypeDefOf.RejectInput, false);
+                return false;
+            }
+
             Pawn animal;
             try
             {
-                animal = PawnGenerator.GeneratePawn(AnimalFormGender.CreateRequest(human, kind));
+                animal = reused ? storage.TryTake(kind) : PawnGenerator.GeneratePawn(AnimalFormGender.CreateRequest(human, kind));
             }
             catch (Exception ex)
             {
@@ -151,7 +160,9 @@ namespace WildShift
 
             if (animal == null)
             {
-                Log.Error("[WildShift] PawnGenerator returned null for animal form " + kind + ".");
+                if (reused)
+                    Messages.Message("WildShift_ShiftCachedFormUnavailable".Translate(), human, MessageTypeDefOf.RejectInput, false);
+                else Log.Error("[WildShift] PawnGenerator returned null for animal form " + kind + ".");
                 return false;
             }
 
@@ -165,26 +176,30 @@ namespace WildShift
                 animal.SetFaction(faction);
             }
 
-            ClearGeneratedAnimalHealth(animal);
-            GeneticsCompatibility.Restore(animal, TryGetShapeshifterComp(human)?.geneticForm);
+            if (!reused) ClearGeneratedAnimalHealth(animal);
+            if (!reused) GeneticsCompatibility.Restore(animal, TryGetShapeshifterComp(human)?.geneticForm);
             if (animal.Dead || animal.Destroyed)
             {
                 // A restored terminal hybrid disease may reject the new body.
                 // The original pawn has not been despawned or transferred yet.
-                FormTransferUtility.DestroyEmptyForm(animal);
+                RestoreUnusedAnimal(animal, storage, kind, reused);
                 return false;
             }
 
-            Hediff transformed = HediffMaker.MakeHediff(WildShiftDefOf.WildShift_Transformed, animal);
-            animal.health.AddHediff(transformed);
-
-            HediffComp_Transformed comp = transformed.TryGetComp<HediffComp_Transformed>();
+            HediffComp_Transformed comp = TryGetTransformedComp(animal);
+            if (comp == null)
+            {
+                Hediff transformed = HediffMaker.MakeHediff(WildShiftDefOf.WildShift_Transformed, animal);
+                animal.health.AddHediff(transformed);
+                comp = transformed.TryGetComp<HediffComp_Transformed>();
+            }
             if (comp == null)
             {
                 Log.Error("[WildShift] Transformed hediff is missing HediffComp_Transformed.");
                 animal.Destroy(DestroyMode.Vanish);
                 return false;
             }
+            comp.sourceKind = kind;
 
             AnimalFormTraining.CompleteSpecialTraining(animal);
 
@@ -192,13 +207,15 @@ namespace WildShift
             // can occupy the same cell; no frame/tick elapses during this swap.
             if (!FormTransferUtility.TrySpawn(animal, cell, map) || !comp.TryStore(human))
             {
-                FormTransferUtility.DestroyEmptyForm(animal);
+                RestoreUnusedAnimal(animal, storage, kind, reused);
                 Patch_GameEnder.InvalidateCache();
                 if (Find.ColonistBar != null) Find.ColonistBar.MarkColonistsDirty();
                 return false;
             }
             animal.Rotation = rotation;
             EnemyShapeshifterUtility.OnTransformed(human, animal, comp);
+            SharedFormIdentity.Initialize(animal);
+            SharedFormHealth.Initialize(animal);
             EnsureTransformedAnimalControl(animal, true);
             if (human.playerSettings != null && animal.playerSettings != null)
             {
@@ -230,9 +247,42 @@ namespace WildShift
             return true;
         }
 
+        private static void RestoreUnusedAnimal(Pawn animal, AnimalFormStorage storage, PawnKindDef kind, bool reused)
+        {
+            if (!reused)
+            {
+                FormTransferUtility.DestroyEmptyForm(animal);
+                return;
+            }
+            // A failed checkout must not delete the original body's implants
+            // or third-party component state. Native storage rolls back before
+            // reporting failure; emergency world retention is a last resort.
+            if (!storage.TryStore(animal, kind)) FormTransferUtility.PreserveDetachedPawn(animal);
+        }
+
         public static void ClearGeneratedAnimalHealth(Pawn animal)
         {
             ClearGeneratedAnimalHealth(animal, null);
+        }
+
+        internal static bool PrepareStoredAnimal(Pawn animal, Pawn human)
+        {
+            ClearGeneratedAnimalHealth(animal);
+            // These acute physical conditions were absent from the freshly
+            // generated replacement body used before form preservation. In
+            // particular, lethal temperature/toxin buildup must not immediately
+            // kill a reused body as soon as SpawnSetup checks its health.
+            var hediffs = animal.health.hediffSet.hediffs;
+            foreach (Hediff hediff in new List<Hediff>(hediffs))
+            {
+                string name = hediff.def != null ? hediff.def.defName : null;
+                if (name == "Heatstroke" || name == "Hypothermia" || name == "ToxicBuildup"
+                    || name == "Malnutrition" || name == "Anesthetic") animal.health.RemoveHediff(hediff);
+            }
+            // Optional genetic terminal disease is restored under ownership,
+            // where a callback cannot discard this preserved body's implants.
+            GeneticsCompatibility.Restore(animal, TryGetShapeshifterComp(human)?.geneticForm);
+            return !animal.Dead && !animal.Destroyed && !animal.health.ShouldBeDead();
         }
 
         public static void ClearGeneratedAnimalHealth(Pawn animal, HediffDef hediffDefToKeep)
@@ -253,7 +303,7 @@ namespace WildShift
                         continue;
                     }
 
-                    if (ShouldRemoveGeneratedHealthCondition(hediff))
+                if (!IsPreservedAddedPartMarker(animal, hediff) && ShouldRemoveGeneratedHealthCondition(hediff))
                     {
                         animal.health.RemoveHediff(hediff);
                     }
@@ -261,17 +311,31 @@ namespace WildShift
             }
         }
 
+        private static bool IsPreservedAddedPartMarker(Pawn animal, Hediff hediff)
+        {
+            // Added limbs use missing-child markers to replace their natural
+            // subparts. Clearing those markers would change the prosthesis's
+            // anatomy while supposedly preserving the original upgrade.
+            if (!(hediff is Hediff_MissingPart) || hediff.Part == null) return false;
+            for (BodyPartRecord part = hediff.Part.parent; part != null; part = part.parent)
+                foreach (Hediff candidate in animal.health.hediffSet.hediffs)
+                    if (candidate is Hediff_AddedPart && candidate.Part == part) return true;
+            return false;
+        }
+
         private static bool ShouldRemoveGeneratedHealthCondition(Hediff hediff)
         {
+            HediffDef def = hediff.def;
+            if (hediff is Hediff_AddedPart || hediff is Hediff_Implant
+                || (def != null && (def.countsAsAddedPartOrImplant || def.spawnThingOnRemoved != null))) return false;
             if (hediff is Hediff_Injury || hediff is Hediff_MissingPart)
             {
                 return true;
             }
 
-            HediffDef def = hediff.def;
-            return def != null
+            return def == HediffDefOf.BloodLoss || (def != null
                 && def.isBad
-                && (def.chronic || def.isInfection || def.tendable || def.makesSickThought);
+                && (def.chronic || def.isInfection || def.tendable || def.makesSickThought));
         }
 
         public static void EnsureTransformedAnimalControl(Pawn animal, bool transformedKnown = false)
@@ -331,6 +395,15 @@ namespace WildShift
                 return null;
             }
 
+            HediffComp_Shapeshifter shifter = TryGetShapeshifterComp(human);
+            AnimalFormStorage storage = shifter != null ? shifter.FormStorage : null;
+            if (storage != null && storage.HasStoredForm)
+            {
+                if (sendMessage)
+                    Messages.Message("WildShift_ReturnFormStorageBlocked".Translate(), animal, MessageTypeDefOf.RejectInput, false);
+                return null;
+            }
+
             Patch_GameEnder.InvalidateCache();
 
             Map map = animal.MapHeld;
@@ -339,6 +412,9 @@ namespace WildShift
             Faction faction = animal.Faction;
             bool wasSelected = Find.Selector != null && Find.Selector.IsSelected(animal);
             bool wasDrafted = animal.Drafted;
+            ThingOwner oldOwner = animal.holdingOwner;
+            bool wasSpawned = animal.Spawned;
+            bool wasWorldPawn = Find.WorldPawns != null && WorldPawnsUtility.IsWorldPawn(animal);
 
             // Unload before releasing the preserved human or deleting this
             // body. Native drops can fail silently; leave the form for retry.
@@ -392,8 +468,26 @@ namespace WildShift
 
             // Preserve raid membership before Destroy can report a lost pawn.
             GeneticsCompatibility.Remember(animal, human);
+            if (storage != null && !storage.TryStore(animal, comp.sourceKind ?? shifter.assignedKind ?? animal.kindDef))
+            {
+                // Placement has committed, but retaining the animal did not.
+                // Return to the previous ownership graph before reporting a
+                // failed reversion; the source form still contains its state.
+                if (comp.TryStore(human))
+                {
+                    if (wasSpawned) FormTransferUtility.TrySpawn(animal, cell, map);
+                    else if (oldOwner != null) FormTransferUtility.TryRestoreOwner(animal, oldOwner);
+                    if (wasWorldPawn) FormTransferUtility.TryRegisterWorldPawn(animal);
+                    if (!animal.Spawned && animal.holdingOwner == null) FormTransferUtility.PreserveDetachedPawn(animal);
+                    SharedFormIdentity.Initialize(animal);
+                    SharedFormHealth.Initialize(animal);
+                    return null;
+                }
+                Log.Error("[WildShift] Could not roll back the preserved animal after reversion; retaining both bodies.");
+                FormTransferUtility.PreserveDetachedPawn(animal);
+            }
             EnemyShapeshifterUtility.ReplaceLordPawn(animal, human);
-            FormTransferUtility.DestroyEmptyForm(animal);
+            if (storage == null) FormTransferUtility.DestroyEmptyForm(animal);
             human.Rotation = rotation;
 
             if (human.jobs != null)

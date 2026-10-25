@@ -5,6 +5,10 @@ WildShift is a RimWorld 1.6 / 1.7 beta mod about colonists who can transform int
 ## Features
 
 - Transform a shapeshifter into one eligible animal form before or after drafting.
+- Keep the original person's identity, relationships, memories and canonical skill records. Animal-form learning updates those records once.
+- Share unconditional stat offsets and factors from active genes and unsuppressed traits. Conditional gene modifiers and gene abilities are outside this feature.
+- Continue supported native whole-body drug effects, chemical needs and dependency state on the original human while transformed. Drugs ingested by the animal update that same canonical state.
+- Reuse the same animal Pawn across transformations, retaining its prosthetics and serialized custom component state. Human implants remain on the human body; they are not mapped onto the animal.
 - Keep transformed animals visible and selectable in the colonist bar.
 - Draft and directly control the transformed animal.
 - Enter animal form with the species' supported special training and required prerequisites completed. All active transformed forms retain tameness and training; ordinary livestock keeps native training decay. Hive queens spew eggs and sludge only when commanded.
@@ -19,7 +23,7 @@ WildShift is a RimWorld 1.6 / 1.7 beta mod about colonists who can transform int
 - Prevent a false game over while a lone colonist is transformed.
 - Keep temporary camp/site maps while a living player-owned animal form still holds its original living colonist. Return to human form before using the native solo caravan departure flow.
 - Keep an existing caravan alive when its last ordinary human dies but a living transformed colonist remains. Healthy, sane forms also prevent false all-owners-downed or mental-break travel blocks; normal animal trade classification remains intact.
-- Remove randomly generated diseases and injuries from temporary animal bodies.
+- Remove unwanted generated diseases and injuries from new animal bodies. Reusing a cached form clears ordinary wounds, unrelated missing parts and blood loss while preserving its implants. Wounds on the original human remain separate.
 - Discover latent shapeshifters through successful normal taming, or through medical-bond taming if the animal has no recorded player-inflicted harm. Normal taming does not require a bonded relationship.
 - Select a purchased or already owned latent animal on a map and use **Awaken as human**. Purchases ignore past damage; belongings are automatically placed nearby.
 - Every normal human colonist join has a 5% chance to reveal a shapeshifter instead of triggering a separate join event.
@@ -122,7 +126,9 @@ To build 1.6, supply matching 1.6 game or reference assemblies and `-p:RimWorldV
 
 ## Current version
 
-`v1.3.0-beta.5`
+`v1.4.0-beta.1` — local candidate
+
+The local candidate builds for RimWorld 1.6 and 1.7. See [shared-state behavior and verification](Docs/SharedState-v1.4.0-beta.1.md) for supported effects, persistent animal bodies and validation limits. Animal-form apparel and cargo still unload on return as described above.
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
 

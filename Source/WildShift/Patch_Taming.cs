@@ -157,11 +157,16 @@ namespace WildShift
                 Messages.Message("WildShift_AwakenDropFailed".Translate(), animal, MessageTypeDefOf.RejectInput, false);
                 return;
             }
-            // Commit before invoking arbitrary destruction callbacks. A failed
-            // cleanup cannot turn this animal into a fresh awakening candidate.
-            recovery.Complete(animal);
-            if (!FormTransferUtility.DestroyEmptyForm(animal))
+            // The revealed human keeps the actual original animal, including
+            // implants and optional-mod components. A failed adoption rolls
+            // back the candidate rather than deleting the only animal body.
+            if (!AnimalFormStorage.TryAdoptAwakened(animal, human, animalKind))
+            {
+                recovery.RollBack(animal, human);
                 Messages.Message("WildShift_AwakenCleanupFailed".Translate(), animal, MessageTypeDefOf.RejectInput, false);
+                return;
+            }
+            recovery.Complete(animal);
             human.Rotation = rotation;
 
             if (wasSelected)

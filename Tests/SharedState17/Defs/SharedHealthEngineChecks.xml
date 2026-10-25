@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <!-- TEST ONLY. Deterministic ingestion checks the native shared-state death
+       path without waiting for a random drug overdose or MTB event. -->
+  <HediffDef>
+    <defName>WildShift_TestSharedLethalState</defName>
+    <label>shared health validation fatal state</label>
+    <description>TEST ONLY lethal whole-body state used by the engine regression.</description>
+    <hediffClass>HediffWithComps</hediffClass>
+    <initialSeverity>0.001</initialSeverity>
+    <maxSeverity>1</maxSeverity>
+    <lethalSeverity>1</lethalSeverity>
+    <everCurableByItem>false</everCurableByItem>
+    <stages><li><lifeThreatening>true</lifeThreatening></li></stages>
+  </HediffDef>
+  <HediffDef>
+    <defName>WildShift_TestSharedTrailingDrugState</defName>
+    <label>shared health validation trailing tolerance</label>
+    <description>TEST ONLY post-lethal GiveHediff outcome which must not reach the cached animal.</description>
+    <hediffClass>HediffWithComps</hediffClass>
+    <initialSeverity>0.1</initialSeverity>
+    <maxSeverity>1</maxSeverity>
+  </HediffDef>
+  <ThingDef ParentName="DrugPillBase">
+    <defName>WildShift_TestSharedLethalDrug</defName>
+    <label>shared health validation dose</label>
+    <description>TEST ONLY native drug GiveHediff outcome for deterministic lethal-state validation.</description>
+    <graphicData><texPath>Things/Item/Drug/Luciferium</texPath><graphicClass>Graphic_StackCount</graphicClass></graphicData>
+    <rotatable>false</rotatable>
+    <statBases><MarketValue>0</MarketValue><Mass>0.01</Mass></statBases>
+    <ingestible>
+      <drugCategory>Medical</drugCategory>
+      <outcomeDoers>
+        <li Class="IngestionOutcomeDoer_GiveHediff">
+          <hediffDef>WildShift_TestSharedLethalState</hediffDef>
+          <severity>1</severity>
+        </li>
+        <li Class="IngestionOutcomeDoer_GiveHediff">
+          <hediffDef>WildShift_TestSharedTrailingDrugState</hediffDef>
+          <severity>0.1</severity>
+        </li>
+      </outcomeDoers>
+    </ingestible>
+    <comps>
+      <li Class="CompProperties_Drug">
+        <chemical>Luciferium</chemical>
+        <addictiveness>1</addictiveness>
+        <needLevelOffset>0.9</needLevelOffset>
+        <listOrder>1900</listOrder>
+        <largeOverdoseChance>0</largeOverdoseChance>
+        <overdoseSeverityOffset>0.25~0.25</overdoseSeverityOffset>
+      </li>
+    </comps>
+  </ThingDef>
+</Defs>

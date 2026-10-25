@@ -38,23 +38,49 @@ namespace Verse
     public struct IntVec3 {}
     public struct Rot4 {}
     public interface IThingHolder { ThingOwner GetDirectlyHeldThings(); }
+    public interface ISuspendableThingHolder { bool IsContentsSuspended { get; } }
+    public static partial class Scribe_Deep { public static void Look<T>(ref T value,string key,params object[] args) {} }
+    public static class Scribe_Defs { public static void Look<T>(ref T value,string key) {} }
+    public static class ThingOwnerUtility { public static void AppendThingHoldersFromThings(List<IThingHolder> children,ThingOwner things) {} }
     public class Thing { public bool Destroyed, Spawned; public Map Map; public IntVec3 Position; public Faction Faction; public ThingOwner holdingOwner; }
     public class ThingComp { public Thing parent; }
     public class RaceProperties { public bool Animal = true, Humanlike; }
-    public class PawnKindDef { public bool forceDeathOnDowned; public string LabelCap="animal"; }
-    public class Hediff {}
+    public class ThingDef {}
+    public class PawnKindDef { public ThingDef race=new ThingDef(); public bool forceDeathOnDowned; public string LabelCap="animal"; }
+    public class HediffDef { public string defName; public bool countsAsAddedPartOrImplant,isBad,chronic,isInfection,tendable,makesSickThought; public object spawnThingOnRemoved; }
+    public class Hediff
+    {
+        public HediffDef def; public Pawn pawn; public BodyPartRecord Part; public WildShift.HediffComp_Transformed transformed;
+        public T TryGetComp<T>() where T : class { return transformed as T; }
+    }
+    public class BodyPartRecord { public BodyPartRecord parent; }
+    public class Hediff_Injury : Hediff {}
+    public class Hediff_MissingPart : Hediff {}
+    public class Hediff_AddedPart : Hediff {}
+    public class Hediff_Implant : Hediff {}
     public class ThinkTreeDef {}
-    public class MindState { public object duty; }
-    public class HediffSet { public bool latent; public Hediff GetFirstHediffOfDef(object def) { return latent ? new Hediff() : null; } }
-    public class Pawn_HealthTracker { public float overrideDeathOnDownedChance = -1f; public HediffSet hediffSet = new HediffSet(); public int added; public void AddHediff(Hediff hediff) { hediffSet.latent=true; added++; } }
-    public static class HediffMaker { public static Hediff MakeHediff(object def,Pawn pawn) { return new Hediff(); } }
+    public class MentalStateHandler { public int resets; public void Reset() { resets++; } }
+    public class MindState { public object duty; public MentalStateHandler mentalStateHandler=new MentalStateHandler(); }
+    public class HediffSet { public bool latent; public List<Hediff> hediffs=new List<Hediff>(); public Hediff GetFirstHediffOfDef(object def) { return latent ? new Hediff() : null; } }
+    public class Pawn_HealthTracker
+    {
+        public float overrideDeathOnDownedChance = -1f; public HediffSet hediffSet = new HediffSet(); public int added;
+        public bool lethal; public bool ShouldBeDead() { return lethal; }
+        public void AddHediff(Hediff hediff) { if(hediff.transformed!=null) hediff.pawn.comp=hediff.transformed; else hediffSet.latent=true; hediffSet.hediffs.Add(hediff); added++; }
+        public void RemoveHediff(Hediff hediff) { hediffSet.hediffs.Remove(hediff); if(hediff.transformed!=null && hediff.pawn.comp==hediff.transformed) hediff.pawn.comp=null; }
+    }
+    public static class HediffMaker
+    {
+        public static Hediff MakeHediff(object def,Pawn pawn)
+        { return new Hediff {def=def as HediffDef,pawn=pawn,transformed=def==WildShift.WildShiftDefOf.WildShift_Transformed ? new WildShift.HediffComp_Transformed() : null}; }
+    }
     public class Jobs
     {
         public Job lastJob;
         public void StopAll(bool b) {}
         public bool TryTakeOrderedJob(Job job) { lastJob=job; WildShift.TransformUtility.orders++; return WildShift.TransformUtility.orderSuccess; }
     }
-    public class Pawn : Thing
+    public class Pawn : Thing, IThingHolder
     {
         private static int nextId;
         public Pawn() { Faction = Faction.OfPlayer; }
@@ -63,7 +89,8 @@ namespace Verse
         public TestEquipment equipment;
         public TestApparel apparel;
         public TestCarryTracker carryTracker;
-        public IThingHolder ParentHolder { get { return holdingOwner; } }
+        public IThingHolder ParentHolder { get { return holdingOwner != null ? holdingOwner.Owner ?? holdingOwner : null; } }
+        public ThingOwner GetDirectlyHeldThings() { return null; }
         public Map MapHeld { get { return Map; } }
         public IntVec3 PositionHeld { get { return Position; } }
         public Rot4 Rotation;
@@ -92,6 +119,8 @@ namespace Verse
     }
     public class ThingOwner : IThingHolder
     {
+        public IThingHolder Owner;
+        public bool dontTickContents;
         public List<Pawn> pawns = new List<Pawn>();
         public Predicate<Pawn> Reject, ThrowBefore, ThrowAfter;
         public bool PreflightReject;
@@ -122,6 +151,11 @@ namespace Verse
             return true;
         }
         public ThingOwner GetDirectlyHeldThings() { return this; }
+    }
+    public class ThingOwner<T> : ThingOwner where T : Pawn
+    {
+        public ThingOwner(IThingHolder owner,bool oneStackOnly,LookMode mode) { Owner=owner; }
+        public new T this[int index] { get { return (T)pawns[index]; } }
     }
     public class MapPawns
     {
@@ -180,6 +214,7 @@ namespace Verse
 }
 namespace RimWorld
 {
+    public static class HediffDefOf { public static readonly HediffDef BloodLoss=new HediffDef { defName="BloodLoss" }; }
     public class Faction { public static Faction OfPlayer = new Faction(); public bool IsPlayer { get { return this==OfPlayer; } } public bool hostile; public bool HostileTo(Faction p) { return hostile && p!=null; } }
     public class FactionManager { public Faction OfPlayer = Faction.OfPlayer; }
     public class IncidentWorker_Raid {}
@@ -223,10 +258,18 @@ namespace RimWorld.Planet
 namespace WildShift
 {
     public static class AnimalFormGender { public static bool mismatch; public static object CreateHumanRequest(Pawn p) { return p; } public static bool MatchesHumanRequest(Pawn p,object request) { return !mismatch; } }
-    public class HediffComp_Shapeshifter { public bool enemyRaidParticipant, enemyShiftUsed; public PawnKindDef assignedKind = new PawnKindDef(); }
+    public class HediffComp_Shapeshifter
+    {
+        private Pawn owner; private AnimalFormStorage forms;
+        public HediffComp_Shapeshifter(Pawn owner=null) { this.owner=owner; }
+        public AnimalFormStorage FormStorage { get { return forms ?? (owner!=null ? forms=new AnimalFormStorage(owner) : null); } set { forms=value; } }
+        public bool enemyRaidParticipant, enemyShiftUsed; public PawnKindDef assignedKind = new PawnKindDef();
+        public object geneticForm;
+    }
     public class HediffComp_Transformed
     {
         public bool enemyCombatForm, enemyReturnPending;
+        public PawnKindDef sourceKind;
         public ThingOwner storage = new ThingOwner();
         public bool HasStoredPawn { get { return storage.Count > 0; } }
         public Pawn StoredPawn { get { return HasStoredPawn ? storage.pawns[0] : null; } }
@@ -239,16 +282,18 @@ namespace WildShift
         public static int shiftCalls;
         public static bool failAssignment;
         public static HediffComp_Shapeshifter TryGetShapeshifterComp(Pawn p) { return p==null ? null : p.shifter; }
-        public static HediffComp_Shapeshifter AddOrGetShapeshifter(Pawn p, PawnKindDef k, bool racial=false) { if(failAssignment) return null; if(p.shifter==null) p.shifter=new HediffComp_Shapeshifter(); return p.shifter; }
+        public static HediffComp_Shapeshifter AddOrGetShapeshifter(Pawn p, PawnKindDef k, bool racial=false) { if(failAssignment) return null; if(p.shifter==null) p.shifter=new HediffComp_Shapeshifter(p); if(k!=null) p.shifter.assignedKind=k; return p.shifter; }
         // Pawn generation is a mocked boundary here; queue attempt/one-use rules
         // and real reversion/Lord replacement are exercised separately.
         public static bool TransformToAnimal(Pawn p, PawnKindDef k) { shiftCalls++; return false; }
         public static int transformedLookups;
         public static HediffComp_Transformed TryGetTransformedComp(Pawn p) { transformedLookups++; return p != null ? p.comp : null; }
-        public static bool IsTransformedAnimal(Pawn p) { transformedLookups++; return p != null && p.comp != null && p.comp.HasStoredPawn; }
+        public static bool IsTransformedAnimal(Pawn p) { transformedLookups++; return p != null && p.comp != null; }
         public static void EnsureTransformedAnimalControl(Pawn p, bool b) {}
     }
     public static class Patch_GameEnder { public static void InvalidateCache() {} }
+    public static class SharedFormIdentity { public static void Initialize(Pawn animal) {} }
+    public static class SharedFormHealth { public const string ProjectionDefName="WildShift_SharedFormDrugEffect"; public static void Initialize(Pawn animal) {} public static bool IsSharedLethalDeath(Pawn animal) { return false; } }
     public class Settings { public float deathChance, spilloverDamageFactor, enemyShapeshifterChance = .05f; public bool forceTraderShapeshifters; }
     public static class WildShiftMod { public static Settings Settings = new Settings(); }
 }

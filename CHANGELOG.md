@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.4.0-beta.1 — Shared identity and persistent animal bodies (local candidate, 2026-10-26)
+
+- Keep the original person's identity, relationships, memories and canonical skill records while transformed. Native animal-form learning updates the original records once.
+- Share unconditional stat offsets and factors from active genes and unsuppressed traits through the animal's native stat calculation. Conditional gene modifiers and gene abilities are excluded.
+- Advance supported native whole-body drug effects, chemical needs and dependency state on the original human. Native ingestion by the animal updates that canonical state without creating a separate animal addiction.
+- Cache and reuse the same animal Pawn, including its prosthetics and serialized custom component state. Clear ordinary animal wounds, unrelated missing parts and blood loss when entering that form again. The original human's wounds and implants remain on the human body; implants are not transferred between species.
+- Keep the existing return behavior for animal apparel, equipment and cargo: drop items nearby, with human-inventory fallback when needed. Original human clothing remains worn.
+- Build for RimWorld 1.6 and 1.7. See [shared-state behavior and verification](Docs/SharedState-v1.4.0-beta.1.md) for evidence and limits of this local candidate.
+
 ## v1.3.0-beta.5 — Caravan and form-state review (2026-10-25)
 
 - Preserve an existing player caravan when its last ordinary human dies and a living transformed colonist remains. Prevent false all-owners-downed or mental-break travel blocks while a healthy, sane form survives. Keep native animal trade, negotiator and caravan-formation ownership rules.
