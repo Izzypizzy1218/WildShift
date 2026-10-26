@@ -36,7 +36,7 @@ namespace WildShift
 
         public static void Postfix(Thing __0, ref bool __result)
         {
-            if (__result || !(__0 is Pawn pawn) || pawn.Faction != Faction.OfPlayer
+            if (__result || !(__0 is Pawn pawn) || pawn.Faction?.IsPlayer != true
                 || pawn.RaceProps == null || !pawn.RaceProps.Animal) return;
             __result = TransformUtility.TryGetTransformedComp(pawn)?.HasStoredPawn == true;
         }

@@ -29,6 +29,13 @@ namespace WildShift
             public bool active;
         }
 
+        private sealed class ConditionalState
+        {
+            public GeneDef gene;
+            public ConditionalStatAffecter affecter;
+            public bool applies;
+        }
+
         private sealed class State
         {
             public State() { }
@@ -38,6 +45,7 @@ namespace WildShift
             private int generation;
             private List<GeneState> humanGenes, animalGenes;
             private List<TraitState> humanTraits, animalTraits;
+            private List<ConditionalState> conditions = new List<ConditionalState>();
             private HediffStage nativeStage, sharedStage;
             private readonly Dictionary<StatWorker, int> workerGenerations = new Dictionary<StatWorker, int>();
 
@@ -54,19 +62,66 @@ namespace WildShift
                     List<Gene> ag = human != null && activeBiotech ? animal.genes?.GenesListForReading : null;
                     List<Trait> ht = human?.story?.traits?.allTraits;
                     List<Trait> at = human != null ? animal.story?.traits?.allTraits : null;
-                    if (original == human && biotech == activeBiotech
+                    bool sourceChanged = !(original == human && biotech == activeBiotech
                         && GenesMatch(hg, humanGenes) && GenesMatch(ag, animalGenes)
-                        && TraitsMatch(ht, humanTraits) && TraitsMatch(at, animalTraits)) return;
-                    original = human;
-                    biotech = activeBiotech;
-                    humanGenes = CaptureGenes(hg);
-                    animalGenes = CaptureGenes(ag);
-                    humanTraits = CaptureTraits(ht);
-                    animalTraits = CaptureTraits(at);
-                    dirty = true;
-                    generation++;
+                        && TraitsMatch(ht, humanTraits) && TraitsMatch(at, animalTraits));
+                    if (sourceChanged)
+                    {
+                        original = human;
+                        biotech = activeBiotech;
+                        humanGenes = CaptureGenes(hg);
+                        animalGenes = CaptureGenes(ag);
+                        humanTraits = CaptureTraits(ht);
+                        animalTraits = CaptureTraits(at);
+                        CaptureConditions();
+                    }
+                    // Conditions belong to the active body, not the stored
+                    // human. Recheck only this form's relevant affecters on
+                    // queries: movement, sunlight or clothes can change twice
+                    // in one tick, without changing its gene membership.
+                    bool conditionChanged = RefreshConditions(animal);
+                    if (sourceChanged || conditionChanged)
+                    {
+                        dirty = true;
+                        generation++;
+                    }
                 }
                 finally { refreshing = false; }
+            }
+
+            private void CaptureConditions()
+            {
+                conditions.Clear();
+                var seen = new HashSet<GeneDef>();
+                for (int i = 0; i < humanGenes.Count; i++)
+                {
+                    GeneState gene = humanGenes[i];
+                    if (!gene.active || gene.def == null || !seen.Add(gene.def)
+                        || gene.def.conditionalStatAffecters == null) continue;
+                    for (int j = 0; j < gene.def.conditionalStatAffecters.Count; j++)
+                    {
+                        ConditionalStatAffecter affecter = gene.def.conditionalStatAffecters[j];
+                        if (affecter == null || ((affecter.statOffsets == null || affecter.statOffsets.Count == 0)
+                            && (affecter.statFactors == null || affecter.statFactors.Count == 0))) continue;
+                        conditions.Add(new ConditionalState { gene = gene.def, affecter = affecter });
+                    }
+                }
+            }
+
+            private bool RefreshConditions(Pawn animal)
+            {
+                if (conditions.Count == 0) return false;
+                StatRequest request = StatRequest.For(animal);
+                bool changed = false;
+                for (int i = 0; i < conditions.Count; i++)
+                {
+                    ConditionalState condition = conditions[i];
+                    bool applies = condition.affecter.Applies(request);
+                    if (condition.applies == applies) continue;
+                    condition.applies = applies;
+                    changed = true;
+                }
+                return changed;
             }
 
             public HediffStage Stage(Hediff carrier, HediffStage baseline)
@@ -115,10 +170,16 @@ namespace WildShift
                     GeneState gene = humanGenes[i];
                     if (!gene.active || gene.def == null || !seenGenes.Add(gene.def) || HasGene(animalGenes, gene.def)) continue;
                     // Native GeneDef list lookup uses the first modifier for
-                    // each stat. ConditionalStatAffecters and custom gene
-                    // behavior deliberately remain outside this bridge.
+                    // each stat, both in unconditional and conditional lists.
                     changed |= Merge(offsets, gene.def.statOffsets, false, true);
                     changed |= Merge(factors, gene.def.statFactors, true, true);
+                }
+                for (int i = 0; i < conditions.Count; i++)
+                {
+                    ConditionalState condition = conditions[i];
+                    if (!condition.applies || HasGene(animalGenes, condition.gene)) continue;
+                    changed |= Merge(offsets, condition.affecter.statOffsets, false, true);
+                    changed |= Merge(factors, condition.affecter.statFactors, true, true);
                 }
                 for (int i = 0; i < humanTraits.Count; i++)
                 {

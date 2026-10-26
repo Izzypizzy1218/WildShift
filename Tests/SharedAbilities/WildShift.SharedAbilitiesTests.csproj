@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RimWorldVersion Condition="'$(RimWorldVersion)' == ''">1.7</RimWorldVersion>
+    <TargetFramework Condition="'$(RimWorldVersion)' == '1.7'">net10.0</TargetFramework>
+    <TargetFramework Condition="'$(RimWorldVersion)' == '1.6'">net472</TargetFramework>
+    <OutputType Condition="'$(RimWorldVersion)' == '1.7'">Exe</OutputType>
+    <OutputType Condition="'$(RimWorldVersion)' == '1.6'">Library</OutputType>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <LangVersion>7.3</LangVersion>
+    <RimWorldManaged Condition="'$(RimWorldManaged)' == ''">C:/Program Files (x86)/Steam/steamapps/common/RimWorld</RimWorldManaged>
+    <HarmonyPath Condition="'$(HarmonyPath)' == ''">C:/Program Files (x86)/Steam/steamapps/workshop/content/294100/2009463077/$(RimWorldVersion)/Assemblies/0Harmony.dll</HarmonyPath>
+    <UseProductionAbilities Condition="'$(UseProductionAbilities)' == ''">true</UseProductionAbilities>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="WildShift" HintPath="$(WildShiftPath)" Private="true" />
+    <Reference Include="Assembly-CSharp" HintPath="$(RimWorldManaged)/Assembly-CSharp.dll" Private="false" />
+    <Reference Include="0Harmony" HintPath="$(HarmonyPath)" Private="false" />
+    <Compile Include="../../Source/WildShift/SharedFormAbilities.cs" Link="SharedFormAbilities.cs" Condition="'$(UseProductionAbilities)' != 'true'" />
+    <Compile Include="Program.cs" Condition="'$(RimWorldVersion)' == '1.7'" />
+    <Compile Include="../SharedState17/SharedAbilitiesEngineChecks.cs" Link="SharedAbilitiesEngineChecks.cs" />
+    <Reference Include="UnityStubs" HintPath="$(RimWorldManaged)/UnityStubs.dll" Private="false" Condition="'$(RimWorldVersion)' == '1.7'" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(RimWorldManaged)/UnityEngine.CoreModule.dll" Private="false" Condition="'$(RimWorldVersion)' == '1.6'" />
+    <Reference Include="UnityEngine.IMGUIModule" HintPath="$(RimWorldManaged)/UnityEngine.IMGUIModule.dll" Private="false" Condition="'$(RimWorldVersion)' == '1.6'" />
+  </ItemGroup>
+</Project>

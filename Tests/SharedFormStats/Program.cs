@@ -20,6 +20,19 @@ internal static class Program
         public override bool Active { get { HediffStage unused = carrier.CurStage; return true; } }
     }
 
+    // A mod's condition can inspect the current body and query another stat.
+    // No game API is replaced: native StatWorker calls this native extension.
+    private sealed class PositionAffecter : ConditionalStatAffecter
+    {
+        public Hediff carrier;
+        public override string Label { get { return "position condition"; } }
+        public override bool Applies(StatRequest req)
+        {
+            if (carrier != null) { HediffStage unused = carrier.CurStage; }
+            return req.HasThing && req.Thing.Position.x >= 5;
+        }
+    }
+
     private static int Main(string[] args)
     {
         if (args.Length != 4) return 2;
@@ -61,6 +74,7 @@ internal static class Program
             harmony.Patch(AccessTools.Method(typeof(StatWorker), "GetValue", new[] { typeof(Thing), typeof(bool), typeof(int) }), prefix: new HarmonyMethod(typeof(Patch_SharedFormStatCache), "Prefix"));
         }
         TestStats();
+        if (mode != "baseline") TestConditionalStats();
         AccessTools.Method(typeof(Log), "DrainOffThreadMessages").Invoke(null, null);
         foreach (LogMessage message in Log.Messages)
             if (message.type == LogMessageType.Error) throw new InvalidOperationException("Native game error: " + message.text);
@@ -233,6 +247,124 @@ internal static class Program
         Check(carrier.CurStage != baselineStage && carrier.CurStage.painFactor == .25f, "non-stat carrier fields are preserved on a separate stage");
         Near(baselineStage.statOffsets[0].value, 5, "shared offset does not mutate the carrier definition");
         Near(baselineStage.statFactors[0].value, .5f, "shared factor does not mutate the carrier definition");
+        carrier.def.stages = null;
+    }
+
+    private static Apparel Clothing(Pawn pawn, int id)
+    {
+        if (pawn.apparel == null) pawn.apparel = new Pawn_ApparelTracker(pawn);
+        var clothing = new Apparel { thingIDNumber = id, stackCount = 1, def = new ThingDef {
+            defName = "StatClothing" + id, apparel = new ApparelProperties { countsAsClothingForNudity = true } } };
+        pawn.apparel.WornApparel.Add(clothing);
+        return clothing;
+    }
+
+    private static void TestConditionalStats()
+    {
+        var stat = new StatDef { defName = "ConditionalSharedStat", label = "conditional shared stat", defaultBaseValue = 10,
+            neverDisabled = true, noSkillFactor = 1, cacheable = true };
+        var worker = new StatWorker(); worker.InitSetStat(stat); worker.SetCacheability(false);
+        Pawn human = MakePawn(20, true), animal = MakePawn(21, false), ordinary = MakePawn(22, false);
+        Hediff carrier = Mark(animal, human);
+        var clothed = new ConditionalStatAffecter_Clothed { statOffsets = new List<StatModifier> { Mod(stat, -4) },
+            statFactors = new List<StatModifier> { Mod(stat, .8f) } };
+        var unclothed = new ConditionalStatAffecter_Unclothed { statOffsets = new List<StatModifier> { Mod(stat, 3), Mod(stat, 100) },
+            statFactors = new List<StatModifier> { Mod(stat, 1.2f), Mod(stat, 100) } };
+        var def = new GeneDef { defName = "ConditionalSharedGene", statOffsets = new List<StatModifier> { Mod(stat, 2) },
+            statFactors = new List<StatModifier> { Mod(stat, 1.5f) },
+            conditionalStatAffecters = new List<ConditionalStatAffecter> { clothed, unclothed } };
+        Gene gene = AddGene(human, def);
+        Clothing(human, 200);
+        Check(clothed.Applies(StatRequest.For(human)) && !clothed.Applies(StatRequest.For(animal)), "native clothing condition distinguishes stored human and active animal");
+        Near(CachedValue(worker, animal), 27, "unclothed positive conditional uses active animal, static and conditional first-entry arithmetic");
+        Near(carrier.CurStage.statOffsets.GetStatOffsetFromList(stat), 5, "conditional tooltip stage contains the active offset");
+        Near(carrier.CurStage.statFactors.GetStatFactorFromList(stat), 1.8f, "conditional tooltip stage contains the active factor");
+        string explanation = worker.GetExplanationUnfinalized(StatRequest.For(animal), ToStringNumberSense.Absolute);
+        Check(explanation.IndexOf("shapeshifter", StringComparison.OrdinalIgnoreCase) >= 0, "native explanation includes active conditional projection");
+        HediffStage unchanged = carrier.CurStage;
+        Check(ReferenceEquals(unchanged, carrier.CurStage), "unchanged conditions reuse the stage allocation");
+        Apparel armor = Clothing(animal, 201);
+        Near(CachedValue(worker, animal), 9.6f, "same-tick apparel change invalidates native cache and applies conditional penalty");
+        Near(carrier.CurStage.statOffsets.GetStatOffsetFromList(stat), -2, "conditional tooltip immediately replaces bonus with penalty");
+        Near(carrier.CurStage.statFactors.GetStatFactorFromList(stat), 1.2f, "conditional tooltip immediately replaces factor");
+        animal.apparel.WornApparel.Remove(armor);
+        Near(CachedValue(worker, animal), 27, "same-tick undressing restores the conditional bonus");
+        gene.overriddenByGene = new Gene { def = new GeneDef() };
+        Near(CachedValue(worker, animal), 10, "suppressed source gene removes static and conditional modifiers");
+        gene.overriddenByGene = null;
+        Gene duplicate = AddGene(human, def);
+        Near(CachedValue(worker, animal), 27, "duplicate source GeneDef shares conditional effects once");
+        Gene native = AddGene(animal, def);
+        Near(CachedValue(worker, animal), 27, "same native active GeneDef excludes duplicate conditional projection");
+        animal.apparel.WornApparel.Add(armor);
+        Near(CachedValue(worker, animal), 9.6f, "same native gene's conditional transition invalidates native cache");
+        native.overriddenByGene = new Gene { def = new GeneDef() };
+        Near(CachedValue(worker, animal), 9.6f, "inactive native gene allows original conditional projection");
+        gene.overriddenByGene = new Gene { def = new GeneDef() };
+        duplicate.overriddenByGene = new Gene { def = new GeneDef() };
+        Near(CachedValue(worker, animal), 10, "all suppressed duplicate source genes share nothing");
+        Near(CachedValue(worker, ordinary), 10, "ordinary animal receives no conditional sharing");
+
+        var immutable = new StatDef { defName = "ConditionalImmutableStat", defaultBaseValue = 5, immutable = true,
+            neverDisabled = true, noSkillFactor = 1 };
+        var immutableWorker = new StatWorker(); immutableWorker.InitSetStat(immutable); immutableWorker.SetCacheability(true);
+        var position = new PositionAffecter { carrier = carrier,
+            statOffsets = new List<StatModifier> { Mod(immutable, -2) }, statFactors = new List<StatModifier> { Mod(immutable, .5f) } };
+        human.Position = new IntVec3(10, 0, 10); animal.Position = new IntVec3(1, 0, 1);
+        Gene positionGene = AddGene(human, new GeneDef { defName = "ModPositionGene",
+            conditionalStatAffecters = new List<ConditionalStatAffecter> { position } });
+        Near(CachedValue(immutableWorker, animal), 5, "mod conditional is evaluated against active body position rather than stored human");
+        animal.Position = new IntVec3(6, 0, 1);
+        Near(CachedValue(immutableWorker, animal), 1.5f, "same-tick environmental condition change clears native immutable cache with reentrancy guard");
+        animal.Position = new IntVec3(1, 0, 1);
+        Near(CachedValue(immutableWorker, animal), 5, "same-tick environmental condition removal restores native immutable value");
+        AccessTools.Field(typeof(ModsConfig), "biotechActive").SetValue(null, false);
+        animal.Position = new IntVec3(6, 0, 1);
+        Near(CachedValue(immutableWorker, animal), 5, "Biotech deactivation excludes conditional gene effects");
+        AccessTools.Field(typeof(ModsConfig), "biotechActive").SetValue(null, true);
+        Near(CachedValue(immutableWorker, animal), 1.5f, "Biotech reactivation restores current conditional state");
+        Check(positionGene.pawn == human && animal.genes.Endogenes.Count == 1 && human.genes.Endogenes.Count == 3,
+            "conditional bridge keeps gene ownership and native trackers separate");
+        TestNativeSunlight();
+    }
+
+    private static void TestNativeSunlight()
+    {
+        // An isolated native map graph exercises the actual vanilla sunlight
+        // predicate, roof grid and sky glow, without replacing any methods or
+        // claiming that the full game has initialized/spawned these pawns.
+        var map = Bare<Map>(); map.info = new MapInfo { Size = new IntVec3(10, 1, 10) };
+        map.cellIndices = new CellIndices(map); map.roofGrid = new RoofGrid(map); map.skyManager = Bare<SkyManager>();
+        AccessTools.Field(typeof(Game), "maps").SetValue(Current.Game, new List<Map> { map });
+        var glow = AccessTools.Field(typeof(SkyManager), "curSkyGlowInt"); glow.SetValue(map.skyManager, 1f);
+        Pawn human = MakePawn(30, true), animal = MakePawn(31, false);
+        animal.Position = new IntVec3(2, 0, 2);
+        Mark(animal, human);
+        AccessTools.Field(typeof(Thing), "mapIndexOrState").SetValue(animal, (sbyte)0);
+        try
+        {
+            var stat = new StatDef { defName = "SunlightSharedStat", defaultBaseValue = 10, cacheable = true,
+                neverDisabled = true, noSkillFactor = 1 };
+            var worker = new StatWorker(); worker.InitSetStat(stat); worker.SetCacheability(false);
+            var sunlight = new ConditionalStatAffecter_InSunlight { statOffsets = new List<StatModifier> { Mod(stat, -2) },
+                statFactors = new List<StatModifier> { Mod(stat, .8f) } };
+            AddGene(human, new GeneDef { defName = "NativeSunlightGene", conditionalStatAffecters = new List<ConditionalStatAffecter> { sunlight } });
+            Check(!sunlight.Applies(StatRequest.For(human)) && sunlight.Applies(StatRequest.For(animal)), "native sunlight predicate observes active map body, not off-map original");
+            Near(CachedValue(worker, animal), 6.4f, "native sunlight penalty has both conditional offset and factor");
+            RoofDef[] roofs = (RoofDef[])AccessTools.Field(typeof(RoofGrid), "roofGrid").GetValue(map.roofGrid);
+            roofs[map.cellIndices.CellToIndex(animal.Position)] = new RoofDef { defName = "StatTestRoof" };
+            Near(CachedValue(worker, animal), 10, "same-tick native roof change removes sunlight penalty from cached stat");
+            roofs[map.cellIndices.CellToIndex(animal.Position)] = null;
+            glow.SetValue(map.skyManager, .05f);
+            Near(CachedValue(worker, animal), 10, "native night sky suppresses sunlight penalty");
+            glow.SetValue(map.skyManager, 1f);
+            Near(CachedValue(worker, animal), 6.4f, "same-tick native daylight transition reapplies cached sunlight penalty");
+        }
+        finally
+        {
+            AccessTools.Field(typeof(Thing), "mapIndexOrState").SetValue(animal, (sbyte)-1);
+            AccessTools.Field(typeof(Game), "maps").SetValue(Current.Game, new List<Map>());
+        }
     }
 
     private static T Bare<T>() where T : class { return (T)RuntimeHelpers.GetUninitializedObject(typeof(T)); }

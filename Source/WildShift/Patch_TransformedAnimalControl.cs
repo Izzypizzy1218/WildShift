@@ -12,10 +12,12 @@ namespace WildShift
             if (__result
                 || __instance == null
                 || __instance.Dead
-                || __instance.Faction != Faction.OfPlayer
                 || __instance.RaceProps == null
                 || !__instance.RaceProps.Animal
                 || !__instance.Spawned
+                // World generation queries ordinary faction leaders before a
+                // player faction exists. Read this pawn's faction directly.
+                || __instance.Faction?.IsPlayer != true
                 || __instance.MentalStateDef != null
                 || !TransformUtility.IsTransformedAnimal(__instance))
             {

@@ -38,6 +38,7 @@ namespace WildShift
         {
             Pawn human = SharedFormIdentity.HumanFor(animal);
             if (human == null) return;
+            SharedFormBuffs.AdoptExisting(animal, human);
             clocks.Remove(animal);
             clocks.Add(animal, new Clock { human = human, lastTick = Now, lastInterval = Now });
             Refresh(animal);
@@ -84,13 +85,16 @@ namespace WildShift
 
         public static bool IsSupported(Hediff source)
         {
-            if (source == null || source.def == null || source.Part != null || source is Hediff_SharedFormDrugEffect)
+            if (source == null || source.def == null || source is Hediff_SharedFormDrugEffect)
                 return false;
+            if (SharedFormBuffs.IsSupported(source)) return true;
+            if (source.Part != null) return false;
             Type type = source.GetType();
             bool dependency = type == typeof(Hediff_ChemicalDependency);
+            bool hemogen = type == typeof(Hediff_HemogenCraving);
             if (!dependency && type != typeof(Hediff) && type != typeof(HediffWithComps)
-                && type != typeof(Hediff_High) && type != typeof(Hediff_Addiction)) return false;
-            if (!dependency && !DrugDefs.Contains(source.def)) return false;
+                && type != typeof(Hediff_High) && type != typeof(Hediff_Addiction) && !hemogen) return false;
+            if (!dependency && !hemogen && !DrugDefs.Contains(source.def)) return false;
             HediffWithComps withComps = source as HediffWithComps;
             if (withComps != null && withComps.comps != null)
             {
@@ -252,6 +256,7 @@ namespace WildShift
             Pawn animal = thing as Pawn;
             Clock clock;
             if (animal == null || !clocks.TryGetValue(animal, out clock)) return;
+            if (clock.dirty) Refresh(animal);
             int previous;
             if (!clock.statGenerations.TryGetValue(worker, out previous) || previous != clock.generation)
             {
@@ -429,11 +434,13 @@ namespace WildShift
     [HarmonyPatch(typeof(IngestionOutcomeDoer_GiveHediff), "DoIngestionOutcomeSpecial")]
     public static class Patch_SharedDrugOutcome
     {
-        public static void Prefix(ref Pawn pawn, Thing ingested, out Pawn __state)
+        public static bool Prefix(IngestionOutcomeDoer_GiveHediff __instance, ref Pawn pawn, Thing ingested, out Pawn __state)
         {
             __state = null;
-            if (ingested == null || !ingested.def.IsDrug) return;
+            if ((ingested == null || !ingested.def.IsDrug) && !SharedFormBuffs.IsSupportedDef(__instance.hediffDef)) return true;
+            if (AnimalFormStorage.IsStored(pawn)) return false;
             __state = SharedFormHealth.RedirectDrugRecipient(ref pawn);
+            return true;
         }
         public static void Finalizer(Pawn __state) { if (__state != null) SharedFormHealth.ExitSource(); }
     }

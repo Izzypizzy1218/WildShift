@@ -18,7 +18,7 @@ namespace Verse
 }
 namespace RimWorld
 {
-    public class Faction { public static readonly Faction OfPlayer = new Faction(); }
+    public class Faction { public static readonly Faction OfPlayer = new Faction(); public bool IsPlayer { get { return ReferenceEquals(this, OfPlayer); } } }
     public class TrainableDef { public bool assignable = true; public int steps = 2; public List<TrainableDef> prerequisites; }
     public class Pawn_TrainingTracker
     {

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <!-- TEST ONLY. This opt-in is a declarative native timed buff, not a custom
+       effect implementation. Its food is deliberately not a drug. -->
+  <HediffDef>
+    <defName>WildShift_TestSharedFoodBuff</defName>
+    <label>shared buff validation food effect</label>
+    <description>TEST ONLY whole-body food effect for native ingestion validation.</description>
+    <hediffClass>HediffWithComps</hediffClass>
+    <initialSeverity>0.1</initialSeverity>
+    <maxSeverity>1</maxSeverity>
+    <isBad>false</isBad>
+    <modExtensions><li Class="WildShift.SharedFormBuffExtension" /></modExtensions>
+    <comps>
+      <li Class="HediffCompProperties_Disappears">
+        <disappearsAfterTicks>60000~60000</disappearsAfterTicks>
+        <showRemainingTime>true</showRemainingTime>
+      </li>
+    </comps>
+    <stages><li><painFactor>0.95</painFactor></li></stages>
+  </HediffDef>
+  <ThingDef ParentName="MealBase">
+    <defName>WildShift_TestSharedBuffMeal</defName>
+    <label>shared buff validation meal</label>
+    <description>TEST ONLY non-drug meal carrying one registered native whole-body timed effect.</description>
+    <graphicData>
+      <texPath>Things/Item/Meal/Simple</texPath>
+      <graphicClass>Graphic_StackCount</graphicClass>
+    </graphicData>
+    <statBases><Nutrition>0.4</Nutrition><MarketValue>0</MarketValue></statBases>
+    <ingestible>
+      <preferability>MealSimple</preferability>
+      <chairSearchRadius>0</chairSearchRadius>
+      <outcomeDoers>
+        <li Class="IngestionOutcomeDoer_GiveHediff">
+          <hediffDef>WildShift_TestSharedFoodBuff</hediffDef>
+          <severity>0.5</severity>
+        </li>
+      </outcomeDoers>
+    </ingestible>
+  </ThingDef>
+</Defs>

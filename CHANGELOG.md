@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.4.0-beta.2 — Conditional genes, abilities and timed buffs (local candidate, 2026-10-26)
+
+- Apply active genes' conditional stat bonuses and penalties using the active animal's clothes, location and environment. Keep native offset/factor ordering and stat explanations; condition changes invalidate that body's queried stat cache in the same tick.
+- Expose supported native gene abilities through the animal while retaining the exact human-owned ability objects, cooldowns, remaining charges and saved state. The active body becomes the caster; returning restores the human caster. Keep gene suppression, native costs and group cooldowns. Xenogerm implantation, psycasts and custom ability components are excluded.
+- Keep supported native hemogen and drain state on the original human. Animal-form ability costs, bloodfeeding/resource changes and the resource display use that canonical resource without a second pool.
+- Share reviewed timed buffs from Kiiro, Miho, Ratkin, Ideology and Royalty, plus explicitly opted-in declarative buffs passing the restricted native-component gate. Work drive and preach health also support their native brain attachment; this does not map implants or arbitrary body-part effects between species.
+- Fix actual mod-pack world-generation errors caused by control, selection, draft and training guards querying the player-faction singleton before it exists. Inspect the pawn's own faction while preserving ordinary pawn behavior.
+- Preserve beta.1's identity/skills, native drug/dependency progression, cached animal bodies/prosthetics, next-shift wound reset and return-time gear unloading. Build for RimWorld 1.6 and 1.7; see [behavior, compatibility scope and validation status](Docs/SharedState-v1.4.0-beta.2.md).
+- Validate the final DLL with 469 native 1.7 checks and 259 initialized-game checks each on actual 1.7 and 1.6, preserving normal configuration. The 1.6 Animal Apparel/Draftable run passes all 259 gameplay checks but retains a failed strict preferences-byte check for one appended CRLF; XML settings are unchanged.
+- Complete selected Windows mod-pack UI checks for map/portrait warg and thrumbo armor, preserved dropped armor, mixed selection/drafting and Kiiro catmint through human/animal return. Verify 79 loaded packages and final inputs; retain the raw automated failure for five external/other-mod ERROR messages rather than claiming an error-free mod pack.
+
 ## v1.4.0-beta.1 — Shared identity and persistent animal bodies (local candidate, 2026-10-26)
 
 - Keep the original person's identity, relationships, memories and canonical skill records while transformed. Native animal-form learning updates the original records once.

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+  <name>WildShift Mod Pack Visual Fixture (isolated test)</name>
+  <author>Local test</author>
+  <packageId>wildshift.modpackvisualdemo</packageId>
+  <supportedVersions><li>1.7</li></supportedVersions>
+  <modDependencies><li><packageId>wildshift.mod</packageId><displayName>WildShift</displayName></li></modDependencies>
+  <loadAfter><li>wildshift.mod</li><li>Ancot.KiiroRace</li><li>Solaris.RatkinRaceMod</li></loadAfter>
+  <description>TEST ONLY. Creates a paused native comparison map for the isolated user mod-pack profile. Does not modify rendering and never auto-quits.</description>
+</ModMetaData>

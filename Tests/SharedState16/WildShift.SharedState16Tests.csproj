@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <OutputType>Library</OutputType>
+    <AssemblyName>WildShiftSharedState16Validation</AssemblyName>
+    <LangVersion>7.3</LangVersion>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp" HintPath="$(RimWorldManaged)\Assembly-CSharp.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(RimWorldManaged)\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.IMGUIModule" HintPath="$(RimWorldManaged)\UnityEngine.IMGUIModule.dll" Private="false" />
+    <Reference Include="netstandard" HintPath="$(RimWorldManaged)\netstandard.dll" Private="false" />
+    <Reference Include="0Harmony" HintPath="$(HarmonyPath)" Private="false" />
+    <Reference Include="WildShift" HintPath="$(WildShiftPath)" Private="false" />
+    <Compile Include="$(SharedRegressionSource)" />
+    <Compile Include="..\SharedState17\SharedHealthEngineChecks.cs" Link="SharedHealthEngineChecks.cs" />
+    <Compile Include="..\SharedState17\SharedAbilitiesEngineChecks.cs" Link="SharedAbilitiesEngineChecks.cs" Condition="Exists('..\SharedState17\SharedAbilitiesEngineChecks.cs')" />
+    <Compile Include="..\SharedState17\SharedBuffEngineChecks.cs" Link="SharedBuffEngineChecks.cs" Condition="Exists('..\SharedState17\SharedBuffEngineChecks.cs')" />
+    <Compile Include="Engine16Context.cs" />
+    <Compile Include="JsonSerializer.cs" />
+  </ItemGroup>
+  <Target Name="ValidateInputs" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(RimWorldManaged)\Assembly-CSharp.dll')" Text="Supply matching 1.6 managed assemblies or cached 1.6 API references." />
+    <Error Condition="!Exists('$(SharedRegressionSource)')" Text="Use Run-SharedState16Tests.ps1 to generate the audited 1.6 variant of the unchanged 1.7 fixture into external build output." />
+    <Error Condition="!Exists('$(WildShiftPath)')" Text="Supply a separately built 1.6 WildShift DLL." />
+    <Error Condition="!Exists('$(HarmonyPath)')" Text="Supply a matching 1.6 Harmony DLL." />
+  </Target>
+</Project>

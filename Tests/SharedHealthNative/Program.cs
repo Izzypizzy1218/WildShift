@@ -167,11 +167,11 @@ internal static class Program
         try { Check(recipient == human && state == animal, "Drug component recipient redirects without changing physical ingester"); }
         finally { Patch_SharedDrugBeforeIngestion.Finalizer(state); }
         recipient = animal;
-        Patch_SharedDrugOutcome.Prefix(ref recipient, drug, out state);
+        Patch_SharedDrugOutcome.Prefix((IngestionOutcomeDoer_GiveHediff)drugDef.ingestible.outcomeDoers[0], ref recipient, drug, out state);
         try { Check(recipient == human, "Native drug GiveHediff outcome selects original body"); }
         finally { Patch_SharedDrugOutcome.Finalizer(state); }
         recipient = animal;
-        Patch_SharedDrugOutcome.Prefix(ref recipient, new Thing { def = new ThingDef { ingestible = new IngestibleProperties() } }, out state);
+        Patch_SharedDrugOutcome.Prefix(new IngestionOutcomeDoer_GiveHediff(), ref recipient, new Thing { def = new ThingDef { ingestible = new IngestibleProperties() } }, out state);
         Check(recipient == animal && state == null, "Ordinary food outcome remains on active animal");
         drug.TryGetComp<CompDrug>().PrePostIngested(animal);
         Check(chemicalNeed.CurLevel > 0.8f && animal.needs.AllNeeds.Count == 0,
@@ -204,7 +204,160 @@ internal static class Program
         ((IngestionOutcomeDoer_GiveHediff)drugDef.ingestible.outcomeDoers[0]).DoIngestionOutcome(animal, drug, 1);
         Check(!animal.health.hediffSet.hediffs.Any(h => h.def == highDef),
             "Inactive cached animal rejects the remaining native drug ingestion outcome");
+        RunBuffRegressions();
         Console.WriteLine("Scope: actual native hediff ownership/comps/chemical needs and isolated caravan holder graph; full map/UI health transitions and need-set rebuilding are fixture boundaries. Full ingestion/return/death/save lifecycle requires the engine fixture.");
+    }
+
+    private static HediffDef BuffDef(string name, bool optIn = true)
+    {
+        var def = new HediffDef {
+            defName = name, label = name, hediffClass = typeof(HediffWithComps), initialSeverity = 1, maxSeverity = 1,
+            stages = new List<HediffStage> { new HediffStage { painFactor = 0.9f } },
+            comps = new List<HediffCompProperties> {
+                new HediffCompProperties_Disappears { disappearsAfterTicks = new IntRange(600, 600) },
+                new HediffCompProperties_SeverityPerDay { severityPerDay = -2 }
+            }
+        };
+        if (optIn) def.modExtensions = new List<DefModExtension> { new SharedFormBuffExtension() };
+        DefDatabase<HediffDef>.Add(def);
+        return def;
+    }
+
+    private static void RunBuffRegressions()
+    {
+        Console.WriteLine("Additional scope: explicit native timed-buff opt-in, native health Add/Has/Get/Remove and native food outcome. Complete Thing.Ingested nutrition remains an engine-fixture check.");
+        SetTick(2000);
+        var buffDef = BuffDef("FixtureOptInTimedBuff");
+        Pawn human = Pawn(301, Intelligence.Humanlike), animal = Pawn(302, Intelligence.Animal);
+        var holder = Mark(animal);
+        Check(holder.TryStore(human), "Buff fixture stores a distinct canonical original");
+        SharedFormIdentity.Initialize(animal);
+        SharedFormHealth.Initialize(animal);
+
+        var effect = (HediffWithComps)HediffMaker.MakeHediff(buffDef, animal);
+        animal.health.AddHediff(effect);
+        Check(effect.pawn == human && human.health.hediffSet.hediffs.Contains(effect)
+            && !animal.health.hediffSet.hediffs.Contains(effect),
+            "Actual native AddHediff routes an approved whole-body buff to one original owner");
+        Check(human.health.hediffSet.hediffs.Count(h => h.def == buffDef) == 1
+            && animal.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>().Count(h => h.source == effect) == 1,
+            "Approved buff produces exactly one distinct animal projection");
+        Check(animal.health.hediffSet.HasHediff(buffDef)
+            && ReferenceEquals(animal.health.hediffSet.GetFirstHediffOfDef(buffDef), effect),
+            "Native HasHediff and GetFirstHediffOfDef expose the canonical approved source");
+
+        var timer = effect.TryGetComp<HediffComp_Disappears>();
+        int timerBefore = timer.ticksToDisappear;
+        int ageBefore = effect.ageTicks;
+        float severityBefore = effect.Severity;
+        SetTick(2001);
+        SharedFormHealth.Tick(animal);
+        SharedFormHealth.Tick(animal);
+        human.health.HealthTick();
+        Check(timer.ticksToDisappear == timerBefore - 1,
+            "Approved native buff timer advances once despite duplicate actor and hidden-human ticks");
+        // Native SeverityModifierBase applies a 200-tick hash step rather
+        // than a fractional change on every smaller health interval.
+        SetTick(2200);
+        SharedFormHealth.TickInterval(animal, 200);
+        SharedFormHealth.TickInterval(animal, 200);
+        Check(effect.ageTicks == ageBefore + 200
+            && Math.Abs(effect.Severity - (severityBefore - 2f * 200 / 60000)) < 0.000001f,
+            "Approved buff age and native severity timer advance once at original elapsed rate");
+
+        // This isolated graph does not load Core XML. Supply the native stat
+        // definition that Need_Food.SetInitialLevel uses to clear its cache.
+        if (StatDefOf.MaxNutrition == null)
+            StatDefOf.MaxNutrition = new StatDef { defName = "FixtureMaxNutrition", defaultBaseValue = 1, workerClass = typeof(StatWorker) };
+        var foodNeed = new Need_Food(animal) { def = new NeedDef { defName = "FixtureActorFood", needClass = typeof(Need_Food) } };
+        foodNeed.CurLevel = 0.4f;
+        AccessTools.Field(typeof(Pawn_NeedsTracker), "needs").SetValue(animal.needs, new List<Need> { foodNeed });
+        float foodBefore = foodNeed.CurLevel;
+        var outcome = new IngestionOutcomeDoer_GiveHediff { hediffDef = buffDef, severity = 0.1f };
+        var food = new Thing { def = new ThingDef { defName = "FixtureBuffFood", category = ThingCategory.Item,
+            ingestible = new IngestibleProperties { outcomeDoers = new List<IngestionOutcomeDoer> { outcome } } }, stackCount = 1 };
+        Check(!food.def.IsDrug, "Food regression uses a genuinely non-drug native ingestible");
+        outcome.DoIngestionOutcome(animal, food, 1);
+        Check(human.health.hediffSet.hediffs.Count(h => h.def == buffDef) == 1
+            && ReferenceEquals(human.health.hediffSet.GetFirstHediffOfDef(buffDef), effect)
+            && !animal.health.hediffSet.hediffs.Any(h => h.def == buffDef),
+            "Actual native non-drug food GiveHediff merges into canonical original without an animal copy");
+        Check(ReferenceEquals(animal.needs.TryGetNeed<Need_Food>(), foodNeed)
+            && foodNeed.CurLevel == foodBefore && human.needs.TryGetNeed<Need_Food>() == null,
+            "Food outcome routing leaves physical actor and its nutrition need untouched");
+
+        animal.health.RemoveHediff(animal.health.hediffSet.GetFirstHediffOfDef(buffDef));
+        Check(!human.health.hediffSet.hediffs.Contains(effect)
+            && !animal.health.hediffSet.HasHediff(buffDef)
+            && !animal.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>().Any(h => h.source == effect),
+            "Actual native RemoveHediff removes the canonical buff and clears presence and projection");
+
+        var unregistered = BuffDef("FixtureUnregisteredTimedBuff", false);
+        Check(!SharedFormBuffs.IsSupportedDef(unregistered), "An arbitrary unregistered native timed buff is rejected");
+        var unknown = HediffMaker.MakeHediff(unregistered, animal);
+        animal.health.AddHediff(unknown);
+        Check(unknown.pawn == animal && animal.health.hediffSet.hediffs.Contains(unknown)
+            && !human.health.hediffSet.hediffs.Contains(unknown),
+            "Unregistered native AddHediff retains ordinary animal ownership");
+
+        var part = new BodyPartRecord { def = new BodyPartDef { defName = "FixtureBuffLeg" } };
+        var anatomical = HediffMaker.MakeHediff(buffDef, animal, part);
+        Check(!SharedFormBuffs.IsSupported(anatomical)
+            && !SharedFormBuffs.AllowsPart(buffDef, animal, part),
+            "Generic buff opt-in cannot opt anatomy-bound effects into sharing");
+        Check(!SharedFormBuffs.IsSupported(new CustomBuff { def = buffDef, pawn = animal }),
+            "A custom runtime hediff subclass cannot inherit native buff approval");
+        var badCompDef = BuffDef("FixtureOptInCustomComp");
+        badCompDef.comps.Add(new HediffCompProperties { compClass = typeof(CustomBuffComp) });
+        Check(!SharedFormBuffs.IsSupportedDef(badCompDef), "Explicit opt-in still rejects an arbitrary custom comp");
+        var mentalDef = BuffDef("FixtureOptInMentalTimer");
+        ((HediffCompProperties_Disappears)mentalDef.comps[0]).requiredMentalState = new MentalStateDef();
+        Check(!SharedFormBuffs.IsSupportedDef(mentalDef), "A native timer tied to mental state is not a context-free buff");
+        var woundDef = BuffDef("FixtureOptInAnatomicalRemoval");
+        ((HediffCompProperties_Disappears)woundDef.comps[0]).leaveFreshWounds = false;
+        Check(!SharedFormBuffs.IsSupportedDef(woundDef), "A native timer with anatomy-dependent removal is rejected");
+
+        var changedInstance = (HediffWithComps)HediffMaker.MakeHediff(buffDef, animal);
+        changedInstance.comps.Add(new CustomBuffComp { parent = changedInstance, props = new HediffCompProperties { compClass = typeof(CustomBuffComp) } });
+        Check(!SharedFormBuffs.IsSupported(changedInstance), "Runtime injected custom comp is rejected even when its Def is native");
+        animal.health.AddHediff(changedInstance);
+        Check(changedInstance.pawn == animal && animal.health.hediffSet.hediffs.Contains(changedInstance)
+            && !human.health.hediffSet.hediffs.Contains(changedInstance),
+            "Native AddHediff validates the actual instance before redirecting ownership");
+
+        SetTick(3000);
+        Pawn legacyHuman = Pawn(401, Intelligence.Humanlike), legacyAnimal = Pawn(402, Intelligence.Animal);
+        var legacy = (HediffWithComps)HediffMaker.MakeHediff(buffDef, legacyAnimal);
+        legacyAnimal.health.AddHediff(legacy);
+        var legacyTimer = legacy.TryGetComp<HediffComp_Disappears>();
+        var legacySeverity = legacy.TryGetComp<HediffComp_SeverityPerDay>();
+        legacyTimer.ticksToDisappear = 237;
+        legacySeverity.severityPerDay = -0.12345f;
+        legacy.ageTicks = 67;
+        var legacyHolder = Mark(legacyAnimal);
+        Check(legacyHolder.TryStore(legacyHuman), "Legacy buff fixture preserves its existing animal body");
+        SharedFormIdentity.Initialize(legacyAnimal);
+        SharedFormHealth.Initialize(legacyAnimal);
+        Check(ReferenceEquals(legacyHuman.health.hediffSet.GetFirstHediffOfDef(buffDef), legacy)
+            && legacy.pawn == legacyHuman && !legacyAnimal.health.hediffSet.hediffs.Contains(legacy),
+            "Initialization adopts the exact legacy native buff with only one owning body");
+        Check(legacyTimer.ticksToDisappear == 237 && legacy.ageTicks == 67
+            && legacySeverity.severityPerDay == -0.12345f,
+            "Legacy adoption does not replay PostAdd, reroll native severity, refresh duration or advance age");
+        SharedFormHealth.Initialize(legacyAnimal);
+        Check(legacyHuman.health.hediffSet.hediffs.Count(h => h.def == buffDef) == 1
+            && legacyAnimal.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>().Count(h => h.source == legacy) == 1
+            && legacyTimer.ticksToDisappear == 237,
+            "Repeated initialization leaves legacy state and its projection idempotent");
+
+        legacyHolder.ReleaseStoredPawn();
+        var dormant = new AnimalFormStorage(legacyHuman);
+        Check(dormant.TryStore(legacyAnimal, new PawnKindDef { defName = "FixtureCachedBuffKind", race = legacyAnimal.def })
+            && AnimalFormStorage.IsStored(legacyAnimal), "Food-tail fixture uses a real production inactive animal holder");
+        outcome.DoIngestionOutcome(legacyAnimal, food, 1);
+        Check(!legacyAnimal.health.hediffSet.hediffs.Any(h => h.def == buffDef)
+            && legacyHuman.health.hediffSet.hediffs.Contains(legacy) && legacyTimer.ticksToDisappear == 237,
+            "Cached inactive animal rejects a trailing registered non-drug food effect");
     }
 
     private static bool SkipFixtureCache(Pawn ___pawn) { return !fixtures.Contains(___pawn); }
@@ -249,6 +402,8 @@ internal static class Program
 }
 
 internal sealed class CustomDrug : Hediff_High { }
+internal sealed class CustomBuff : HediffWithComps { }
+internal sealed class CustomBuffComp : HediffComp { }
 internal sealed class StageProbeException : Exception { }
 internal sealed class RecordingGiver : HediffGiver
 {

@@ -292,8 +292,9 @@ namespace WildShift
         public static void EnsureTransformedAnimalControl(Pawn p, bool b) {}
     }
     public static class Patch_GameEnder { public static void InvalidateCache() {} }
-    public static class SharedFormIdentity { public static void Initialize(Pawn animal) {} }
+    public static class SharedFormIdentity { public static void Initialize(Pawn animal) {} public static Pawn HumanFor(Pawn animal) { return TransformUtility.TryGetTransformedComp(animal)?.StoredPawn; } }
     public static class SharedFormHealth { public const string ProjectionDefName="WildShift_SharedFormDrugEffect"; public static void Initialize(Pawn animal) {} public static bool IsSharedLethalDeath(Pawn animal) { return false; } }
+    public static class SharedFormAbilities { public static void Initialize(Pawn animal) {} public static void Release(Pawn animal) {} }
     public class Settings { public float deathChance, spilloverDamageFactor, enemyShapeshifterChance = .05f; public bool forceTraderShapeshifters; }
     public static class WildShiftMod { public static Settings Settings = new Settings(); }
 }

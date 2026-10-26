@@ -1,0 +1,11 @@
+# Isolated installed-pack UI verification
+
+Build `WildShift.ModPack17Tests.csproj` with explicit `RimWorldDir`, `WildShiftPath` and `OutputPath`, then stage its DLL and `About` in a test-only mod directory. Never include this helper in a runtime release.
+
+`../Run-ModPack17Tests.ps1` requires an explicit saved `ModsConfigSource`, production `SourceWildShiftDir` and expected production `ExpectedWildShiftSHA256`. `Startup` tests the saved active IDs without a fixture; `Visual` adds the fixture and any explicitly requested `AdditionalMods`, starts a fresh quicktest map, and returns without waiting for or stopping the GUI. Use `-Language Korean` or `-Language 'Korean (한국어)'` for the exact native Korean language folder. Credentials and other mod settings are not copied.
+
+The visual fixture pauses with paired normal/shapeshifter wargs and thrumbos, a Kiiro food subject, a human ability target, a wild warcall target and a wooden wall. When the three Animal Apparel packs are present, each paired animal wears one steel animal plate armor. Compare actual map rendering and portraits; an apparel tracker entry does not establish visible armor. Use production return/shift commands, check dropped armor, and use the fixture's record button for native state evidence. The helper does not automatically re-equip dropped armor.
+
+Close only the owned GUI, then call `-Mode Visual -FinalizeVisual -Output <original output>`. This verifies loaded mod order, the actual production DLL and unchanged normal configuration. It leaves the visual verdict unset: the operator must separately record observed interactions and rendering. Any native ERROR keeps automated evidence failed, including unrelated assets or environment failures; preserve the raw logs and describe attribution separately.
+
+Default preflight requires other RimWorld processes to be closed. `-AllowIsolatedParallel` is limited to a private game copy below this workspace's `outputs` and independently verified background batch/headless profiles. It never stops other projects. A custom `-GameExe` must be inside that private copy and byte-identical to its stock apphost. Keep the production source and staged DLL fixed until finalization.

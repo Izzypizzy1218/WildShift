@@ -216,6 +216,7 @@ namespace WildShift
             EnemyShapeshifterUtility.OnTransformed(human, animal, comp);
             SharedFormIdentity.Initialize(animal);
             SharedFormHealth.Initialize(animal);
+            SharedFormAbilities.Initialize(animal);
             EnsureTransformedAnimalControl(animal, true);
             if (human.playerSettings != null && animal.playerSettings != null)
             {
@@ -369,6 +370,7 @@ namespace WildShift
             finally
             {
                 FormTransferUtility.EndReturn(animal);
+                if (SharedFormIdentity.HumanFor(animal) != null) SharedFormAbilities.Initialize(animal);
                 Patch_GameEnder.InvalidateCache();
                 if (Find.ColonistBar != null) Find.ColonistBar.MarkColonistsDirty();
             }
@@ -438,6 +440,9 @@ namespace WildShift
                 human.playerSettings.displayOrder = animal.playerSettings.displayOrder;
             }
 
+            animal.jobs?.StopAll(false);
+            SharedFormAbilities.Release(animal);
+
             if (animal.Spawned)
             {
                 human = comp.ReleaseStoredPawn();
@@ -481,6 +486,7 @@ namespace WildShift
                     if (!animal.Spawned && animal.holdingOwner == null) FormTransferUtility.PreserveDetachedPawn(animal);
                     SharedFormIdentity.Initialize(animal);
                     SharedFormHealth.Initialize(animal);
+                    SharedFormAbilities.Initialize(animal);
                     return null;
                 }
                 Log.Error("[WildShift] Could not roll back the preserved animal after reversion; retaining both bodies.");

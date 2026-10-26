@@ -115,6 +115,7 @@ namespace WildShift
                         if (!HasStoredPawn) return;
                         SharedFormIdentity.Initialize(animal);
                         SharedFormHealth.Initialize(animal);
+                        SharedFormAbilities.Initialize(animal);
                         AnimalFormTraining.CompleteSpecialTraining(animal);
                         AnimalApparelGraphics.RefreshIfOutOfSync(animal);
                     });

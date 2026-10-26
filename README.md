@@ -6,7 +6,9 @@ WildShift is a RimWorld 1.6 / 1.7 beta mod about colonists who can transform int
 
 - Transform a shapeshifter into one eligible animal form before or after drafting.
 - Keep the original person's identity, relationships, memories and canonical skill records. Animal-form learning updates those records once.
-- Share unconditional stat offsets and factors from active genes and unsuppressed traits. Conditional gene modifiers and gene abilities are outside this feature.
+- Share stat offsets and factors from active genes and unsuppressed traits, including conditional gene bonuses and penalties evaluated against the active animal's environment and apparel.
+- Use supported native gene abilities in animal form while retaining the original ability objects, cooldowns, charges and hemogen resource. Custom ability components, xenogerm implantation and psycasts are excluded.
+- Continue reviewed timed buffs from Kiiro, Miho, Ratkin, Ideology and Royalty through transformation. Additional declarative buffs can opt in through a restricted compatibility extension; arbitrary mod effects are not automatically shared.
 - Continue supported native whole-body drug effects, chemical needs and dependency state on the original human while transformed. Drugs ingested by the animal update that same canonical state.
 - Reuse the same animal Pawn across transformations, retaining its prosthetics and serialized custom component state. Human implants remain on the human body; they are not mapped onto the animal.
 - Keep transformed animals visible and selectable in the colonist bar.
@@ -126,9 +128,13 @@ To build 1.6, supply matching 1.6 game or reference assemblies and `-p:RimWorldV
 
 ## Current version
 
-`v1.4.0-beta.1` — local candidate
+`v1.4.0-beta.2` — local candidate
 
-The local candidate builds for RimWorld 1.6 and 1.7. See [shared-state behavior and verification](Docs/SharedState-v1.4.0-beta.1.md) for supported effects, persistent animal bodies and validation limits. Animal-form apparel and cargo still unload on return as described above.
+The local candidate builds for RimWorld 1.6 and 1.7. See [shared-state behavior and scope](Docs/SharedState-v1.4.0-beta.2.md) for conditional modifiers, supported abilities, reviewed buffs and verification limits. Persistent animal bodies remain as introduced in beta.1, and animal-form apparel and cargo still unload on return as described above.
+
+The final candidate fixes control/selection/draft/training checks that queried the player faction too early during world generation. Validation: 469 native 1.7 checks and 259 full-engine checks each on actual 1.7 and 1.6 pass with normal configuration unchanged. The 1.6 gear/Draftable run passes all 259 gameplay checks but retains a failed strict byte check for one added preferences-file newline; XML settings are unchanged.
+
+Selected Windows mod-pack UI checks are complete: warg/thrumbo armor on map and portraits, dropped armor preservation, mixed selection/drafting and Kiiro catmint through transformation. The 79-package session verifies loaded inputs and normal configuration; five external/other-mod ERROR messages keep its raw automated verdict failed. See the linked scope and known issues.
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
 

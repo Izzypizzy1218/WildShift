@@ -126,7 +126,7 @@ namespace WildShift
         [HarmonyPriority(Priority.Last)]
         public static IEnumerable<Gizmo> Postfix(IEnumerable<Gizmo> __result, Pawn __instance)
         {
-            if (__instance == null || __instance.Faction != Faction.OfPlayer
+            if (__instance == null || __instance.Faction?.IsPlayer != true
                 || TransformUtility.TryGetTransformedComp(__instance)?.HasStoredPawn != true)
                 return __result;
             return WithoutDuplicateDraft(__result);

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework><OutputType>Library</OutputType><LangVersion>7.3</LangVersion>
+    <AssemblyName>WildShiftModPackVisual</AssemblyName><GenerateDependencyFile>false</GenerateDependencyFile>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems><AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <RimWorldDir Condition="'$(RimWorldDir)' == ''">$(MSBuildThisFileDirectory)..\..\..\outputs\wildshift-1.4.0-beta.2\engine17-backup</RimWorldDir>
+    <WildShiftPath Condition="'$(WildShiftPath)' == ''">$(MSBuildThisFileDirectory)..\..\1.7\Assemblies\WildShift.dll</WildShiftPath>
+    <HarmonyPath Condition="'$(HarmonyPath)' == ''">$(MSBuildProgramFiles32)\Steam\steamapps\workshop\content\294100\2009463077\1.7\Assemblies\0Harmony.dll</HarmonyPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp" HintPath="$(RimWorldDir)\Assembly-CSharp.dll" Private="false" />
+    <Reference Include="UnityStubs" HintPath="$(RimWorldDir)\UnityStubs.dll" Private="false" />
+    <Reference Include="0Harmony" HintPath="$(HarmonyPath)" Private="false" />
+    <Reference Include="WildShift" HintPath="$(WildShiftPath)" Private="false" />
+    <Compile Include="ModPackVisualDemo.cs" />
+  </ItemGroup>
+</Project>

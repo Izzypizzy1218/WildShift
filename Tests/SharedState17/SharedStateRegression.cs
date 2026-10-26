@@ -55,12 +55,23 @@ namespace WildShiftSharedStateValidation
         private Caravan caravan;
         private string originalId, formId, implantId, originalName, activeSavedDrugId;
         private float learnedXp;
+        private Ability persistentFire, persistentWarcall;
+        private Hediff persistentBuff;
+        private string persistentFireId, persistentWarcallId, persistentBuffId;
+        private int persistentCooldownEnd;
         private readonly List<string> results = new List<string>();
         public Regression(Game game) { }
 
         public override void FinalizeInit() { ready = true; processPhase = stage; }
         public override void ExposeData()
         {
+            Scribe_References.Look(ref persistentFire, "persistentFire");
+            Scribe_References.Look(ref persistentWarcall, "persistentWarcall");
+            Scribe_References.Look(ref persistentBuff, "persistentBuff");
+            Scribe_Values.Look(ref persistentFireId, "persistentFireId");
+            Scribe_Values.Look(ref persistentWarcallId, "persistentWarcallId");
+            Scribe_Values.Look(ref persistentBuffId, "persistentBuffId");
+            Scribe_Values.Look(ref persistentCooldownEnd, "persistentCooldownEnd", 0);
             Scribe_Values.Look(ref stage, "sharedStateStage", 0);
             Scribe_Values.Look(ref originalId, "sharedOriginalId");
             Scribe_Values.Look(ref formId, "sharedFormId");
@@ -106,6 +117,7 @@ namespace WildShiftSharedStateValidation
             companion = NewHuman(map, "SharedCompanion", -3, Gender.Female);
             originalId = original.GetUniqueLoadID();
             originalName = original.Name.ToStringFull;
+            SeedPersistentSharedEffects();
             original.relations.AddDirectRelation(PawnRelationDefOf.Spouse, companion);
             original.needs.mood.thoughts.memories.TryGainMemory(Married(), companion);
             Require(HasMemory(), "native spouse memory is seeded on the original human");
@@ -135,6 +147,7 @@ namespace WildShiftSharedStateValidation
             CheckIdentity();
             CheckPureStats();
             CheckProjections();
+            CheckPersistentSharedEffects(true);
 
             List<BodyPartRecord> legs = form.RaceProps.body.AllParts.Where(p => p.def.tags.Contains(BodyPartTagDefOf.MovingLimbCore)).ToList();
             Require(legs.Count >= 3, "animal body has distinct limbs for implant, wound and missing-part probes");
@@ -162,6 +175,7 @@ namespace WildShiftSharedStateValidation
             Check(Near(original.skills.GetSkill(SkillDefOf.Melee).xpSinceLastLevel, learnedXp), "return preserves canonical learned XP");
             Check(Drug(original) != null && ChemicalNeed() != null, "return keeps canonical luciferium and its chemical need");
             Check(Inventory() == 17, "return preserves the original silver inventory");
+            CheckPersistentSharedEffects(false);
             Require(failures == 0, "initial shared-state checks pass before saving");
             stage = 1;
             GameDataSaveLoader.SaveGame("autostart");
@@ -184,6 +198,7 @@ namespace WildShiftSharedStateValidation
             CheckIdentity();
             Check(Near(original.skills.GetSkill(SkillDefOf.Melee).xpSinceLastLevel, learnedXp)
                 && original.skills.GetSkill(SkillDefOf.Melee).passion == Passion.Major, "native reload preserves learned XP and passion");
+            CheckPersistentSharedEffects(false);
             Require(TransformUtility.TransformToAnimal(original, Kind()), "production transformation reuses the reloaded cached body");
             Check(Body(Find.CurrentMap) == form && form.GetUniqueLoadID() == formId && !AnimalFormStorage.IsStored(form),
                 "active form is the same cached animal, not a newly generated replacement");
@@ -197,6 +212,7 @@ namespace WildShiftSharedStateValidation
                 "reactivation rebinds native skill lookups to the original record");
             CheckIdentity();
             CheckProjections();
+            CheckPersistentSharedEffects(true);
             CheckDrugTicks(300, "map");
             Need_Chemical need = ChemicalNeed();
             Require(need != null, "stored original chemical need remains available");
@@ -218,10 +234,13 @@ namespace WildShiftSharedStateValidation
             }
             Check(form.health.hediffSet.hediffs.Contains(implant) && ImplantState() == 731, "repeated cycles preserve the original stateful implant");
             SharedHealthEngineChecks.Run(Find.CurrentMap, Check);
+            SharedBuffEngineChecks.Run(Find.CurrentMap, Check);
+            SharedAbilitiesEngineChecks.Run(Find.CurrentMap, Check);
             caravan = CaravanExitMapUtility.ExitMapAndCreateCaravan(new[] { companion, form }, Faction.OfPlayer,
                 Find.CurrentMap.Tile, Find.CurrentMap.Tile, PlanetTile.Invalid, false);
             Require(caravan != null && caravan.Spawned && caravan.ContainsPawn(form), "native departure creates a caravan with the active form");
             CheckDrugTicks(300, "caravan");
+            CheckPersistentSharedEffects(true);
             activeSavedDrugId = Drug(original).GetUniqueLoadID();
             activeSavedDrugAge = Drug(original).ageTicks;
             Require(failures == 0, "active shared-state and native health checks pass before saving");
@@ -260,14 +279,68 @@ namespace WildShiftSharedStateValidation
                 "active-form reload resolves one projection reference to the exact canonical drug");
             CheckIdentity();
             CheckDrugTicks(300, "reloaded caravan");
+            CheckPersistentSharedEffects(true);
             Require(TransformUtility.RevertToHuman(form, false) == original, "off-map production return restores the original human");
             Check(caravan.ContainsPawn(original) && !original.Spawned && WorldPawnsUtility.IsWorldPawn(original),
                 "off-map return retains the exact world-registered caravan member");
             Check(AnimalFormStorage.IsStored(form) && !form.Destroyed && TransformUtility.TryGetTransformedComp(form).StoredPawn == null,
                 "off-map return preserves the same cached body without an ownership cycle");
             Check(Inventory() == 17 && ImplantState() == 731, "caravan return preserves exact inventory and implant state");
+            CheckPersistentSharedEffects(false);
             CheckIdentity();
             Finish("complete");
+        }
+
+        private void SeedPersistentSharedEffects()
+        {
+            foreach (string name in new[] { "FireSpew", "AnimalWarcall", "Hemogenic", "HemogenDrain" })
+                original.genes.AddGene(DefDatabase<GeneDef>.GetNamed(name), false);
+            persistentFire = original.abilities.GetAbility(DefDatabase<AbilityDef>.GetNamed("FireSpew"));
+            persistentWarcall = original.abilities.GetAbility(DefDatabase<AbilityDef>.GetNamed("AnimalWarcall"));
+            Require(persistentFire != null && persistentWarcall != null, "native genes grant persistent test abilities");
+            persistentFire.StartCooldown(600000);
+            persistentWarcall.RemainingCharges = 1;
+            persistentWarcall.StartCooldown(600000);
+            persistentCooldownEnd = Find.TickManager.TicksGame + 600000;
+            persistentFireId = persistentFire.GetUniqueLoadID();
+            persistentWarcallId = persistentWarcall.GetUniqueLoadID();
+            SharedFormAbilities.HemogenFor(original).Value = .7f;
+            BodyPartRecord brain = original.health.hediffSet.GetBrain();
+            persistentBuff = HediffMaker.MakeHediff(DefDatabase<HediffDef>.GetNamed("WorkDrive"), original, brain);
+            persistentBuff.TryGetComp<HediffComp_Disappears>().SetDuration(600000);
+            original.health.AddHediff(persistentBuff, brain);
+            persistentBuffId = persistentBuff.GetUniqueLoadID();
+        }
+
+        private void CheckPersistentSharedEffects(bool active)
+        {
+            Require(persistentFire != null && persistentWarcall != null && persistentBuff != null,
+                "native save resolves persistent ability and buff references");
+            Check(persistentFire.GetUniqueLoadID() == persistentFireId && persistentWarcall.GetUniqueLoadID() == persistentWarcallId
+                && original.abilities.abilities.Contains(persistentFire) && original.abilities.abilities.Contains(persistentWarcall),
+                "both gene abilities retain exact IDs and one canonical human tracker owner");
+            Check(persistentFire.CooldownTicksRemaining == persistentCooldownEnd - Find.TickManager.TicksGame
+                && persistentWarcall.CooldownTicksRemaining == persistentFire.CooldownTicksRemaining
+                && persistentWarcall.RemainingCharges == 1,
+                "native cooldown timestamps and spent warcall charge survive forms and fresh processes");
+            Pawn caster = active ? form : original;
+            Check(persistentFire.pawn == caster && persistentFire.verb.CasterPawn == caster
+                && persistentWarcall.pawn == caster && persistentWarcall.verb.CasterPawn == caster,
+                "persistent native ability and verb casters follow the currently active body");
+            if (active)
+                Check(ReferenceEquals(form.abilities.GetAbility(persistentFire.def), persistentFire)
+                    && !form.abilities.abilities.Contains(persistentFire),
+                    "active body exposes the canonical ability without deep-owning another copy");
+            Gene_Hemogen resource = SharedFormAbilities.HemogenFor(original);
+            Check(resource != null && resource.pawn == original && resource.Value > .6f && resource.Value <= .7f,
+                "canonical native hemogen remains on the original with bounded passive progression");
+            Check(persistentBuff.GetUniqueLoadID() == persistentBuffId && persistentBuff.pawn == original
+                && persistentBuff.Part == original.health.hediffSet.GetBrain() && original.health.hediffSet.hediffs.Contains(persistentBuff),
+                "brain-bound native WorkDrive retains its original ID, timer owner and exact human brain");
+            if (active)
+                Check(ReferenceEquals(form.health.hediffSet.GetFirstHediffOfDef(persistentBuff.def), persistentBuff)
+                    && form.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>().Count(h => h.source == persistentBuff) == 1,
+                    "active animal resolves one canonical brain buff and one separate stage projection");
         }
 
         private void CheckPureStats()

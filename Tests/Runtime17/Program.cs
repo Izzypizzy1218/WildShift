@@ -16,6 +16,8 @@ using WildShift;
 internal static class Program
 {
     private static int assertions;
+    private static bool observeWorldgenPlayerLookup;
+    private static int worldgenPlayerFactionLookups;
     private const string Owner = "wildshift.mod";
 
     private static int Main(string[] args)
@@ -63,12 +65,18 @@ internal static class Program
             prefix: new HarmonyMethod(typeof(Program), nameof(ProbeCaravanRemove)));
         caravanFixtureHarmony.Patch(AccessTools.Method(typeof(Pawn), "Strip", new[] { typeof(bool) }),
             prefix: new HarmonyMethod(typeof(Program), nameof(ProbeMemberStrip)));
+        // Observe the real getter before production patches can JIT and inline
+        // it. This prefix never skips the getter or changes its return value.
+        new Harmony("wildshift.tests.worldgen-player-faction-observer").Patch(
+            AccessTools.PropertyGetter(typeof(Faction), "OfPlayer"),
+            prefix: new HarmonyMethod(typeof(Program), nameof(ObservePlayerFactionLookup)));
         var harmony = new Harmony(Owner);
         harmony.PatchAll(typeof(TransformUtility).Assembly);
         AnimalModCompatibility.Install(harmony);
         SapientAnimalsCompatibility.Install(harmony);
         AuditPatches();
         SetupGame();
+        TestControlBeforePlayerFactionExists();
         TestNativeControlAndStorage();
         TestNativeTemporaryMapRetention();
         TestNativeCaravanSurvival();
@@ -186,6 +194,68 @@ internal static class Program
         hediff.comps = new List<HediffComp> { comp };
         pawn.health.hediffSet.hediffs.Add(hediff);
         return comp;
+    }
+
+    private static void ObservePlayerFactionLookup()
+    {
+        if (observeWorldgenPlayerLookup) worldgenPlayerFactionLookups++;
+    }
+
+    private static void TestControlBeforePlayerFactionExists()
+    {
+        var factionManager = AccessTools.Field(typeof(World), "factionManager");
+        object previousManager = factionManager.GetValue(Find.World);
+        Faction previousPlayer = Find.GameInitData.playerFaction;
+        int errorsBefore = Log.Messages.Count(m => m.type == LogMessageType.Error);
+        try
+        {
+            // Match world generation before the player faction is registered.
+            // Do not patch or mock the native Faction.OfPlayer getter: the old
+            // production guards themselves must produce the observed error.
+            Find.GameInitData.playerFaction = null;
+            factionManager.SetValue(Find.World, new FactionManager());
+            Check(Faction.OfPlayerSilentFail == null, "World-generation fixture has no player faction");
+            worldgenPlayerFactionLookups = 0;
+            observeWorldgenPlayerLookup = true;
+            var foreign = Bare<Faction>();
+            foreign.def = new FactionDef { defName = "RuntimeWorldgenFaction" };
+            Pawn leader = Pawn(9101, Intelligence.Humanlike, foreign);
+            Pawn livestock = Pawn(9102, Intelligence.Animal, foreign);
+            Pawn wild = Pawn(9103, Intelligence.Animal, null);
+            Check(!leader.IsColonistPlayerControlled && !livestock.IsColonistPlayerControlled
+                && !wild.IsColonistPlayerControlled,
+                "Native player-control queries preserve ordinary world-generation pawn behavior");
+            MethodInfo drag = Patch_TransformedDragSelection.FindTarget();
+            // The native human drag predicate intentionally reads OfPlayer;
+            // drag UI is not used during world generation. Probe our human
+            // postfix alone, and the full native predicate for an animal.
+            bool leaderDrag = false;
+            Patch_TransformedDragSelection.Postfix(leader, ref leaderDrag);
+            Check(!leaderDrag && !(bool)drag.Invoke(null, new object[] { livestock }),
+                "Drag guards preserve ordinary pawns without an eager player singleton lookup");
+            IEnumerable<Gizmo> gizmos = Array.Empty<Gizmo>();
+            Check(ReferenceEquals(Patch_TransformedDraftableAnimalsGizmos.Postfix(gizmos, leader), gizmos)
+                && ReferenceEquals(Patch_TransformedDraftableAnimalsGizmos.Postfix(gizmos, livestock), gizmos),
+                "Releashed gizmo filter preserves ordinary world-generation pawn commands");
+            var training = Bare<Pawn_TrainingTracker>();
+            AccessTools.Field(typeof(Pawn_TrainingTracker), "pawn").SetValue(training, livestock);
+            IEnumerable<Gizmo> result = null;
+            Check(Patch_EnemyAnimalTrainingGizmos.Prefix(training, ref result) && result == null,
+                "Ordinary livestock retains native training gizmos before player faction registration");
+            Check(leader.drafter == null && livestock.drafter == null && wild.drafter == null,
+                "World-generation queries do not allocate draft controllers for ordinary pawns");
+            AccessTools.Method(typeof(Log), "DrainOffThreadMessages").Invoke(null, null);
+            Check(worldgenPlayerFactionLookups == 0
+                && Log.Messages.Count(m => m.type == LogMessageType.Error) == errorsBefore,
+                "Control and selection guards never query the erroring player-faction getter before it exists (observed "
+                    + worldgenPlayerFactionLookups + " lookups)");
+        }
+        finally
+        {
+            observeWorldgenPlayerLookup = false;
+            Find.GameInitData.playerFaction = previousPlayer;
+            factionManager.SetValue(Find.World, previousManager);
+        }
     }
 
     private static void TestNativeControlAndStorage()

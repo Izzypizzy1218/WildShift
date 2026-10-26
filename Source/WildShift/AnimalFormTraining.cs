@@ -50,8 +50,8 @@ namespace WildShift
         public static bool Prefix(Pawn_TrainingTracker __instance, ref IEnumerable<Gizmo> __result)
         {
             Pawn animal = __instance.pawn;
-            if (animal == null || animal.Faction == Faction.OfPlayer
-                || !TransformUtility.IsTransformedAnimal(animal)) return true;
+            if (animal == null || !TransformUtility.IsTransformedAnimal(animal)
+                || animal.Faction?.IsPlayer == true) return true;
 
             // Odyssey assumes a trained attack animal has player settings.
             // Enemy forms can retain special training without a player master.

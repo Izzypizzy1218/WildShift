@@ -18,5 +18,7 @@
     <Reference Include="WildShift" HintPath="$(WildShiftPath)" Private="false" />
     <Compile Include="SharedStateRegression.cs" />
     <Compile Include="SharedHealthEngineChecks.cs" />
+    <Compile Include="SharedBuffEngineChecks.cs" />
+    <Compile Include="SharedAbilitiesEngineChecks.cs" />
   </ItemGroup>
 </Project>
