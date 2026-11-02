@@ -29,6 +29,7 @@ namespace WildShift
             get
             {
                 if (formStorage == null) formStorage = new AnimalFormStorage(ParentPawn);
+                else formStorage.BindOwner(ParentPawn);
                 return formStorage;
             }
         }
@@ -65,6 +66,7 @@ namespace WildShift
             Scribe_Defs.Look(ref customAssignedKind, "customAssignedKind");
             Scribe_Deep.Look(ref geneticForm, "geneticForm");
             Scribe_Deep.Look(ref formStorage, "animalFormStorage", ParentPawn);
+            formStorage?.BindOwner(ParentPawn);
             Scribe_Values.Look(ref saleRevengeRolled, "saleRevengeRolled", false);
             Scribe_Values.Look(ref enemyRaidParticipant, "enemyRaidParticipant", false);
             Scribe_Values.Look(ref enemyShiftUsed, "enemyShiftUsed", false);

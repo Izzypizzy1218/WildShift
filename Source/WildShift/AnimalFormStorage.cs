@@ -10,7 +10,7 @@ namespace WildShift
     // animal in its own preserved human: that would create a deep-save cycle.
     public sealed class AnimalFormStorage : IExposable, IThingHolder, ISuspendableThingHolder
     {
-        private readonly Pawn human;
+        private Pawn human;
         private ThingOwner<Pawn> forms;
         private PawnKindDef sourceKind;
 
@@ -31,6 +31,14 @@ namespace WildShift
         public bool HasStoredForm { get { return StoredForm != null; } }
         public IThingHolder ParentHolder { get { return human; } }
         public bool IsContentsSuspended { get { return true; } }
+
+        internal void BindOwner(Pawn owner)
+        {
+            // A Hediff has no pawn during LoadingVars; HediffSet assigns it
+            // while resolving references. The owning comp rebinds us once the
+            // actual human exists, including when another mod moves its Hediff.
+            if (owner != null) human = owner;
+        }
 
         public bool Matches(PawnKindDef kind)
         {
@@ -76,6 +84,10 @@ namespace WildShift
             if (transformed == null || transformed.HasStoredPawn) return false;
             if (forms == null) forms = NewOwner();
             if (forms.Count > 0 && !forms.Contains(form)) return false;
+            // Release the live human-skill view immediately. This body is now
+            // inactive, so direct consumers must see its own preserved records
+            // both before saving and after a fresh native reload.
+            (form.skills as SharedPawnSkillTracker)?.Bind();
             // Projections belong to the active identity, never to the dormant
             // body's saved health. The real drug state stays on the human.
             var hediffs = form.health != null ? form.health.hediffSet?.hediffs : null;

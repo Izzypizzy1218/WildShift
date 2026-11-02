@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RimWorldVersion Condition="'$(RimWorldVersion)' == ''">1.7</RimWorldVersion>
+    <TargetFramework Condition="'$(RimWorldVersion)' == '1.7'">net10.0</TargetFramework>
+    <TargetFramework Condition="'$(RimWorldVersion)' == '1.6'">net472</TargetFramework>
+    <RimWorldDir Condition="'$(RimWorldDir)' == ''">$(MSBuildProgramFiles32)\Steam\steamapps\common\RimWorld</RimWorldDir>
+    <RimWorldManaged Condition="'$(RimWorldManaged)' == '' and '$(RimWorldVersion)' == '1.7'">$(RimWorldDir)</RimWorldManaged>
+    <RimWorldManaged Condition="'$(RimWorldManaged)' == '' and '$(RimWorldVersion)' == '1.6'">$(RimWorldDir)\RimWorldWin64_Data\Managed</RimWorldManaged>
+    <WildShiftPath Condition="'$(WildShiftPath)' == ''">$(MSBuildThisFileDirectory)..\..\$(RimWorldVersion)\Assemblies\WildShift.dll</WildShiftPath>
+    <HarmonyPath Condition="'$(HarmonyPath)' == ''">$(MSBuildProgramFiles32)\Steam\steamapps\workshop\content\294100\2009463077\$(RimWorldVersion)\Assemblies\0Harmony.dll</HarmonyPath>
+    <OutputType>Library</OutputType><AssemblyName>WildShiftUpgradeProbe</AssemblyName><LangVersion>7.3</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems><AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp" HintPath="$(RimWorldManaged)\Assembly-CSharp.dll" Private="false" />
+    <Reference Include="0Harmony" HintPath="$(HarmonyPath)" Private="false" />
+    <Reference Include="WildShift" HintPath="$(WildShiftPath)" Private="false" />
+    <Compile Include="UpgradeProbe.cs" />
+    <Compile Include="GenerationTrace.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(RimWorldVersion)' == '1.7'"><Reference Include="UnityStubs" HintPath="$(RimWorldManaged)\UnityStubs.dll" Private="false" /></ItemGroup>
+  <ItemGroup Condition="'$(RimWorldVersion)' == '1.6'">
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(RimWorldManaged)\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="System.Xml.Linq" />
+  </ItemGroup>
+</Project>

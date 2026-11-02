@@ -38,6 +38,7 @@ namespace WildShift
         {
             Pawn human = SharedFormIdentity.HumanFor(animal);
             if (human == null) return;
+            SharedFormLegacyDrugs.AdoptExisting(animal, human);
             SharedFormBuffs.AdoptExisting(animal, human);
             clocks.Remove(animal);
             clocks.Add(animal, new Clock { human = human, lastTick = Now, lastInterval = Now });

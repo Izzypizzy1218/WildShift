@@ -59,10 +59,17 @@ namespace WildShiftSharedStateValidation
         private Hediff persistentBuff;
         private string persistentFireId, persistentWarcallId, persistentBuffId;
         private int persistentCooldownEnd;
+        private SharedLegacyDrugEngineChecks legacyDrugReplay;
         private readonly List<string> results = new List<string>();
         public Regression(Game game) { }
 
-        public override void FinalizeInit() { ready = true; processPhase = stage; }
+        public override void FinalizeInit()
+        {
+            // Pause before queued native/production postload callbacks finish,
+            // so the legacy replay can assert exact saved timers before ticking.
+            if (Find.TickManager != null) Find.TickManager.Pause();
+            ready = true; processPhase = stage;
+        }
         public override void ExposeData()
         {
             Scribe_References.Look(ref persistentFire, "persistentFire");
@@ -86,6 +93,7 @@ namespace WildShiftSharedStateValidation
             Scribe_References.Look(ref form, "sharedForm");
             Scribe_References.Look(ref implant, "sharedImplant");
             Scribe_References.Look(ref caravan, "sharedCaravan");
+            Scribe_Deep.Look(ref legacyDrugReplay, "legacyDrugReplay");
         }
         public override void GameComponentUpdate()
         {
@@ -168,6 +176,7 @@ namespace WildShiftSharedStateValidation
                 "inactive animal is stored without owning the active human or a deep-save cycle");
             Check(TransformUtility.TryGetShapeshifterComp(original).FormStorage.StoredForm == form,
                 "human's production holder owns exactly the same cached animal");
+            CheckInactiveBodyState("before native save");
             Check(form.health.hediffSet.hediffs.Contains(implant) && ImplantState() == 731,
                 "cached animal retains the exact stateful implant object before saving");
             Check(form.health.hediffSet.hediffs.Any(h => h is Hediff_Injury), "injury remains on the dormant animal until the next transformation");
@@ -195,6 +204,7 @@ namespace WildShiftSharedStateValidation
             Require(original.Spawned && AnimalFormStorage.IsStored(form)
                 && TransformUtility.TryGetTransformedComp(form)?.StoredPawn == null,
                 "native reload retains the acyclic active-human and cached-animal ownership");
+            CheckInactiveBodyState("after fresh native reload");
             CheckIdentity();
             Check(Near(original.skills.GetSkill(SkillDefOf.Melee).xpSinceLastLevel, learnedXp)
                 && original.skills.GetSkill(SkillDefOf.Melee).passion == Passion.Major, "native reload preserves learned XP and passion");
@@ -228,6 +238,7 @@ namespace WildShiftSharedStateValidation
                 Require(TransformUtility.RevertToHuman(form, false) == original, "repeated return restores the canonical human " + i);
                 Check(AnimalFormStorage.IsStored(form) && TransformUtility.TryGetTransformedComp(form).StoredPawn == null,
                     "repeated return preserves one-way dormant ownership " + i);
+                CheckInactiveBodyState("after repeated return " + i);
                 Require(TransformUtility.TransformToAnimal(original, Kind()), "repeated transformation succeeds " + i);
                 Check(Body(Find.CurrentMap) == form && TransformUtility.TryGetShapeshifterComp(original).FormStorage.StoredForm == null,
                     "repeated transformation has one active body and no nested copy " + i);
@@ -243,6 +254,8 @@ namespace WildShiftSharedStateValidation
             CheckPersistentSharedEffects(true);
             activeSavedDrugId = Drug(original).GetUniqueLoadID();
             activeSavedDrugAge = Drug(original).ageTicks;
+            legacyDrugReplay = new SharedLegacyDrugEngineChecks();
+            legacyDrugReplay.Seed(original, form, Check);
             Require(failures == 0, "active shared-state and native health checks pass before saving");
             stage = 2;
             GameDataSaveLoader.SaveGame("autostart");
@@ -258,6 +271,8 @@ namespace WildShiftSharedStateValidation
             Require(caravan.ContainsPawn(form) && caravan.ContainsPawn(companion) && !form.Spawned
                 && TransformUtility.TryGetTransformedComp(form)?.StoredPawn == original,
                 "active-form reload retains the exact original inside the caravan animal");
+            Require(legacyDrugReplay != null, "controlled legacy-drug fixture state survives the active native save");
+            legacyDrugReplay.CheckAfterLoad(original, form, Check);
             Check(original.GetUniqueLoadID() == originalId && form.GetUniqueLoadID() == formId,
                 "active-form reload preserves both original pawn IDs");
             Check(implant.GetUniqueLoadID() == implantId && form.health.hediffSet.hediffs.Contains(implant)
@@ -285,7 +300,9 @@ namespace WildShiftSharedStateValidation
                 "off-map return retains the exact world-registered caravan member");
             Check(AnimalFormStorage.IsStored(form) && !form.Destroyed && TransformUtility.TryGetTransformedComp(form).StoredPawn == null,
                 "off-map return preserves the same cached body without an ownership cycle");
+            CheckInactiveBodyState("after caravan return");
             Check(Inventory() == 17 && ImplantState() == 731, "caravan return preserves exact inventory and implant state");
+            legacyDrugReplay.CheckAfterReturn(original, form, Check);
             CheckPersistentSharedEffects(false);
             CheckIdentity();
             Finish("complete");
@@ -398,6 +415,25 @@ namespace WildShiftSharedStateValidation
                 "canonical spouse relation and original memory are preserved");
         }
 
+        private void CheckInactiveBodyState(string context)
+        {
+            // Observe the actual cached body's owner before asking the human
+            // comp for its storage: a repairing getter must not mask a missing
+            // native post-load owner rebind in this assertion.
+            var holder = form.ParentHolder as AnimalFormStorage;
+            Check(holder != null && ReferenceEquals(holder.ParentHolder, original)
+                && form.MapHeld == original.MapHeld,
+                context + " retains the real cached-body parent chain and held map");
+            var shared = form.skills as SharedPawnSkillTracker;
+            var ownSkills = shared != null
+                ? (Pawn_SkillTracker)AccessTools.Field(typeof(SharedPawnSkillTracker), "bodySkills").GetValue(shared)
+                : form.skills;
+            Check(shared != null && shared.OriginalSkills == null && ownSkills != null
+                && ReferenceEquals(form.skills.skills, ownSkills.skills)
+                && !ReferenceEquals(form.skills.skills, original.skills.skills),
+                context + " exposes the inactive animal's own skill records without a stale human alias");
+        }
+
         private bool UnderImplant(BodyPartRecord part)
         {
             for (BodyPartRecord p = part; p != null; p = p.parent) if (p == implant.Part) return true;
@@ -452,6 +488,7 @@ namespace WildShiftSharedStateValidation
                 WildShiftPath = typeof(TransformUtility).Assembly.Location, WildShiftSHA256 = Boot.Hash(typeof(TransformUtility).Assembly.Location),
                 FixtureSHA256 = Boot.Hash(typeof(Boot).Assembly.Location),
                 Mods = LoadedModManager.RunningModsListForReading.Select(m => m.PackageId).ToArray(), Results = results.ToArray(),
+                LegacyDrugReplay = legacyDrugReplay?.EvidenceSummary(),
                 Scope = "Actual initialized 1.7 game with all five DLCs, production transformations, native ingestion/learning/ticks/caravans, native death/scar-healing probes and three-process inactive/active full save reload. No gameplay result is mocked; no visual compatibility claim."
             };
             File.WriteAllText(Path.Combine(Boot.Output, "phase-" + processPhase + ".json"), JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true }));

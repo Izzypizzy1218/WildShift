@@ -80,11 +80,23 @@ internal static class Program
         var needDef = new NeedDef { defName = "FixtureChemical", needClass = typeof(Need_Chemical), fallPerDay = 0.15f, developmentalStageFilter = DevelopmentalStage.Adult };
         var addictionDef = new HediffDef { defName = "FixtureAddiction", label = "fixture addiction", hediffClass = typeof(Hediff_Addiction), chemicalNeed = needDef, initialSeverity = 1,
             stages = new List<HediffStage> { new HediffStage(), new HediffStage { painOffset = 0.4f } } };
-        var chemical = new ChemicalDef { defName = "FixtureLuciferium", addictionHediff = addictionDef };
+        var toleranceDef = new HediffDef { defName = "FixtureTolerance", label = "fixture tolerance", hediffClass = typeof(Hediff), initialSeverity = 0.18f,
+            maxSeverity = 1, stages = new List<HediffStage> { new HediffStage() } };
+        var healingHighDef = new HediffDef { defName = "FixtureLegacyHealingHigh", label = "fixture healing high", hediffClass = typeof(Hediff_High), initialSeverity = 1,
+            maxSeverity = 1, stages = new List<HediffStage> { stage },
+            comps = new List<HediffCompProperties> { new HediffCompProperties_HealPermanentWounds() } };
+        var visualHighDef = new HediffDef { defName = "FixtureLegacyEffecterHigh", label = "fixture visual high", hediffClass = typeof(Hediff_High), initialSeverity = 1,
+            maxSeverity = 1, stages = new List<HediffStage> { stage },
+            comps = new List<HediffCompProperties> { new HediffCompProperties_Effecter() } };
+        var chemical = new ChemicalDef { defName = "FixtureLuciferium", addictionHediff = addictionDef, toleranceHediff = toleranceDef };
         var drugDef = new ThingDef { defName = "FixtureDrug", category = ThingCategory.Item, comps = new List<CompProperties> { new CompProperties_Drug { chemical = chemical, addictiveness = 1, needLevelOffset = 0.9f } }, ingestible = new IngestibleProperties { drugCategory = DrugCategory.Medical,
-            outcomeDoers = new List<IngestionOutcomeDoer> { new IngestionOutcomeDoer_GiveHediff { hediffDef = highDef, severity = 1 } } } };
+            outcomeDoers = new List<IngestionOutcomeDoer> {
+                new IngestionOutcomeDoer_GiveHediff { hediffDef = highDef, severity = 1 },
+                new IngestionOutcomeDoer_GiveHediff { hediffDef = healingHighDef, severity = 1 },
+                new IngestionOutcomeDoer_GiveHediff { hediffDef = visualHighDef, severity = 1 }
+            } } };
         var projectionDef = new HediffDef { defName = SharedFormHealth.ProjectionDefName, label = "shared state", hediffClass = typeof(Hediff_SharedFormDrugEffect), initialSeverity = 1 };
-        foreach (var def in new[] { highDef, addictionDef, projectionDef }) DefDatabase<HediffDef>.Add(def);
+        foreach (var def in new[] { highDef, addictionDef, toleranceDef, healingHighDef, visualHighDef, projectionDef }) DefDatabase<HediffDef>.Add(def);
         DefDatabase<ThingDef>.Add(drugDef);
         DefDatabase<ChemicalDef>.Add(chemical);
         DefDatabase<NeedDef>.Add(needDef);
@@ -205,7 +217,287 @@ internal static class Program
         Check(!animal.health.hediffSet.hediffs.Any(h => h.def == highDef),
             "Inactive cached animal rejects the remaining native drug ingestion outcome");
         RunBuffRegressions();
+        RunLegacyDrugRegressions(scratch, highDef, toleranceDef, addictionDef, needDef, healingHighDef, visualHighDef);
         Console.WriteLine("Scope: actual native hediff ownership/comps/chemical needs and isolated caravan holder graph; full map/UI health transitions and need-set rebuilding are fixture boundaries. Full ingestion/return/death/save lifecycle requires the engine fixture.");
+    }
+
+    private static void RunLegacyDrugRegressions(string scratch, HediffDef highDef, HediffDef toleranceDef,
+        HediffDef addictionDef, NeedDef needDef, HediffDef healingHighDef, HediffDef visualHighDef)
+    {
+        Console.WriteLine("Legacy migration scope: native pre-bridge animal-owned drug Hediffs and chemical need. No production outcome is mocked; native health/need UI boundaries remain isolated.");
+        SetTick(4000);
+        Pawn human = Pawn(501, Intelligence.Humanlike), animal = Pawn(502, Intelligence.Animal);
+        var high = HediffMaker.MakeHediff(highDef, animal);
+        var tolerance = HediffMaker.MakeHediff(toleranceDef, animal);
+        var addiction = HediffMaker.MakeHediff(addictionDef, animal);
+        var healingHigh = HediffMaker.MakeHediff(healingHighDef, animal);
+        var visualHigh = HediffMaker.MakeHediff(visualHighDef, animal);
+        var healingClock = AccessTools.Field(typeof(HediffComp_HealPermanentWounds), "ticksToHeal");
+        healingClock.SetValue(healingHigh.TryGetComp<HediffComp_HealPermanentWounds>(), 731);
+        high.Severity = 0.4f;
+        high.ageTicks = 67;
+        var timer = high.TryGetComp<HediffComp_Disappears>();
+        timer.ticksToDisappear = 237;
+        tolerance.Severity = 0.18f;
+        tolerance.ageTicks = 11;
+        addiction.ageTicks = 31;
+        // Native Scribe puts these exact objects in the loaded animal's lists.
+        // Reconstruct that pre-bridge state before establishing the human link,
+        // so the new ingestion redirection cannot pre-migrate the fixture.
+        animal.health.hediffSet.hediffs.AddRange(new[] { high, tolerance, addiction, healingHigh, visualHigh });
+        var chemicalNeed = new Need_Chemical(animal) { def = needDef, CurLevel = 0.37f };
+        AccessTools.Field(typeof(Pawn_NeedsTracker), "needs").SetValue(animal.needs, new List<Need> { chemicalNeed });
+        Check(ReferenceEquals(((Hediff_Addiction)addiction).Need, chemicalNeed)
+            && ReferenceEquals(chemicalNeed.AddictionHediff, addiction),
+            "Legacy addiction and chemical-need properties are read before migration to expose any stale body cache");
+        var anatomical = HediffMaker.MakeHediff(highDef, animal,
+            new BodyPartRecord { def = new BodyPartDef { defName = "FixtureLegacyDrugLeg" } });
+        var custom = new CustomDrug { pawn = animal, def = highDef };
+        animal.health.hediffSet.hediffs.AddRange(new Hediff[] { anatomical, custom });
+        Check(SharedFormHealth.IsSupported(high) && SharedFormHealth.IsSupported(tolerance)
+            && SharedFormHealth.IsSupported(addiction),
+            "Legacy migration fixture uses three supported native drug classes and registered chemical definitions");
+        Check(!SharedFormHealth.IsSupported(anatomical) && !SharedFormHealth.IsSupported(custom),
+            "Legacy migration fixture keeps body-bound and custom drug controls outside the supported bridge");
+        var holder = Mark(animal);
+        Check(holder.TryStore(human), "Legacy drug fixture owns the exact original through the native transformed holder");
+        SharedFormIdentity.Initialize(animal);
+        Rand.PushState(34901);
+        int expectedRandom;
+        try
+        {
+            // Each neutral native projection runs Hediff.PostMake, which draws
+            // causesNoPain even with chance zero. Those four native creations
+            // are expected; chemical-need reconstruction must add no extra roll.
+            HediffDef projectionDef = DefDatabase<HediffDef>.GetNamed(SharedFormHealth.ProjectionDefName);
+            for (int i = 0; i < 4; i++) HediffMaker.MakeHediff(projectionDef, animal);
+            expectedRandom = Rand.Int;
+        }
+        finally { Rand.PopState(); }
+        Rand.PushState(34901);
+        int observedRandom;
+        try { SharedFormHealth.Initialize(animal); observedRandom = Rand.Int; }
+        finally { Rand.PopState(); }
+
+        var failures = new List<string>();
+        Action<bool, string> verify = delegate(bool passed, string message)
+        {
+            if (passed) Check(true, message);
+            else { failures.Add(message); Console.WriteLine("FAIL: " + message); }
+        };
+        verify(observedRandom == expectedRandom,
+            "Legacy need reconstruction adds no random rolls beyond native neutral projection creation");
+        verify(high.pawn == human && human.health.hediffSet.hediffs.Contains(high)
+            && !animal.health.hediffSet.hediffs.Contains(high),
+            "Legacy animal-only high migrates as the exact canonical human-owned object");
+        verify(tolerance.pawn == human && human.health.hediffSet.hediffs.Contains(tolerance)
+            && addiction.pawn == human && human.health.hediffSet.hediffs.Contains(addiction)
+            && !animal.health.hediffSet.hediffs.Contains(tolerance) && !animal.health.hediffSet.hediffs.Contains(addiction),
+            "Legacy native tolerance and addiction migrate without leftover animal-owned copies");
+        verify(timer.ticksToDisappear == 237 && high.ageTicks == 67 && Math.Abs(high.Severity - 0.4f) < 0.000001f
+            && tolerance.ageTicks == 11 && Math.Abs(tolerance.Severity - 0.18f) < 0.000001f && addiction.ageTicks == 31,
+            "Legacy drug migration does not replay PostAdd, reroll severity, reset duration or advance age");
+        verify(human.needs.TryGetNeed(needDef) != null
+            && Math.Abs(human.needs.TryGetNeed(needDef).CurLevel - 0.37f) < 0.000001f
+            && animal.needs.TryGetNeed(needDef) == null,
+            "Legacy native chemical need retains its saved level under one canonical human tracker");
+        verify(animal.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>().Count(h => h.source == high) == 1
+            && animal.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>().Count(h => h.source == tolerance) == 1
+            && animal.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>().Count(h => h.source == addiction) == 1,
+            "Legacy drug migration exposes exactly one active-body projection for each canonical source");
+        verify(anatomical.pawn == animal && custom.pawn == animal
+            && animal.health.hediffSet.hediffs.Contains(anatomical) && animal.health.hediffSet.hediffs.Contains(custom)
+            && !human.health.hediffSet.hediffs.Contains(anatomical) && !human.health.hediffSet.hediffs.Contains(custom),
+            "Legacy migration leaves unsupported anatomy-bound and custom drug objects local");
+        verify(visualHigh.pawn == animal && animal.health.hediffSet.hediffs.Contains(visualHigh)
+            && !human.health.hediffSet.hediffs.Contains(visualHigh),
+            "A native visual component outside the reviewed migration set remains on its existing body");
+        verify(healingHigh.pawn == human && human.health.hediffSet.hediffs.Contains(healingHigh)
+            && !animal.health.hediffSet.hediffs.Contains(healingHigh)
+            && healingHigh.TryGetComp<HediffComp_HealPermanentWounds>().Pawn == human
+            && (int)healingClock.GetValue(healingHigh.TryGetComp<HediffComp_HealPermanentWounds>()) == 731,
+            "Native luciferium-style healing component follows its exact moved Hediff without a cached animal or reset clock");
+        Need migratedNeed = human.needs.TryGetNeed(needDef);
+        verify(migratedNeed != null && AccessTools.Field(typeof(Need), "pawn").GetValue(migratedNeed) == human
+            && ReferenceEquals(((Hediff_Addiction)addiction).Need, migratedNeed)
+            && ReferenceEquals(((Need_Chemical)migratedNeed).AddictionHediff, addiction),
+            "Moved native addiction dynamically resolves the new human chemical need after prior animal-side property reads");
+        SharedFormHealth.Initialize(animal);
+        verify(human.health.hediffSet.hediffs.Count(h => h.def == highDef) == 1
+            && animal.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>().Count(h => h.source == high) == 1
+            && timer.ticksToDisappear == 237,
+            "Repeated legacy drug initialization is idempotent with no duplicate source or timer refresh");
+
+        // A separate native graph covers an already-canonical matching dose.
+        // The original lasts longer than the old animal dose, so retaining the
+        // existing canonical timer does not prescribe a contested merge policy.
+        Pawn existingHuman = Pawn(503, Intelligence.Humanlike), existingAnimal = Pawn(504, Intelligence.Animal);
+        var canonical = HediffMaker.MakeHediff(highDef, existingHuman);
+        var extra = HediffMaker.MakeHediff(highDef, existingAnimal);
+        canonical.TryGetComp<HediffComp_Disappears>().ticksToDisappear = 511;
+        extra.TryGetComp<HediffComp_Disappears>().ticksToDisappear = 237;
+        canonical.Severity = 0.2f; canonical.ageTicks = 144;
+        extra.Severity = 0.4f; extra.ageTicks = 67;
+        existingHuman.health.hediffSet.hediffs.Add(canonical);
+        existingAnimal.health.hediffSet.hediffs.Add(extra);
+        var existingHolder = Mark(existingAnimal);
+        Check(existingHolder.TryStore(existingHuman), "Matching legacy dose fixture retains its existing canonical original");
+        SharedFormIdentity.Initialize(existingAnimal);
+        SharedFormHealth.Initialize(existingAnimal);
+        verify(existingHuman.health.hediffSet.hediffs.Count(h => h.def == highDef) == 1
+            && existingHuman.health.hediffSet.hediffs.Contains(canonical)
+            && !existingAnimal.health.hediffSet.hediffs.Any(h => h.def == highDef)
+            && existingAnimal.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>().Count(h => h.source == canonical) == 1,
+            "Matching legacy animal dose cannot remain as a second physical effect beside its canonical projection");
+        verify(canonical.TryGetComp<HediffComp_Disappears>().ticksToDisappear == 511,
+            "An existing longer canonical high is not shortened or reset by legacy-dose initialization");
+        verify(Math.Abs(canonical.Severity - 0.4f) < 0.000001f && canonical.ageTicks == 144,
+            "Matching legacy doses retain original identity and age while taking maximum severity instead of summing a new dose");
+        SharedFormHealth.Initialize(existingAnimal);
+        verify(canonical.TryGetComp<HediffComp_Disappears>().ticksToDisappear == 511
+            && Math.Abs(canonical.Severity - 0.4f) < 0.000001f && canonical.ageTicks == 144,
+            "Reinitializing merged legacy doses cannot grow severity or refresh duration");
+
+        Pawn lowerHuman = Pawn(505, Intelligence.Humanlike), lowerAnimal = Pawn(506, Intelligence.Animal);
+        var shorter = HediffMaker.MakeHediff(highDef, lowerHuman);
+        var longer = HediffMaker.MakeHediff(highDef, lowerAnimal);
+        shorter.TryGetComp<HediffComp_Disappears>().ticksToDisappear = 127;
+        longer.TryGetComp<HediffComp_Disappears>().ticksToDisappear = 237;
+        shorter.Severity = 0.6f; shorter.ageTicks = 44;
+        longer.Severity = 0.2f; longer.ageTicks = 101;
+        var humanAddiction = HediffMaker.MakeHediff(addictionDef, lowerHuman);
+        var animalAddiction = HediffMaker.MakeHediff(addictionDef, lowerAnimal);
+        lowerHuman.health.hediffSet.hediffs.AddRange(new[] { shorter, humanAddiction });
+        lowerAnimal.health.hediffSet.hediffs.AddRange(new[] { longer, animalAddiction });
+        var lowerNeed = new Need_Chemical(lowerHuman) { def = needDef, CurLevel = 0.12f };
+        var higherNeed = new Need_Chemical(lowerAnimal) { def = needDef, CurLevel = 0.37f };
+        var humanFood = new Need_Food(lowerHuman) { def = new NeedDef { defName = "FixtureLegacyHumanFood", needClass = typeof(Need_Food) } };
+        var animalFood = new Need_Food(lowerAnimal) { def = new NeedDef { defName = "FixtureLegacyAnimalFood", needClass = typeof(Need_Food) } };
+        humanFood.CurLevel = 0.55f; animalFood.CurLevel = 0.6f;
+        AccessTools.Field(typeof(Pawn_NeedsTracker), "needs").SetValue(lowerHuman.needs, new List<Need> { lowerNeed, humanFood });
+        AccessTools.Field(typeof(Pawn_NeedsTracker), "needs").SetValue(lowerAnimal.needs, new List<Need> { higherNeed, animalFood });
+        var lowerHolder = Mark(lowerAnimal);
+        Check(lowerHolder.TryStore(lowerHuman), "Existing lower chemical-need fixture preserves its canonical original");
+        SharedFormIdentity.Initialize(lowerAnimal);
+        SharedFormHealth.Initialize(lowerAnimal);
+        verify(lowerHuman.health.hediffSet.hediffs.Contains(shorter)
+            && !lowerAnimal.health.hediffSet.hediffs.Contains(longer)
+            && shorter.TryGetComp<HediffComp_Disappears>().ticksToDisappear == 237
+            && Math.Abs(shorter.Severity - 0.6f) < 0.000001f && shorter.ageTicks == 101,
+            "A longer saved animal timer survives without summing severity, resetting age or replacing the original source ID");
+        verify(ReferenceEquals(lowerHuman.needs.TryGetNeed(needDef), lowerNeed)
+            && Math.Abs(lowerNeed.CurLevel - 0.12f) < 0.000001f && lowerAnimal.needs.TryGetNeed(needDef) == null,
+            "Combining saved native chemical needs retains the lower canonical level instead of refilling it");
+        verify(lowerHuman.needs.food == humanFood && lowerAnimal.needs.food == animalFood
+            && Math.Abs(humanFood.CurLevel - 0.55f) < 0.000001f && Math.Abs(animalFood.CurLevel - 0.6f) < 0.000001f,
+            "Native tracker field rebinding preserves unrelated original and physical-animal nutrition needs");
+        SharedFormHealth.Initialize(lowerAnimal);
+        verify(Math.Abs(lowerNeed.CurLevel - 0.12f) < 0.000001f
+            && shorter.TryGetComp<HediffComp_Disappears>().ticksToDisappear == 237,
+            "Repeated native chemical reconciliation cannot refill need or extend the saved maximum timer");
+        var olderWithdrawal = HediffMaker.MakeHediff(addictionDef, lowerAnimal);
+        lowerAnimal.health.hediffSet.hediffs.Add(olderWithdrawal);
+        lowerAnimal.needs.AllNeeds.Add(new Need_Chemical(lowerAnimal) { def = needDef, CurLevel = 0f });
+        SharedFormHealth.Initialize(lowerAnimal);
+        verify(ReferenceEquals(lowerHuman.needs.TryGetNeed(needDef), lowerNeed)
+            && lowerNeed.CurLevel == 0f
+            && ReferenceEquals(((Hediff_Addiction)humanAddiction).Need, lowerNeed)
+            && ((Hediff_Addiction)humanAddiction).CurStageIndex == 1
+            && lowerAnimal.needs.TryGetNeed(needDef) == null,
+            "A lower saved animal level retains withdrawal without rebinding the canonical need to its obsolete body");
+
+        Pawn excludedHuman = Pawn(507, Intelligence.Humanlike), excludedAnimal = Pawn(508, Intelligence.Animal);
+        var customNeed = new CustomChemicalNeed(excludedAnimal) { def = needDef, CurLevel = 0.31f };
+        var customNeedAddiction = HediffMaker.MakeHediff(addictionDef, excludedAnimal);
+        var dependencyDef = new HediffDef { defName = "FixtureLegacyGeneDependency", hediffClass = typeof(Hediff_ChemicalDependency), initialSeverity = 0.5f,
+            maxSeverity = 1, stages = new List<HediffStage> { new HediffStage() } };
+        var cravingDef = new HediffDef { defName = "FixtureLegacyHemogenCraving", hediffClass = typeof(Hediff_HemogenCraving), initialSeverity = 0.3f,
+            maxSeverity = 1, stages = new List<HediffStage> { new HediffStage() } };
+        var dependency = (Hediff_ChemicalDependency)HediffMaker.MakeHediff(dependencyDef, excludedAnimal);
+        dependency.chemical = DefDatabase<ChemicalDef>.AllDefsListForReading.Single(c => c.addictionHediff == addictionDef);
+        var craving = HediffMaker.MakeHediff(cravingDef, excludedAnimal);
+        excludedAnimal.health.hediffSet.hediffs.AddRange(new[] { customNeedAddiction, dependency, craving });
+        AccessTools.Field(typeof(Pawn_NeedsTracker), "needs").SetValue(excludedAnimal.needs, new List<Need> { customNeed });
+        var excludedHolder = Mark(excludedAnimal);
+        Check(excludedHolder.TryStore(excludedHuman), "Unsupported legacy need/gene fixture stores an original without a source gene");
+        SharedFormIdentity.Initialize(excludedAnimal);
+        SharedFormHealth.Initialize(excludedAnimal);
+        verify(customNeedAddiction.pawn == excludedAnimal && customNeed.CurLevel == 0.31f
+            && ReferenceEquals(excludedAnimal.needs.TryGetNeed(needDef), customNeed)
+            && excludedHuman.needs.TryGetNeed(needDef) == null,
+            "A custom chemical-need subclass and its consuming addiction remain body-local without state loss");
+        verify(dependency.pawn == excludedAnimal && craving.pawn == excludedAnimal
+            && excludedAnimal.health.hediffSet.hediffs.Contains(dependency) && excludedAnimal.health.hediffSet.hediffs.Contains(craving)
+            && !excludedHuman.health.hediffSet.hediffs.Contains(dependency) && !excludedHuman.health.hediffSet.hediffs.Contains(craving),
+            "Animal gene-dependent deficiency and hemogen craving are not adopted without their original-human source gene");
+
+        Pawn healingHuman = Pawn(509, Intelligence.Humanlike), healingAnimal = Pawn(510, Intelligence.Animal);
+        var canonicalHealing = HediffMaker.MakeHediff(healingHighDef, healingHuman);
+        var legacyHealing = HediffMaker.MakeHediff(healingHighDef, healingAnimal);
+        int canonicalHealingId = canonicalHealing.loadID;
+        var canonicalHealingComp = canonicalHealing.TryGetComp<HediffComp_HealPermanentWounds>();
+        var legacyHealingComp = legacyHealing.TryGetComp<HediffComp_HealPermanentWounds>();
+        healingClock.SetValue(canonicalHealingComp, 600000);
+        healingClock.SetValue(legacyHealingComp, 731);
+        healingHuman.health.hediffSet.hediffs.Add(canonicalHealing);
+        healingAnimal.health.hediffSet.hediffs.Add(legacyHealing);
+        var healingHolder = Mark(healingAnimal);
+        Check(healingHolder.TryStore(healingHuman), "Paired healing-clock fixture owns its original canonical drug source");
+        SharedFormIdentity.Initialize(healingAnimal);
+        SharedFormHealth.Initialize(healingAnimal);
+        int earlierLegacyClock = (int)healingClock.GetValue(canonicalHealingComp);
+        verify(earlierLegacyClock == 731 && canonicalHealing.loadID == canonicalHealingId
+            && healingHuman.health.hediffSet.hediffs.Contains(canonicalHealing)
+            && !healingAnimal.health.hediffSet.hediffs.Contains(legacyHealing),
+            "Merging paired luciferium-style highs preserves the earlier pending animal heal and canonical source identity");
+        verify(canonicalHealingComp.Pawn == healingHuman && canonicalHealing.ageTicks == 0
+            && healingAnimal.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>().Count(h => h.source == canonicalHealing) == 1,
+            "Paired healing-clock adoption creates one view without ticking, dosing or healing during initialization");
+        SharedFormHealth.Initialize(healingAnimal);
+        verify((int)healingClock.GetValue(canonicalHealingComp) == 731,
+            "Reinitialization retains the merged pending heal without restarting its native interval");
+
+        // A later old-animal clock must likewise never delay a nearer heal on
+        // the already-canonical source. Preserve exactly one pending interval.
+        healingClock.SetValue(canonicalHealingComp, 317);
+        var laterLegacyHealing = HediffMaker.MakeHediff(healingHighDef, healingAnimal);
+        healingClock.SetValue(laterLegacyHealing.TryGetComp<HediffComp_HealPermanentWounds>(), 800000);
+        healingAnimal.health.hediffSet.hediffs.Add(laterLegacyHealing);
+        SharedFormHealth.Initialize(healingAnimal);
+        int earlierCanonicalClock = (int)healingClock.GetValue(canonicalHealingComp);
+        verify(earlierCanonicalClock == 317 && canonicalHealing.loadID == canonicalHealingId
+            && !healingAnimal.health.hediffSet.hediffs.Contains(laterLegacyHealing),
+            "A later saved animal healing clock cannot postpone the earlier canonical heal");
+        SharedFormHealth.Initialize(healingAnimal);
+        verify((int)healingClock.GetValue(canonicalHealingComp) == 317
+            && healingHuman.health.hediffSet.hediffs.Count(h => h.def == healingHighDef) == 1
+            && healingAnimal.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>().Count(h => h.source == canonicalHealing) == 1,
+            "Repeated paired healing reconciliation keeps one original, one projection and one unchanged native clock");
+        File.WriteAllText(Path.Combine(scratch, "legacy-drug-observed.json"), System.Text.Json.JsonSerializer.Serialize(new {
+            Scope = "Native isolated pre-bridge ownership graphs, no full-engine or actual-old-save assertion",
+            AnimalOnly = new {
+                HumanHediffs = human.health.hediffSet.hediffs.Select(h => h.def.defName).ToArray(),
+                AnimalHediffs = animal.health.hediffSet.hediffs.Select(h => h.GetType().Name + ":" + h.def.defName).ToArray(),
+                HumanChemicalNeeds = human.needs.AllNeeds.OfType<Need_Chemical>().Select(n => n.CurLevel).ToArray(),
+                AnimalChemicalNeeds = animal.needs.AllNeeds.OfType<Need_Chemical>().Select(n => n.CurLevel).ToArray(),
+                HighOwner = high.pawn == human ? "human" : high.pawn == animal ? "animal" : "other",
+                HighTimer = timer.ticksToDisappear, HighAge = high.ageTicks
+            },
+            MatchingDose = new {
+                HumanHighCount = existingHuman.health.hediffSet.hediffs.Count(h => h.def == highDef),
+                AnimalNativeHighCount = existingAnimal.health.hediffSet.hediffs.Count(h => h.def == highDef),
+                ProjectionCount = existingAnimal.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>().Count(h => h.source == canonical),
+                CanonicalTimer = canonical.TryGetComp<HediffComp_Disappears>().ticksToDisappear
+            },
+            PairedHealing = new {
+                CanonicalSourceID = canonicalHealingId,
+                EarlierLegacyClock = earlierLegacyClock,
+                EarlierCanonicalClock = earlierCanonicalClock,
+                FinalClock = (int)healingClock.GetValue(canonicalHealingComp)
+            },
+            FailedExpectations = failures.ToArray()
+        }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        if (failures.Count != 0) throw new InvalidOperationException("FAIL: " + failures.Count + " legacy native-drug migration expectations; see legacy-drug-observed.json.");
     }
 
     private static HediffDef BuffDef(string name, bool optIn = true)
@@ -402,6 +694,7 @@ internal static class Program
 }
 
 internal sealed class CustomDrug : Hediff_High { }
+internal sealed class CustomChemicalNeed : Need_Chemical { public CustomChemicalNeed(Pawn pawn) : base(pawn) { } }
 internal sealed class CustomBuff : HediffWithComps { }
 internal sealed class CustomBuffComp : HediffComp { }
 internal sealed class StageProbeException : Exception { }

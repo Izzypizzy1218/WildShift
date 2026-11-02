@@ -20,5 +20,6 @@
     <Compile Include="SharedHealthEngineChecks.cs" />
     <Compile Include="SharedBuffEngineChecks.cs" />
     <Compile Include="SharedAbilitiesEngineChecks.cs" />
+    <Compile Include="SharedLegacyDrugEngineChecks.cs" />
   </ItemGroup>
 </Project>

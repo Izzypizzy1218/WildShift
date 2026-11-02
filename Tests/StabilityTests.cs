@@ -89,6 +89,7 @@ namespace Verse
         public TestEquipment equipment;
         public TestApparel apparel;
         public TestCarryTracker carryTracker;
+        public object skills;
         public IThingHolder ParentHolder { get { return holdingOwner != null ? holdingOwner.Owner ?? holdingOwner : null; } }
         public ThingOwner GetDirectlyHeldThings() { return null; }
         public Map MapHeld { get { return Map; } }
@@ -293,6 +294,17 @@ namespace WildShift
     }
     public static class Patch_GameEnder { public static void InvalidateCache() {} }
     public static class SharedFormIdentity { public static void Initialize(Pawn animal) {} public static Pawn HumanFor(Pawn animal) { return TransformUtility.TryGetTransformedComp(animal)?.StoredPawn; } }
+    // Observable tracker boundary: native tracker/list behavior is covered by
+    // the actual-engine SharedState suite. Here the real storage implementation
+    // must bind only after the reverse human ownership has been released.
+    public class SharedPawnSkillTracker
+    {
+        private readonly Pawn body;
+        public int BindCalls;
+        public bool HumanVisible;
+        public SharedPawnSkillTracker(Pawn body) { this.body=body; Bind(); }
+        public void Bind() { BindCalls++; HumanVisible=SharedFormIdentity.HumanFor(body)!=null; }
+    }
     public static class SharedFormHealth { public const string ProjectionDefName="WildShift_SharedFormDrugEffect"; public static void Initialize(Pawn animal) {} public static bool IsSharedLethalDeath(Pawn animal) { return false; } }
     public static class SharedFormAbilities { public static void Initialize(Pawn animal) {} public static void Release(Pawn animal) {} }
     public class Settings { public float deathChance, spilloverDamageFactor, enemyShapeshifterChance = .05f; public bool forceTraderShapeshifters; }

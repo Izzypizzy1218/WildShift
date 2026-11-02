@@ -90,7 +90,7 @@ Phase = phase, Passed = failures == 0, Failures = failures,
         (Join-Path $PSScriptRoot 'SharedState16\Engine16Context.cs'),(Join-Path $PSScriptRoot 'SharedState16\JsonSerializer.cs'),
         (Join-Path $PSScriptRoot 'SharedState16\WildShift.SharedState16Tests.csproj'),(Join-Path $PSScriptRoot 'SharedState16\About.xml'))
     $sourceInputs+=@(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'SharedState17\Defs') -File | ForEach-Object FullName)
-    foreach ($optional in @('SharedAbilitiesEngineChecks.cs','SharedBuffEngineChecks.cs')) {
+    foreach ($optional in @('SharedAbilitiesEngineChecks.cs','SharedBuffEngineChecks.cs','SharedLegacyDrugEngineChecks.cs')) {
         $path=Join-Path $PSScriptRoot ('SharedState17\'+$optional)
         if (Test-Path -LiteralPath $path) { $sourceInputs+=$path }
     }

@@ -14,6 +14,7 @@ namespace WildShift.Tests
         {
             var map=new Map(); Pawn human;
             Reset(); var animal=Form(out human,map); var storage=EnableFormStorage(human,animal);
+            var skills=new SharedPawnSkillTracker(animal); animal.skills=skills;
             var implant=new Hediff_Implant { def=new HediffDef { defName="CustomImplant",isBad=true,chronic=true } };
             var addedPart=new Hediff_AddedPart { def=new HediffDef { defName="BionicLeg" } };
             addedPart.Part=new BodyPartRecord();
@@ -27,10 +28,14 @@ namespace WildShift.Tests
             animal.health.hediffSet.hediffs.AddRange(new[] { implant,addedPart,injury,missing,blood,heatstroke,projection,innate,prostheticChild });
             Check(!storage.TryStore(animal,animal.kindDef) && animal.comp.StoredPawn==human,
                 "cannot put an occupied animal inside its own stored human");
+            Check(skills.HumanVisible && skills.BindCalls==1,
+                "rejected cyclic storage does not release the active human-skill view");
             animal.drafter.Drafted=true;
             Check(TransformUtility.RevertToHuman(animal)==human,"cached map reversion succeeds");
             Check(human.Spawned && human.Drafted && !animal.Spawned && !animal.Destroyed
                 && storage.StoredForm==animal && AnimalFormStorage.IsStored(animal),"exact animal is owned by the returned human without a second active body");
+            Check(!skills.HumanVisible && skills.BindCalls==2,
+                "successful return immediately binds the inactive skill boundary after releasing the human");
             Check(!animal.comp.HasStoredPawn && !WorldPawnsUtility.IsWorldPawn(animal),"cached body owns no human and has no duplicate world registration");
             Check(animal.health.hediffSet.hediffs.Contains(implant) && animal.health.hediffSet.hediffs.Contains(addedPart)
                 && !animal.health.hediffSet.hediffs.Contains(projection),"original implants survive caching while shared drug projection is removed");
@@ -122,6 +127,17 @@ namespace WildShift.Tests
             PawnGenerator.Generate=()=>human; OwnedAnimalAwakening.TryAwaken(animal);
             Check(animal.Spawned && !animal.Destroyed && animal.comp==null && human.Destroyed
                 && Patch_Taming.IsLatentWildShapeshifter(animal),"failed initial cache adoption preserves latent animal and rolls back candidate human");
+
+            Reset(); storage=new AnimalFormStorage(null); human=new Pawn();
+            Check(storage.ParentHolder==null,"load-time cache can exist before its human reference resolves");
+            storage.BindOwner(human); storage.BindOwner(null);
+            Check(storage.ParentHolder==human,"resolved human binds the cache owner and later null callbacks cannot erase it");
+            animal=new Pawn { comp=new HediffComp_Transformed() };
+            Check(storage.TryStore(animal,animal.kindDef),"rebound owner accepts an independent inactive body");
+            var replacementOwner=new Pawn(); storage.BindOwner(replacementOwner);
+            Check(storage.ParentHolder==replacementOwner && storage.StoredForm==animal
+                && animal.ParentHolder==storage && !animal.Destroyed,
+                "moved shifter owner rebind keeps the exact preserved animal and acyclic child ownership");
         }
     }
 }

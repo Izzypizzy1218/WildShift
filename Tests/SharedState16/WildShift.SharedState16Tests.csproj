@@ -19,6 +19,7 @@
     <Compile Include="..\SharedState17\SharedHealthEngineChecks.cs" Link="SharedHealthEngineChecks.cs" />
     <Compile Include="..\SharedState17\SharedAbilitiesEngineChecks.cs" Link="SharedAbilitiesEngineChecks.cs" Condition="Exists('..\SharedState17\SharedAbilitiesEngineChecks.cs')" />
     <Compile Include="..\SharedState17\SharedBuffEngineChecks.cs" Link="SharedBuffEngineChecks.cs" Condition="Exists('..\SharedState17\SharedBuffEngineChecks.cs')" />
+    <Compile Include="..\SharedState17\SharedLegacyDrugEngineChecks.cs" Link="SharedLegacyDrugEngineChecks.cs" />
     <Compile Include="Engine16Context.cs" />
     <Compile Include="JsonSerializer.cs" />
   </ItemGroup>

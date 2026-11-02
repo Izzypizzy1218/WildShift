@@ -10,7 +10,9 @@ WildShift is a RimWorld 1.6 / 1.7 beta mod about colonists who can transform int
 - Use supported native gene abilities in animal form while retaining the original ability objects, cooldowns, charges and hemogen resource. Custom ability components, xenogerm implantation and psycasts are excluded.
 - Continue reviewed timed buffs from Kiiro, Miho, Ratkin, Ideology and Royalty through transformation. Additional declarative buffs can opt in through a restricted compatibility extension; arbitrary mod effects are not automatically shared.
 - Continue supported native whole-body drug effects, chemical needs and dependency state on the original human while transformed. Drugs ingested by the animal update that same canonical state.
+- Reconcile reviewed native drug effects and chemical needs already saved on an older animal form, preserving their recorded state without a second dose. Custom or incompatible state is not automatically transferred; see [old-save migration rules](Docs/Upgrade-v1.4.0-beta.3.md).
 - Reuse the same animal Pawn across transformations, retaining its prosthetics and serialized custom component state. Human implants remain on the human body; they are not mapped onto the animal.
+- Preserve the cached animal's real human owner after saving and loading, and restore its own skill view while inactive.
 - Keep transformed animals visible and selectable in the colonist bar.
 - Draft and directly control the transformed animal.
 - Enter animal form with the species' supported special training and required prerequisites completed. All active transformed forms retain tameness and training; ordinary livestock keeps native training decay. Hive queens spew eggs and sludge only when commanded.
@@ -128,13 +130,13 @@ To build 1.6, supply matching 1.6 game or reference assemblies and `-p:RimWorldV
 
 ## Current version
 
-`v1.4.0-beta.2` — local candidate
+`v1.4.0-beta.3` — locally validated candidate
 
-The local candidate builds for RimWorld 1.6 and 1.7. See [shared-state behavior and scope](Docs/SharedState-v1.4.0-beta.2.md) for conditional modifiers, supported abilities, reviewed buffs and verification limits. Persistent animal bodies remain as introduced in beta.1, and animal-form apparel and cargo still unload on return as described above.
+The local candidate builds for RimWorld 1.6 and 1.7 and preserves supported native drug state saved on older active animal forms. It retains exact source identities, chemical levels and reviewed timers without another ingestion; paired luciferium sources keep the nearer pending heal. Cached-body ownership and inactive skill views also survive return and reload. See [migration behavior, validation and limits](Docs/Upgrade-v1.4.0-beta.3.md). Shared genes/abilities/buffs and preserved animal bodies retain [beta.2's documented scope](Docs/SharedState-v1.4.0-beta.2.md).
 
-The final candidate fixes control/selection/draft/training checks that queried the player faction too early during world generation. Validation: 469 native 1.7 checks and 259 full-engine checks each on actual 1.7 and 1.6 pass with normal configuration unchanged. The 1.6 gear/Draftable run passes all 259 gameplay checks but retains a failed strict byte check for one added preferences-file newline; XML settings are unchanged.
+Current validation includes 504 isolated checks against current 1.7.4995 native APIs and 291 fault-injecting storage/recovery assertions. Actual old-save cycles and fresh reloads pass 21 probe checks on 1.7 and 22 on 1.6. Source comparisons pass 1,358 fields on 1.7 (two unsupported fields retained) and 288 on 1.6 (none unsupported). The 1.6 profile explicitly excludes two missing packages. Controlled full-engine migration/lifecycle tests pass 294 checks on each version. Original saves and normal settings remain unchanged; full-profile mod diagnostics keep their raw overall verdict failed. Earlier failures and the fixture-input correction remain documented.
 
-Selected Windows mod-pack UI checks are complete: warg/thrumbo armor on map and portraits, dropped armor preservation, mixed selection/drafting and Kiiro catmint through transformation. The 79-package session verifies loaded inputs and normal configuration; five external/other-mod ERROR messages keep its raw automated verdict failed. See the linked scope and known issues.
+The earlier beta.2 Windows UI session verified selected warg/thrumbo armor, dropped-item preservation, mixed selection/drafting and Kiiro catmint interactions. Those historical visual results remain in the beta.2 report; beta.3 validation adds no new visual claim. This is not an error-free certification of every installed mod or custom effect. Long-duration 0/20/50-form performance tests remain next.
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
 

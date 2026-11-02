@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.4.0-beta.3 — Preserve supported legacy animal drug state (local candidate, 2026-11-03)
+
+- Reconcile supported native drug effects already saved on an active animal before the shared-state bridge. Move unique effects to the original human with their exact IDs and saved state; keep an existing canonical human object without replaying ingestion or adding another dose.
+- Preserve reviewed chemical-need levels with correct native ownership and no free refill. Keep the nearer pending luciferium heal when both old bodies have native healing clocks; initialization does not heal immediately or reroll timers.
+- Leave custom, incompatible or unsupported state on its original body. Migration runs during shared-state initialization, with no recurring pawn scan.
+- Rebind cached animal storage to the real original human after native loading, preserving its parent-holder chain and held map. Clear the stale human-skill view immediately when the animal becomes inactive; canonical human skills stay on the human.
+- Validate 504 isolated native checks, including 91 health checks repeated against current 1.7.4995 APIs. The final candidate's actual current-1.7 old-save transform/return and fresh reload pass 21 probe checks, with 1,358 source comparisons passing and two unsupported fields retained. Original save/configuration hashes remain unchanged; native mod-pack diagnostics retain a failed overall verdict.
+- The final 1.6 candidate passes 22 old-save probe checks and 288 source comparisons with two explicit package exclusions. Controlled full-engine tests pass 294 checks on each version; the storage/recovery harness passes 291 assertions. Preserve both first replay failures and their unsupported WakeUpTolerance fixture-input diagnosis; the corrected test uses native AlcoholTolerance without widening production support. See [migration rules, evidence and remaining scope](Docs/Upgrade-v1.4.0-beta.3.md).
+
 ## v1.4.0-beta.2 — Conditional genes, abilities and timed buffs (local candidate, 2026-10-26)
 
 - Apply active genes' conditional stat bonuses and penalties using the active animal's clothes, location and environment. Keep native offset/factor ordering and stat explanations; condition changes invalidate that body's queried stat cache in the same tick.
