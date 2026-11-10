@@ -21,6 +21,7 @@ namespace WildShift {
  // keep it as a boundary rather than modeling native ownership here.
  public sealed class AnimalFormStorage {
   public AnimalFormStorage(Verse.Pawn pawn) { }
+  internal void BindOwner(Verse.Pawn pawn) { }
   public Verse.ThingOwner GetDirectlyHeldThings() { return null; }
   public void GetChildHolders(System.Collections.Generic.List<Verse.IThingHolder> holders) { }
  }

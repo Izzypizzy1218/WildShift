@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RimWorldVersion Condition="'$(RimWorldVersion)' == ''">1.7</RimWorldVersion>
+    <TargetFramework Condition="'$(RimWorldVersion)' == '1.7'">net10.0</TargetFramework>
+    <TargetFramework Condition="'$(RimWorldVersion)' == '1.6'">net472</TargetFramework>
+    <RimWorldManaged Condition="'$(RimWorldManaged)' == '' and '$(RimWorldVersion)' == '1.7'">$(RimWorldDir)</RimWorldManaged>
+    <RimWorldManaged Condition="'$(RimWorldManaged)' == '' and '$(RimWorldVersion)' == '1.6'">$(RimWorldDir)\RimWorldWin64_Data\Managed</RimWorldManaged>
+    <OutputType>Library</OutputType><AssemblyName>WildShiftPerformanceProbe</AssemblyName><LangVersion>7.3</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems><AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <DefineConstants Condition="'$(RimWorldVersion)' == '1.7'">$(DefineConstants);RIMWORLD_1_7</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp" HintPath="$(RimWorldManaged)\Assembly-CSharp.dll" Private="false" />
+    <Reference Include="0Harmony" HintPath="$(HarmonyPath)" Private="false" />
+    <Reference Include="WildShift" HintPath="$(WildShiftPath)" Private="false" />
+    <Reference Include="UnityStubs" HintPath="$(RimWorldManaged)\UnityStubs.dll" Private="false" Condition="'$(RimWorldVersion)' == '1.7'" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(RimWorldManaged)\UnityEngine.CoreModule.dll" Private="false" Condition="'$(RimWorldVersion)' == '1.6'" />
+    <Reference Include="System.Xml.Linq" Condition="'$(RimWorldVersion)' == '1.6'" />
+    <Compile Include="PerformanceProbe.cs" /><Compile Include="WindowsMetrics.cs" />
+    <Compile Include="..\SharedState16\JsonSerializer.cs" Link="JsonSerializer.cs" Condition="'$(RimWorldVersion)' == '1.6'" />
+  </ItemGroup>
+</Project>

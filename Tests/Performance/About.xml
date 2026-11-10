@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+  <name>WildShift Performance Probe (TEST ONLY)</name><author>WildShift validation</author>
+  <packageId>wildshift.tests.performance</packageId>
+  <supportedVersions><li>1.6</li><li>1.7</li></supportedVersions>
+  <modDependencies><li><packageId>brrainz.harmony</packageId><displayName>Harmony</displayName></li><li><packageId>wildshift.mod</packageId><displayName>WildShift</displayName></li></modDependencies>
+  <loadAfter><li>brrainz.harmony</li><li>wildshift.mod</li></loadAfter>
+  <description>TEST ONLY. Isolated stationary-pawn native performance benchmark. Never enable in a real colony or distribute in a runtime mod package.</description>
+</ModMetaData>

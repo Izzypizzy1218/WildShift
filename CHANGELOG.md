@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.4.0-beta.4 — Ability allocations and saved buff reconciliation (2026-11-10)
+
+- Remove captured callbacks from repeated canonical-resource, ability-refresh and borrowed-ability lookups. Preserve source changes, suppression, cooldowns and first-match lookup behavior; the three isolated native probe paths each change from 88 allocated bytes per call to zero.
+- Reconcile duplicate reviewed saved buffs without adding their severities or resetting their age. Retain the canonical human object and the larger saved severity, elapsed age and remaining disappearance timer; leave unsupported or ambiguous state on its original body.
+- Add an isolated native performance probe with a fixed population of 50 people and 0, 20 or 50 active animal forms. Short comparisons report actual duration, native TPS limits, tick latency, process memory, allocation scope and collections separately from startup and post-measurement GC.
+- Verify drafting after transformation, draft persistence, undrafting and redrafting in RimWorld 1.6 and 1.7, including 1.7 with Draftable Animals - Releashed.
+
 ## v1.4.0-beta.3 — Preserve supported legacy animal drug state (local candidate, 2026-11-03)
 
 - Reconcile supported native drug effects already saved on an active animal before the shared-state bridge. Move unique effects to the original human with their exact IDs and saved state; keep an existing canonical human object without replaying ingestion or adding another dose.

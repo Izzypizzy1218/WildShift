@@ -46,7 +46,7 @@ namespace WildShift
                 animal.abilities = proxy;
             }
             Gene_Hemogen resource = HemogenFor(human);
-            ResourceClock clock = resourceClocks.GetValue(human, delegate(Pawn ignored) { return new ResourceClock { lastTick = Now, source = resource }; });
+            ResourceClock clock = resourceClocks.GetValue(human, delegate(Pawn ignored) { return new ResourceClock { lastTick = Now }; });
             if (clock.source != resource) { clock.source = resource; clock.lastTick = Now; }
             proxy.Bind();
         }
@@ -159,7 +159,9 @@ namespace WildShift
             Pawn human = SharedFormIdentity.HumanFor(animal);
             if (human == null) return;
             Gene_Hemogen resource = HemogenFor(human);
-            ResourceClock clock = resourceClocks.GetValue(human, delegate(Pawn ignored) { return new ResourceClock { lastTick = Now, source = resource }; });
+            // Keep this factory noncapturing: the tracker calls this path every
+            // tick, even when an existing clock has no hemogen source.
+            ResourceClock clock = resourceClocks.GetValue(human, delegate(Pawn ignored) { return new ResourceClock { lastTick = Now }; });
             if (clock.source != resource) { clock.source = resource; clock.lastTick = Now; }
             if (resource == null) { clock.lastTick = Now; return; }
             int elapsed = Now - clock.lastTick;
@@ -254,7 +256,7 @@ namespace WildShift
                         {
                             AbilityDef def = gene.def.abilities[j];
                             if (sourceDefs.Contains(def)) continue;
-                            Ability ability = human.abilities.abilities.Find(delegate(Ability a) { return a.def == def; });
+                            Ability ability = FirstWithDef(human.abilities.abilities, def);
                             if (!SharedFormAbilities.IsSupported(ability)) continue;
                             bool needsHemogen = ability.CompOfType<CompAbilityEffect_HemogenCost>() != null
                                 || ability.CompOfType<CompAbilityEffect_BloodfeederBite>() != null;
@@ -297,7 +299,16 @@ namespace WildShift
         internal Ability BorrowedAbility(AbilityDef def)
         {
             Refresh();
-            return borrowed.Find(delegate(Ability a) { return a.def == def; });
+            return FirstWithDef(borrowed, def);
+        }
+
+        private static Ability FirstWithDef(List<Ability> list, AbilityDef def)
+        {
+            // Preserve List.Find's first-match behavior without allocating a
+            // captured predicate on every native tracker refresh or lookup.
+            for (int i = 0; i < list.Count; i++)
+                if (list[i].def == def) return list[i];
+            return null;
         }
 
         public void Release()

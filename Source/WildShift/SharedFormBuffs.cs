@@ -22,6 +22,8 @@ namespace WildShift
             { "PreachHealth", "ludeon.rimworld.ideology" },
             { "PsychicAnesthesia", "ludeon.rimworld.royalty" }
         };
+        private static readonly AccessTools.FieldRef<Hediff, float> savedSeverity
+            = AccessTools.FieldRefAccess<Hediff, float>("severityInt");
 
         public static bool IsSupportedDef(HediffDef def)
         {
@@ -95,20 +97,40 @@ namespace WildShift
         public static void AdoptExisting(Pawn animal, Pawn human)
         {
             // Older saves may already have a reviewed buff on the animal.
-            // Transfer the exact native state without replaying PostAdd (which
-            // could reroll severity/timers). Both lists have one owner only.
-            var existing = new List<Hediff>(animal.health.hediffSet.hediffs);
+            // Native TryMergeWith is a new dose: it adds severity and resets
+            // age. Reconcile saved state without replaying that ingestion.
+            List<Hediff> animalEffects = animal?.health?.hediffSet?.hediffs;
+            List<Hediff> humanEffects = human?.health?.hediffSet?.hediffs;
+            if (animalEffects == null || humanEffects == null) return;
+            var existing = new List<Hediff>(animalEffects);
             bool changed = false;
             foreach (Hediff effect in existing)
             {
-                if (!IsSupported(effect)) continue;
-                animal.health.hediffSet.hediffs.Remove(effect);
-                effect.Part = SourcePart(effect.def, human, effect.Part);
-                effect.pawn = human;
-                bool merged = false;
-                foreach (Hediff source in human.health.hediffSet.hediffs)
-                    if (source.TryMergeWith(effect)) { merged = true; break; }
-                if (!merged) human.health.hediffSet.hediffs.Add(effect);
+                if (effect?.pawn != animal || !IsSupported(effect) || !Finite(effect.Severity)) continue;
+                BodyPartRecord part = SourcePart(effect.def, human, effect.Part);
+                Hediff canonical = null;
+                bool incompatible = false;
+                foreach (Hediff source in humanEffects)
+                {
+                    if (source == null || source.def != effect.def || source.Part != part) continue;
+                    if (canonical != null || !IsSupported(source) || !Finite(source.Severity))
+                    {
+                        incompatible = true;
+                        break;
+                    }
+                    canonical = source;
+                }
+                // Never consume a custom source or guess which duplicate
+                // original is authoritative in an ambiguous saved graph.
+                if (incompatible) continue;
+                animalEffects.Remove(effect);
+                if (canonical == null)
+                {
+                    effect.Part = part;
+                    effect.pawn = human;
+                    humanEffects.Add(effect);
+                }
+                else MergeSavedBuff(canonical, effect);
                 changed = true;
             }
             if (changed)
@@ -117,6 +139,19 @@ namespace WildShift
                 human.health.hediffSet.DirtyCache();
             }
         }
+
+        private static void MergeSavedBuff(Hediff canonical, Hediff legacy)
+        {
+            savedSeverity(canonical) = Math.Max(canonical.Severity, legacy.Severity);
+            canonical.ageTicks = Math.Max(canonical.ageTicks, legacy.ageTicks);
+            HediffComp_Disappears target = canonical.TryGetComp<HediffComp_Disappears>();
+            HediffComp_Disappears source = legacy.TryGetComp<HediffComp_Disappears>();
+            if (target == null || source == null || source.ticksToDisappear <= target.ticksToDisappear) return;
+            target.ticksToDisappear = source.ticksToDisappear;
+            target.disappearsAfterTicks = Math.Max(target.disappearsAfterTicks, source.disappearsAfterTicks);
+        }
+
+        private static bool Finite(float value) { return !float.IsNaN(value) && !float.IsInfinity(value); }
     }
 
     [HarmonyPatch(typeof(Pawn_HealthTracker), "AddHediff", new[] { typeof(Hediff), typeof(BodyPartRecord), typeof(DamageInfo?), typeof(DamageWorker.DamageResult) })]

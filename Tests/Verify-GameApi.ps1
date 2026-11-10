@@ -1,10 +1,12 @@
 param(
     [string]$Managed = 'C:\Program Files (x86)\Steam\steamapps\common\RimWorld\RimWorldWin64_Data\Managed',
-    [string]$VefAssembly = ''
+    [string]$VefAssembly = '',
+    [string]$MetadataLoadContextPath = ''
 )
 $ErrorActionPreference = 'Stop'
-# Run under Windows PowerShell/.NET Framework. Reflection-only: do not execute
-# game static constructors, Unity native calls or the mod's Harmony patches.
+# Windows PowerShell uses ReflectionOnlyLoad; PowerShell 7 uses an isolated
+# MetadataLoadContext. Neither route executes game static constructors, Unity
+# native calls or the mod's Harmony patches.
 $resolve = [System.ResolveEventHandler] {
     param($sender, $eventArgs)
     $name = [System.Reflection.AssemblyName]::new($eventArgs.Name).Name
@@ -12,12 +14,54 @@ $resolve = [System.ResolveEventHandler] {
     if (Test-Path -LiteralPath $path) { return [System.Reflection.Assembly]::ReflectionOnlyLoadFrom($path) }
     return [System.Reflection.Assembly]::ReflectionOnlyLoad($eventArgs.Name)
 }
-[AppDomain]::CurrentDomain.add_ReflectionOnlyAssemblyResolve($resolve)
+$metadataContext=$null
+if ($PSVersionTable.PSEdition -eq 'Core') {
+    if (!$MetadataLoadContextPath) {
+        $workspace=Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+        $sdk=Join-Path $workspace '.tools/dotnet10/sdk'
+        $MetadataLoadContextPath=@(Get-ChildItem -LiteralPath $sdk -Directory | Sort-Object Name -Descending |
+            ForEach-Object { Join-Path $_.FullName 'System.Reflection.MetadataLoadContext.dll' } |
+            Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1)[0]
+    }
+    if (!$MetadataLoadContextPath -or !(Test-Path -LiteralPath $MetadataLoadContextPath)) { throw 'Set MetadataLoadContextPath to the matching SDK metadata library.' }
+    $null=[Reflection.Assembly]::LoadFrom($MetadataLoadContextPath)
+    $runtime=[Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory()
+    $assemblyPaths=@(Get-ChildItem -LiteralPath $Managed,$runtime -Filter '*.dll' -File |
+        Group-Object Name | ForEach-Object { $_.Group[0].FullName })
+    $resolver=[Reflection.PathAssemblyResolver]::new([string[]]$assemblyPaths)
+    $metadataContext=[Reflection.MetadataLoadContext]::new($resolver,'System.Private.CoreLib')
+} else {
+    [AppDomain]::CurrentDomain.add_ReflectionOnlyAssemblyResolve($resolve)
+}
+function Load-MetadataAssembly([string]$path) {
+    if ($metadataContext) { return $metadataContext.LoadFromAssemblyPath([IO.Path]::GetFullPath($path)) }
+    return [Reflection.Assembly]::ReflectionOnlyLoadFrom($path)
+}
 try {
-    $game = [System.Reflection.Assembly]::ReflectionOnlyLoadFrom((Join-Path $Managed 'Assembly-CSharp.dll'))
+    $game = Load-MetadataAssembly (Join-Path $Managed 'Assembly-CSharp.dll')
+    $core=if ($metadataContext) { $metadataContext.CoreAssembly } else { [Reflection.Assembly]::ReflectionOnlyLoad('mscorlib') }
+    function Resolve-PatchType([string]$expression) {
+        $expression=$expression.Trim()
+        if ($expression.EndsWith('?')) {
+            $element=Resolve-PatchType $expression.Substring(0,$expression.Length-1)
+            return $core.GetType('System.Nullable`1',$true).MakeGenericType([Type[]]@($element))
+        }
+        if ($expression.EndsWith('[]')) { return (Resolve-PatchType $expression.Substring(0,$expression.Length-2)).MakeArrayType() }
+        $aliases=@{bool='System.Boolean';int='System.Int32';float='System.Single';double='System.Double';string='System.String';object='System.Object';long='System.Int64'}
+        if ($aliases.ContainsKey($expression)) { return $core.GetType($aliases[$expression],$true) }
+        foreach ($name in @($expression,($expression -replace '\.','+'))) {
+            $resolved=$game.GetType($name)
+            if ($resolved) { return $resolved }
+            foreach ($ns in @('Verse','RimWorld','Verse.AI','Verse.AI.Group','RimWorld.Planet')) {
+                $resolved=$game.GetType("$ns.$name")
+                if ($resolved) { return $resolved }
+            }
+        }
+        throw "Cannot resolve explicit Harmony parameter type: $expression"
+    }
     $flags = [System.Reflection.BindingFlags]'Public,NonPublic,Instance,Static'
     if ($VefAssembly) {
-        $vef = [System.Reflection.Assembly]::ReflectionOnlyLoadFrom($VefAssembly)
+        $vef = Load-MetadataAssembly $VefAssembly
         $type = $vef.GetType('VEF.AnimalBehaviours.CompFixedGender',$true)
         $method = $type.GetMethod('CompTick',($flags -bor [System.Reflection.BindingFlags]::DeclaredOnly))
         $field = $type.GetField('changeGenderOnce',$flags)
@@ -59,7 +103,7 @@ try {
     $injectedFields = @{}
     foreach ($file in Get-ChildItem -LiteralPath "$root/Source/WildShift" -Filter '*.cs') {
         $code = Get-Content -LiteralPath $file.FullName -Raw
-        $patches = [regex]::Matches($code, '\[HarmonyPatch\(typeof\((\w+)\),\s*"([^"]+)"')
+        $patches = [regex]::Matches($code, '\[HarmonyPatch\(typeof\((\w+)\),\s*"([^"]+)".*?\)\]',[Text.RegularExpressions.RegexOptions]::Singleline)
         for ($i=0; $i -lt $patches.Count; $i++) {
             $patch=$patches[$i]; $short=$patch.Groups[1].Value; $methodName=$patch.Groups[2].Value
             $type=$null
@@ -69,8 +113,19 @@ try {
             }
             if ($null -eq $type) { throw "Missing patch type: $short" }
             $candidates=@($type.GetMethods($flags) | Where-Object Name -eq $methodName)
-            if ($short -eq 'PawnGenerator' -and $methodName -eq 'GeneratePawn') {
-                $candidates=@($candidates | Where-Object { $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.FullName -eq 'Verse.PawnGenerationRequest' })
+            $signature=[regex]::Match($patch.Value, ',\s*new\s*(?:Type\s*)?\[\]\s*\{([^}]*)\}')
+            if ($signature.Success) {
+                $parameters=@([regex]::Matches($signature.Groups[1].Value,'typeof\(([^)]+)\)') |
+                    ForEach-Object { Resolve-PatchType $_.Groups[1].Value })
+                if (!$parameters.Count -and $signature.Groups[1].Value.Trim()) { throw "Unsupported Harmony argument declaration: $($patch.Value)" }
+                $candidates=@($candidates | Where-Object {
+                    $native=$_.GetParameters()
+                    if ($native.Count -ne $parameters.Count) { return $false }
+                    for ($parameterIndex=0;$parameterIndex -lt $native.Count;$parameterIndex++) {
+                        if ($native[$parameterIndex].ParameterType -ne $parameters[$parameterIndex]) { return $false }
+                    }
+                    return $true
+                })
             }
             if ($candidates.Count -ne 1) { throw "Missing or ambiguous target: $short.$methodName" }
             $end=$code.Length
@@ -103,7 +158,11 @@ try {
         if ($null -eq $type) { $type=$game.GetType("RimWorld.$name") }
         if ($null -eq $type) { throw "Unknown think-node class: $name" }
     }
-    $core = Join-Path (Split-Path (Split-Path $Managed -Parent) -Parent) 'Data/Core/Defs/ThinkTreeDefs'
+    $coreRoots=@((Join-Path $Managed 'Data/Core/Defs/ThinkTreeDefs'),
+        (Join-Path (Split-Path (Split-Path $Managed -Parent) -Parent) 'Data/Core/Defs/ThinkTreeDefs'))
+    $core=@($coreRoots | Where-Object { Test-Path -LiteralPath $_ -PathType Container })
+    if ($core.Count -ne 1) { throw 'Cannot unambiguously locate native Core think-tree definitions for this engine layout.' }
+    $core=$core[0]
     $names = @{}
     foreach ($file in Get-ChildItem -LiteralPath $core -Filter '*.xml' -Recurse) {
         $doc = [xml](Get-Content -LiteralPath $file.FullName -Raw)
@@ -130,5 +189,6 @@ try {
     }
     "PASS: all $targetCount Harmony targets and $($injectedFields.Count) injected fields; 10 exact enemy signatures; $($xmls.Count) XML files, native tree references and duplicate Def/Keyed checks (metadata only)."
 } finally {
-    [AppDomain]::CurrentDomain.remove_ReflectionOnlyAssemblyResolve($resolve)
+    if ($metadataContext) { $metadataContext.Dispose() }
+    else { [AppDomain]::CurrentDomain.remove_ReflectionOnlyAssemblyResolve($resolve) }
 }

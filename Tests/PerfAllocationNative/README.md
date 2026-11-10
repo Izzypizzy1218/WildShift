@@ -1,0 +1,13 @@
+# Shared-state allocation and saved-buff native probe
+
+This TEST ONLY console host loads the selected production `WildShift.dll` and actual RimWorld 1.7 native assemblies. It does not launch a game or install a mod. Build with explicit `WildShiftPath` and an external output/intermediate directory; pass the game directory, matching Harmony directory, a fresh external result directory, and `baseline` or `candidate` to the executable.
+
+The three measured paths use delegates bound before measurement. Each warms for 20,000 calls, then samples 200,000 calls with `GC.GetAllocatedBytesForCurrentThread`, Gen0 counts and elapsed time. Fixture creation, reflection, JSON and disk IO are outside those intervals. The plain-resource path rotates through 50 real native pawn graphs; tracker refresh exercises one supported gene ability; lookup holds the tick stable. These are allocation microbenchmarks, not initialized-game TPS or colony memory results.
+
+`baseline` records the old behavior without expecting conservative buff reconciliation or zero recurring allocation. `candidate` additionally requires less than 8 B/call on each warmed path and checks saved-state reconciliation. The published beta.3 baseline measured 88 B/call on each path; the first scratch correction measured 0 B/call. Timing differences from this short host must not be reported as a whole-game speedup.
+
+Behavior checks cover source-clock creation, elapsed drain, same-tick deduplication, source replacement/removal/reappearance and return/reinitialization. The source replacement fixture uses the native hemogen resource alone: a separate `Gene_HemogenDrain` caches its resource object and would confound direct manual graph replacement. Combined drain behavior remains covered by the existing shared-ability suite.
+
+The saved-buff graph uses exact native Hediffs/components and calls production `SharedFormBuffs.AdoptExisting`. It checks canonical ID and one owner, severity/age/disappearance reconciliation, idempotence, weaker/shorter legacy state, unique exact-object transfer, unreviewed human sources and ambiguous duplicates. Only the unrelated native `HediffSet.DirtyCache` boundary is suppressed for these partial health graphs; the native merge operation and production adoption code are not mocked. The old DLL's candidate-mode failure is preserved as the red reproduction.
+
+The parent performance runner owns real-game verification, both game versions, normal-profile preservation and any final release binary. The scratch DLL used for this probe is not itself a release candidate merely because the probe passes.

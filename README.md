@@ -112,7 +112,7 @@ The optional VEF compatibility hook prevents fixed-female animal components from
 
 The repository uses RimWorld's standard mod layout. Shared definitions, translations and textures remain at the root; `LoadFolders.xml` selects the compiled DLL in `1.6/Assemblies` or `1.7/Assemblies`. When upgrading a manual installation, replace the old WildShift folder instead of merging it: an old root `Assemblies/WildShift.dll` would load twice.
 
-RimWorld 1.7 support is a beta, currently built against **1.7.4985 rev1269 (unstable)**. Both version-specific DLLs include the optional custom form settings. The 1.6 build uses RimRef 1.6.4871 reference assemblies; actual-game validation here uses 1.7. Optional mods such as HAR, Releashed and Animal Apparel require compatible releases of their own; the historical 1.6 integration reports below are not 1.7 validation.
+The current build targets **RimWorld 1.6.4871 rev590** and **1.7.5000 rev1275**. Both version-specific DLLs include the optional custom form settings. Optional mods such as HAR, Releashed and Animal Apparel require compatible releases of their own.
 
 The preceding beta's startup and native-assembly revalidation on **1.7.4982 rev1280** did not reproduce the earlier intermittent CLR/JIT crash; it is not claimed fixed. See the [2026-10-19 investigation](Docs/Startup-1.7-2026-10-19.md) and `Tests/Run-Startup17Tests.ps1` for repeatable actual-game startup checks.
 
@@ -130,13 +130,15 @@ To build 1.6, supply matching 1.6 game or reference assemblies and `-p:RimWorldV
 
 ## Current version
 
-`v1.4.0-beta.3` — locally validated candidate
+`v1.4.0-beta.4` — beta release
 
-The local candidate builds for RimWorld 1.6 and 1.7 and preserves supported native drug state saved on older active animal forms. It retains exact source identities, chemical levels and reviewed timers without another ingestion; paired luciferium sources keep the nearer pending heal. Cached-body ownership and inactive skill views also survive return and reload. See [migration behavior, validation and limits](Docs/Upgrade-v1.4.0-beta.3.md). Shared genes/abilities/buffs and preserved animal bodies retain [beta.2's documented scope](Docs/SharedState-v1.4.0-beta.2.md).
+Remove repeated callback/predicate allocations from shared resource and ability lookups while preserving source changes, suppression, cooldowns and first-match behavior. Reconcile duplicate reviewed saved buffs without adding another dose or resetting their age; retain the human-owned object and the larger saved severity, age and remaining timer. Shared genes, abilities, buffs and persistent animal bodies retain [beta.2's documented scope](Docs/SharedState-v1.4.0-beta.2.md), including [beta.3's supported legacy-drug migration](Docs/Upgrade-v1.4.0-beta.3.md).
 
-Current validation includes 504 isolated checks against current 1.7.4995 native APIs and 291 fault-injecting storage/recovery assertions. Actual old-save cycles and fresh reloads pass 21 probe checks on 1.7 and 22 on 1.6. Source comparisons pass 1,358 fields on 1.7 (two unsupported fields retained) and 288 on 1.6 (none unsupported). The 1.6 profile explicitly excludes two missing packages. Controlled full-engine migration/lifecycle tests pass 294 checks on each version. Original saves and normal settings remain unchanged; full-profile mod diagnostics keep their raw overall verdict failed. Earlier failures and the fixture-input correction remain documented.
+On 2026-11-08, the frozen candidate passed 526 isolated native checks against actual 1.7.5000 APIs (504 existing plus 22 allocation/buff checks), 533 boundary-stub logic/recovery assertions, and 294 initialized-game save/reload/lifecycle checks on each of actual 1.6.4871 and 1.7.5000. Both native builds and versioned API metadata checks passed. Normal save/configuration inputs remained unchanged.
 
-The earlier beta.2 Windows UI session verified selected warg/thrumbo armor, dropped-item preservation, mixed selection/drafting and Kiiro catmint interactions. Those historical visual results remain in the beta.2 report; beta.3 validation adds no new visual claim. This is not an error-free certification of every installed mod or custom effect. Long-duration 0/20/50-form performance tests remain next.
+The short actual-1.7 performance comparison kept 50 people total, with 0, 20 or 50 active Warg forms, using 30 seconds warmup and 120 seconds measured per fresh process. All conditions sustained approximately the native 900 TPS ceiling with peak whole-process resident memory of 1,889–1,909 MiB. The candidate's 50-form replay also sustained 900 TPS; managed allocation fell from approximately 3.45 to 2.61 MB/s and generation-0 collections from 44 to 34 in this single controlled comparison. These are stationary drafted, minimal all-DLC, hidden native 60 FPS measurements, not working-colony or long-duration leak results. The graphics runs retain their external Vulkan/Steam startup diagnostics separately; accepted native state does not erase the raw strict diagnostic verdict.
+
+The draft checks exercise the actual Draft command on a healthy warg after transforming from an undrafted colonist. Drafting, persistence across 30 native ticks, undrafting and redrafting passed in RimWorld 1.6, 1.7, and 1.7 with Draftable Animals - Releashed. Historical beta.3 real-save migration and beta.2 Windows UI results are documented in their respective reports.
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
 
