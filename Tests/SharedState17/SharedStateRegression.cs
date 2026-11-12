@@ -60,6 +60,8 @@ namespace WildShiftSharedStateValidation
         private string persistentFireId, persistentWarcallId, persistentBuffId;
         private int persistentCooldownEnd;
         private SharedLegacyDrugEngineChecks legacyDrugReplay;
+        private Apparel persistentApparel;
+        private string persistentApparelId;
         private readonly List<string> results = new List<string>();
         public Regression(Game game) { }
 
@@ -94,6 +96,8 @@ namespace WildShiftSharedStateValidation
             Scribe_References.Look(ref implant, "sharedImplant");
             Scribe_References.Look(ref caravan, "sharedCaravan");
             Scribe_Deep.Look(ref legacyDrugReplay, "legacyDrugReplay");
+            Scribe_References.Look(ref persistentApparel, "persistentApparel");
+            Scribe_Values.Look(ref persistentApparelId, "persistentApparelId");
         }
         public override void GameComponentUpdate()
         {
@@ -125,6 +129,9 @@ namespace WildShiftSharedStateValidation
             companion = NewHuman(map, "SharedCompanion", -3, Gender.Female);
             originalId = original.GetUniqueLoadID();
             originalName = original.Name.ToStringFull;
+            persistentApparel = (Apparel)ThingMaker.MakeThing(DefDatabase<ThingDef>.GetNamed("Apparel_ShieldBelt"));
+            original.apparel.Wear(persistentApparel);
+            persistentApparelId = persistentApparel.GetUniqueLoadID();
             SeedPersistentSharedEffects();
             original.relations.AddDirectRelation(PawnRelationDefOf.Spouse, companion);
             original.needs.mood.thoughts.memories.TryGainMemory(Married(), companion);
@@ -194,6 +201,9 @@ namespace WildShiftSharedStateValidation
 
         private void ReloadPass()
         {
+            Current.Game.GetComponent<ExpandedSharedHealthPersistence>().Verify(Check);
+            Check(persistentApparel != null && persistentApparel.GetUniqueLoadID() == persistentApparelId
+                && original.apparel.WornApparel.Contains(persistentApparel), "gear/native inactive reload preserves original shield item identity and owner");
             Require(original != null && companion != null && form != null && implant != null,
                 "fresh-process native reload resolves original, spouse, cached body and implant cross-references");
             Check(original.GetUniqueLoadID() == originalId && form.GetUniqueLoadID() == formId,
@@ -231,7 +241,9 @@ namespace WildShiftSharedStateValidation
             Check(ChemicalNeed().CurLevel > .4f && original.health.hediffSet.hediffs.Count(h => h.def.defName == "LuciferiumAddiction") == 1,
                 "native animal ingestion replenishes the original chemical need without duplicate addiction");
             Check(!form.health.hediffSet.hediffs.Any(h => h.def.defName == "LuciferiumHigh" || h.def.defName == "LuciferiumAddiction")
-                && !form.needs.AllNeeds.OfType<Need_Chemical>().Any(), "animal ingestion does not create a separate animal drug or chemical need");
+                && form.needs.AllNeeds.OfType<Need_Chemical>().All(n => original.needs.AllNeeds.Contains(n))
+                && ReferenceEquals(form.needs.TryGetNeed(ChemicalNeed().def), ChemicalNeed()),
+                "animal ingestion exposes the same canonical chemical needs without separate animal-owned drug or need copies");
             CheckProjections();
             for (int i = 0; i < 2; i++)
             {
@@ -247,6 +259,9 @@ namespace WildShiftSharedStateValidation
             SharedHealthEngineChecks.Run(Find.CurrentMap, Check);
             SharedBuffEngineChecks.Run(Find.CurrentMap, Check);
             SharedAbilitiesEngineChecks.Run(Find.CurrentMap, Check);
+            SharedGearEngineChecks.Run(Find.CurrentMap, Check);
+            SharedBiologyEngineChecks.Run(Find.CurrentMap, Check);
+            SharedSystemsEngineChecks.Run(Find.CurrentMap, Check);
             caravan = CaravanExitMapUtility.ExitMapAndCreateCaravan(new[] { companion, form }, Faction.OfPlayer,
                 Find.CurrentMap.Tile, Find.CurrentMap.Tile, PlanetTile.Invalid, false);
             Require(caravan != null && caravan.Spawned && caravan.ContainsPawn(form), "native departure creates a caravan with the active form");
@@ -256,6 +271,7 @@ namespace WildShiftSharedStateValidation
             activeSavedDrugAge = Drug(original).ageTicks;
             legacyDrugReplay = new SharedLegacyDrugEngineChecks();
             legacyDrugReplay.Seed(original, form, Check);
+            Current.Game.GetComponent<ExpandedSharedBiologyPersistence>().Register(original, form);
             Require(failures == 0, "active shared-state and native health checks pass before saving");
             stage = 2;
             GameDataSaveLoader.SaveGame("autostart");
@@ -266,6 +282,13 @@ namespace WildShiftSharedStateValidation
 
         private void ActiveReloadPass()
         {
+            Current.Game.GetComponent<ExpandedSharedHealthPersistence>().Verify(Check);
+            SharedSystemsEngineChecks.AfterLoad(Find.CurrentMap, Check);
+            Current.Game.GetComponent<ExpandedSharedBiologyPersistence>().Verify(Check);
+            Check(persistentApparel != null && persistentApparel.GetUniqueLoadID() == persistentApparelId
+                && original.apparel.GetDirectlyHeldThings().Contains(persistentApparel)
+                && form.apparel.WornApparel.Count(a => a == persistentApparel) == 1,
+                "gear/active native reload saves source shield once and restores non-owning view");
             Require(caravan != null && caravan.Spawned && original != null && companion != null && form != null && implant != null,
                 "third-process native reload resolves the active caravan, both bodies, spouse and implant");
             Require(caravan.ContainsPawn(form) && caravan.ContainsPawn(companion) && !form.Spawned
@@ -368,15 +391,22 @@ namespace WildShiftSharedStateValidation
             Gene existingGene = original.genes.GetGene(quick);
             if (existingGene != null) original.genes.RemoveGene(existingGene);
             float baseline = Speed();
-            Gene added = original.genes.AddGene(quick, false);
-            Check(Speed() > baseline + .01f, "adding the original's native quick-movement gene changes the animal stat immediately");
-            original.genes.RemoveGene(added);
-            Check(Near(Speed(), baseline), "removing the original gene restores the animal stat in the same tick");
-            var trait = new Trait(speed, 1);
-            original.story.traits.GainTrait(trait);
-            Check(Speed() > baseline + .01f, "adding the original's native fast-walker trait changes the animal stat immediately");
-            original.story.traits.RemoveTrait(trait);
-            Check(Near(Speed(), baseline), "removing the original trait restores the animal stat in the same tick");
+            for(int pass=0;pass<3;pass++)
+            {
+                Gene added = original.genes.AddGene(quick, false);
+                float withGene = Speed();
+                Check(withGene > baseline + .01f, "adding the original's native quick-movement gene changes the animal stat immediately ("+baseline+" -> "+withGene+")");
+                original.genes.RemoveGene(added);
+                float withoutGene = Speed();
+                Check(Near(withoutGene, baseline), "removing the original gene restores the animal stat in the same tick ("+withoutGene+" vs "+baseline+")");
+                var trait = new Trait(speed, 1);
+                original.story.traits.GainTrait(trait);
+                float withTrait = Speed();
+                Check(withTrait > baseline + .01f, "adding the original's native fast-walker trait changes the animal stat immediately ("+baseline+" -> "+withTrait+")");
+                original.story.traits.RemoveTrait(trait);
+                float withoutTrait = Speed();
+                Check(Near(withoutTrait, baseline), "removing the original trait restores the animal stat in the same tick ("+withoutTrait+" vs "+baseline+")");
+            }
         }
 
         private void CheckDrugTicks(int count, string location)

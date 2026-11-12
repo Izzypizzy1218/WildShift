@@ -21,13 +21,23 @@ namespace WildShift
             public int lastTick;
             public int lastInterval;
             public bool advancing;
+            public bool refreshing, invalidatingHealth;
             public bool dirty = true;
             public int generation;
             public readonly List<Hediff> sources = new List<Hediff>();
+            public readonly HashSet<Hediff> sourceSet = new HashSet<Hediff>();
+            public readonly List<Hediff> ticking = new List<Hediff>();
             public readonly Dictionary<StatWorker, int> statGenerations = new Dictionary<StatWorker, int>();
         }
 
         private static readonly ConditionalWeakTable<Pawn, Clock> clocks = new ConditionalWeakTable<Pawn, Clock>();
+        private sealed class PartMapping
+        {
+            public PartMapping() { }
+            public System.WeakReference<Pawn> body;
+            public BodyPartRecord original, mapped;
+        }
+        private static readonly ConditionalWeakTable<Hediff, PartMapping> partMappings = new ConditionalWeakTable<Hediff, PartMapping>();
         private static HashSet<HediffDef> drugDefs;
         [ThreadStatic] private static Stack<Pawn> lethalBodies;
         [ThreadStatic] private static Stack<Pawn> sourceBodies;
@@ -43,6 +53,20 @@ namespace WildShift
             clocks.Remove(animal);
             clocks.Add(animal, new Clock { human = human, lastTick = Now, lastInterval = Now });
             Refresh(animal);
+        }
+
+        public static void Release(Pawn animal)
+        {
+            if (animal == null) return;
+            // A suspended cached body cannot run ShouldRemove. Its disposable
+            // views must not retain source references which can expire on the
+            // restored human before the next save. Remove the clock first so
+            // cache queries during removal cannot recreate those views.
+            clocks.Remove(animal);
+            List<Hediff> effects = animal.health?.hediffSet?.hediffs;
+            if (effects == null) return;
+            for (int i = effects.Count - 1; i >= 0; i--)
+                if (effects[i] is Hediff_SharedFormDrugEffect) animal.health.RemoveHediff(effects[i]);
         }
 
         private static Clock GetClock(Pawn animal)
@@ -71,7 +95,16 @@ namespace WildShift
                 }
                 foreach (ThingDef thing in DefDatabase<ThingDef>.AllDefsListForReading)
                 {
-                    if (!thing.IsDrug || thing.ingestible == null || thing.ingestible.outcomeDoers == null) continue;
+                    if (!thing.IsDrug) continue;
+                    // Anomaly serums use UseThing/AddHediff instead of the
+                    // ordinary GiveHediff ingestion outcome.
+                    if (thing.comps != null)
+                        for (int i = 0; i < thing.comps.Count; i++)
+                        {
+                            var use = thing.comps[i] as CompProperties_UseEffectAddHediff;
+                            if (use?.hediffDef != null) drugDefs.Add(use.hediffDef);
+                        }
+                    if (thing.ingestible?.outcomeDoers == null) continue;
                     foreach (IngestionOutcomeDoer outcome in thing.ingestible.outcomeDoers)
                     {
                         IngestionOutcomeDoer_GiveHediff give = outcome as IngestionOutcomeDoer_GiveHediff;
@@ -94,7 +127,7 @@ namespace WildShift
             bool dependency = type == typeof(Hediff_ChemicalDependency);
             bool hemogen = type == typeof(Hediff_HemogenCraving);
             if (!dependency && type != typeof(Hediff) && type != typeof(HediffWithComps)
-                && type != typeof(Hediff_High) && type != typeof(Hediff_Addiction) && !hemogen) return false;
+                && type != typeof(Hediff_High) && type != typeof(Hediff_Alcohol) && type != typeof(Hediff_Addiction) && !hemogen) return false;
             if (!dependency && !hemogen && !DrugDefs.Contains(source.def)) return false;
             HediffWithComps withComps = source as HediffWithComps;
             if (withComps != null && withComps.comps != null)
@@ -109,7 +142,21 @@ namespace WildShift
         {
             Pawn animal = SharedFormIdentity.ActiveFormFor(human);
             Clock clock;
-            if (animal != null && clocks.TryGetValue(animal, out clock)) clock.dirty = true;
+            if (animal == null || !clocks.TryGetValue(animal, out clock)) return;
+            bool changed = !clock.dirty;
+            clock.dirty = true;
+            if (!changed || clock.refreshing || clock.invalidatingHealth || animal.health?.hediffSet == null) return;
+            clock.invalidatingHealth = true;
+            try { animal.health.hediffSet.DirtyCache(); }
+            finally { clock.invalidatingHealth = false; }
+        }
+
+        public static void PrepareHealthFor(Pawn animal)
+        {
+            Clock clock;
+            if (animal == null || !clocks.TryGetValue(animal, out clock) || !clock.dirty
+                || clock.refreshing || clock.invalidatingHealth) return;
+            Refresh(animal);
         }
 
         public static void Refresh(Pawn animal)
@@ -122,10 +169,15 @@ namespace WildShift
                 clock = new Clock { human = human, lastTick = Now, lastInterval = Now };
                 clocks.Add(animal, clock);
             }
+            if (clock.refreshing) return;
+            clock.refreshing = true;
+            try
+            {
             clock.sources.Clear();
+            clock.sourceSet.Clear();
             List<Hediff> originals = human.health.hediffSet.hediffs;
             for (int i = 0; i < originals.Count; i++)
-                if (IsSupported(originals[i])) clock.sources.Add(originals[i]);
+                if (IsSupported(originals[i])) { clock.sources.Add(originals[i]); clock.sourceSet.Add(originals[i]); }
 
             List<Hediff> actual = animal.health.hediffSet.hediffs;
             for (int i = actual.Count - 1; i >= 0; i--)
@@ -150,11 +202,20 @@ namespace WildShift
                     var projection = (Hediff_SharedFormDrugEffect)HediffMaker.MakeHediff(def, animal);
                     projection.source = source;
                     animal.health.AddHediff(projection);
+                    HediffComp_Invisibility invisibility = source.TryGetComp<HediffComp_Invisibility>();
+                    if (invisibility != null)
+                        OnBody(source, animal, delegate { invisibility.BecomeInvisible(true); });
                 }
+                // Components remain owned/serialized by the original Hediff.
+                // The view exposes them for native comp lookup, not callbacks.
+                for (int j = 0; j < actual.Count; j++)
+                    if (actual[j] is Hediff_SharedFormDrugEffect view && view.source == source) view.BindComponents();
             }
             clock.dirty = false;
             clock.generation++;
             animal.health.Notify_HediffChanged(null);
+            }
+            finally { clock.refreshing = false; }
         }
 
         private static bool OriginalStillStored(Pawn animal, Clock clock)
@@ -169,14 +230,18 @@ namespace WildShift
             clock.lastTick = Now;
             if (clock.dirty) Refresh(animal);
             clock.advancing = true;
+            clock.ticking.Clear();
+            clock.ticking.AddRange(clock.sources);
             EnterSource(animal);
             try
             {
-                for (int i = clock.sources.Count - 1; i >= 0 && OriginalStillStored(animal, clock); i--)
+                for (int i = clock.ticking.Count - 1; i >= 0 && OriginalStillStored(animal, clock); i--)
                 {
-                    Hediff source = clock.sources[i];
-                    source.PostTick();
-                    if (source.ShouldRemove)
+                    Hediff source = clock.ticking[i];
+                    if (!clock.sourceSet.Contains(source)) continue;
+                    if (CanonicalProgression(source)) { source.Tick(); source.PostTick(); }
+                    else using (new BodyScope(source, animal)) { source.Tick(); source.PostTick(); }
+                    if (ShouldRemove(source, animal))
                     {
                         clock.human.health.RemoveHediff(source);
                         clock.dirty = true;
@@ -199,28 +264,43 @@ namespace WildShift
             clock.lastInterval = Now;
             if (clock.dirty) Refresh(animal);
             clock.advancing = true;
+            clock.ticking.Clear();
+            clock.ticking.AddRange(clock.sources);
             EnterSource(animal);
             try
             {
                 // NeedInterval is natively a 150-tick step. Keep its original
                 // pawn's hash phase, while visibility follows the active body.
-                if (clock.human.IsHashIntervalTick(150, elapsed) && clock.human.needs != null)
+                if (!SharedFormBiology.SharesNeeds(animal) && clock.human.IsHashIntervalTick(150, elapsed) && clock.human.needs != null)
                 {
                     List<Need> needs = clock.human.needs.AllNeeds;
                     for (int i = 0; i < needs.Count; i++)
                         if (needs[i] is Need_Chemical) needs[i].NeedInterval();
                 }
-                for (int i = clock.sources.Count - 1; i >= 0 && OriginalStillStored(animal, clock); i--)
+                for (int i = clock.ticking.Count - 1; i >= 0 && OriginalStillStored(animal, clock); i--)
                 {
-                    Hediff source = clock.sources[i];
+                    Hediff source = clock.ticking[i];
+                    if (!clock.sourceSet.Contains(source)) continue;
                     float previousSeverity = source.Severity;
-                    source.ageTicks += elapsed;
-                    // Native drug comps own severity, disappearance, scar
-                    // healing and genetic-dependency progression. Stage events
-                    // run once on the animal's projection, never on this body.
-                    source.PostTickInterval(elapsed);
+                    // Tick the native source once, including subclass behavior
+                    // (alcohol/hangover), with its environmental body rebound.
+                    // Projections no longer run a second stage tick.
+                    if (CanonicalProgression(source))
+                    {
+                        source.ageTicks += elapsed;
+                        List<Hediff> views = animal.health.hediffSet.hediffs;
+                        for (int j = 0; j < views.Count; j++)
+                            if (views[j] is Hediff_SharedFormDrugEffect view && view.source == source)
+                            { view.TickSourceStageInterval(elapsed); break; }
+                        source.PostTickInterval(elapsed);
+                    }
+                    else
+                    {
+                        using (new BodyScope(source, animal))
+                        { source.TickInterval(elapsed); source.PostTickInterval(elapsed); }
+                    }
                     if (source.Severity != previousSeverity) clock.dirty = true;
-                    if (source.ShouldRemove)
+                    if (ShouldRemove(source, animal))
                     {
                         clock.human.health.RemoveHediff(source);
                         clock.dirty = true;
@@ -241,6 +321,75 @@ namespace WildShift
             sourceBodies.Push(animal);
         }
         internal static void ExitSource() { sourceBodies.Pop(); }
+
+        internal static bool CanonicalProgression(Hediff source)
+        {
+            return source is Hediff_ChemicalDependency || source is Hediff_Addiction || source is Hediff_HemogenCraving;
+        }
+
+        internal static bool ShouldRemove(Hediff source, Pawn animal)
+        {
+            if (CanonicalProgression(source)) return source.ShouldRemove;
+            using (new BodyScope(source, animal)) return source.ShouldRemove;
+        }
+
+        internal struct BodyScope : IDisposable
+        {
+            private readonly Hediff source;
+            private readonly Pawn owner;
+            private readonly BodyPartRecord part;
+            public BodyScope(Hediff effect, Pawn body)
+            {
+                source = effect; owner = effect?.pawn; part = effect?.Part;
+                if (effect == null || body == null || owner == body) return;
+                effect.pawn = body;
+                if (part == null) return;
+                PartMapping mapping = partMappings.GetOrCreateValue(effect);
+                Pawn previous;
+                if (mapping.original != part || mapping.body == null || !mapping.body.TryGetTarget(out previous)
+                    || previous != body || (mapping.mapped != null && body.health.hediffSet.PartIsMissing(mapping.mapped)))
+                {
+                    mapping.original = part;
+                    mapping.body = new System.WeakReference<Pawn>(body);
+                    mapping.mapped = null;
+                    List<BodyPartRecord> parts = body.RaceProps?.body?.AllParts;
+                    if (parts != null)
+                        for (int i = 0; i < parts.Count; i++)
+                            if (parts[i].def == part.def && !body.health.hediffSet.PartIsMissing(parts[i]))
+                            { mapping.mapped = parts[i]; break; }
+                }
+                effect.Part = mapping.mapped;
+            }
+            public void Dispose()
+            {
+                if (source != null) { source.pawn = owner; source.Part = part; }
+            }
+        }
+
+        internal static void OnBody(Hediff source, Pawn animal, Action action)
+        {
+            ReadOnBody(source, animal, delegate { action(); return true; });
+        }
+
+        internal static T ReadOnBody<T>(Hediff source, Pawn animal, Func<T> action)
+        {
+            using (new BodyScope(source, animal)) return action();
+        }
+
+        internal static HediffStage StageFor(Hediff source, Pawn animal)
+        {
+            HediffStage stage;
+            if (CanonicalProgression(source)) stage = source.CurStage;
+            else using (new BodyScope(source, animal)) stage = source.CurStage;
+            if (stage == null || source.Part == null || !SharedFormBuffs.IsSystemicImplant(source.def)) return stage;
+            // Part efficiency belongs to the source anatomy, handled by the
+            // dedicated prosthetic contribution bridge rather than body-wide.
+            if (stage.partEfficiencyOffset == 0f && !stage.partIgnoreMissingHP) return stage;
+            HediffStage copy = Gen.MemberwiseClone(stage);
+            copy.partEfficiencyOffset = 0f;
+            copy.partIgnoreMissingHP = false;
+            return copy;
+        }
 
         internal static Pawn RedirectDrugRecipient(ref Pawn recipient)
         {
@@ -286,7 +435,7 @@ namespace WildShift
             Clock clock;
             if (animal == null || !clocks.TryGetValue(animal, out clock)) return false;
             for (int i = 0; i < clock.sources.Count; i++)
-                if (clock.sources[i].CauseDeathNow()) return true;
+                if (ReadOnBody(clock.sources[i], animal, delegate { return clock.sources[i].CauseDeathNow(); })) return true;
             return false;
         }
 
@@ -298,16 +447,17 @@ namespace WildShift
 
     // This object belongs only to the animal. It does not own or tick the
     // original hediff's comps, and cannot create another chemical need.
-    public sealed class Hediff_SharedFormDrugEffect : Hediff
+    public sealed class Hediff_SharedFormDrugEffect : HediffWithComps
     {
         public Hediff source;
+        public void BindComponents() { comps = (source as HediffWithComps)?.comps; }
         public override string LabelBase { get { return source != null ? source.LabelBase : base.LabelBase; } }
         public override string LabelInBrackets { get { return source != null ? source.LabelInBrackets : base.LabelInBrackets; } }
         public override string SeverityLabel { get { return source != null ? source.SeverityLabel : base.SeverityLabel; } }
         public override UnityEngine.Color LabelColor { get { return source != null ? source.LabelColor : base.LabelColor; } }
         public override string Description { get { return source != null ? source.Description : base.Description; } }
         public override string TipStringExtra { get { return source != null ? source.TipStringExtra : null; } }
-        public override HediffStage CurStage { get { return source != null ? source.CurStage : null; } }
+        public override HediffStage CurStage { get { return source != null ? SharedFormHealth.StageFor(source, pawn) : null; } }
         public override float Severity
         {
             get { return source != null ? source.Severity : base.Severity; }
@@ -320,19 +470,23 @@ namespace WildShift
             {
                 Pawn human = SharedFormIdentity.HumanFor(pawn);
                 return human == null || source == null || source.pawn != human
-                    || !human.health.hediffSet.hediffs.Contains(source) || source.ShouldRemove;
+                    || !human.health.hediffSet.hediffs.Contains(source)
+                    || SharedFormHealth.ShouldRemove(source, pawn);
             }
         }
-        public override bool CauseDeathNow() { return source != null && source.CauseDeathNow(); }
-        public override bool TryMergeWith(Hediff other) { return false; }
-        public override void TickInterval(int delta)
+        public override bool CauseDeathNow()
         {
-            if (ShouldRemove) return;
+            if (source == null) return false;
+            using (new SharedFormHealth.BodyScope(source, pawn)) return source.CauseDeathNow();
+        }
+        public override bool TryMergeWith(Hediff other) { return false; }
+        public override void Tick() { }
+        public override void TickInterval(int delta) { }
+        internal void TickSourceStageInterval(int delta)
+        {
             SharedFormHealth.EnterProjection(pawn);
             try
             {
-                // The proxy's neutral Def creates no second drug need. Forward
-                // native Def-level side effects explicitly to the active body.
                 if (source.def.hediffGivers != null && pawn.IsHashIntervalTick(60, delta))
                     for (int i = 0; i < source.def.hediffGivers.Count; i++)
                         source.def.hediffGivers[i].OnIntervalPassed(pawn, this);
@@ -340,10 +494,43 @@ namespace WildShift
             }
             finally { SharedFormHealth.ExitProjection(); }
         }
+        public override void PostTick() { }
+        public override void PostTickInterval(int delta) { }
+        public override void PostAdd(DamageInfo? dinfo)
+        {
+            List<HediffComp> borrowed = comps; comps = null;
+            try { base.PostAdd(dinfo); }
+            finally { comps = borrowed; }
+        }
+        public override void PostRemoved()
+        {
+            List<HediffComp> borrowed = comps; comps = null;
+            try { base.PostRemoved(); }
+            finally { comps = borrowed; }
+        }
+        public override void Notify_PawnPostApplyDamage(DamageInfo dinfo, float totalDamageDealt)
+        {
+            if (source != null) SharedFormHealth.OnBody(source, pawn, delegate { source.Notify_PawnPostApplyDamage(dinfo, totalDamageDealt); });
+        }
+        public override void Notify_PawnUsedVerb(Verb verb, LocalTargetInfo target)
+        {
+            if (source != null) SharedFormHealth.OnBody(source, pawn, delegate { source.Notify_PawnUsedVerb(verb, target); });
+        }
+        public override void Notify_EntropyGained(float baseAmount, float finalAmount, Thing src = null)
+        {
+            if (source != null) SharedFormHealth.OnBody(source, pawn, delegate { source.Notify_EntropyGained(baseAmount, finalAmount, src); });
+        }
+        public override void Notify_KilledPawn(Pawn victim, DamageInfo? dinfo)
+        {
+            if (source != null) SharedFormHealth.OnBody(source, pawn, delegate { source.Notify_KilledPawn(victim, dinfo); });
+        }
         public override void ExposeData()
         {
-            base.ExposeData();
+            List<HediffComp> borrowed = comps; comps = null;
+            try { base.ExposeData(); }
+            finally { comps = borrowed; }
             Scribe_References.Look(ref source, "sharedDrugSource");
+            if (Scribe.mode == LoadSaveMode.PostLoadInit) BindComponents();
         }
     }
 

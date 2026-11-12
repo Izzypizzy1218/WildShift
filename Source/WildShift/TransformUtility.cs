@@ -214,9 +214,7 @@ namespace WildShift
             }
             animal.Rotation = rotation;
             EnemyShapeshifterUtility.OnTransformed(human, animal, comp);
-            SharedFormIdentity.Initialize(animal);
-            SharedFormHealth.Initialize(animal);
-            SharedFormAbilities.Initialize(animal);
+            SharedFormRuntime.Initialize(animal);
             EnsureTransformedAnimalControl(animal, true);
             if (human.playerSettings != null && animal.playerSettings != null)
             {
@@ -370,7 +368,7 @@ namespace WildShift
             finally
             {
                 FormTransferUtility.EndReturn(animal);
-                if (SharedFormIdentity.HumanFor(animal) != null) SharedFormAbilities.Initialize(animal);
+                if (SharedFormIdentity.HumanFor(animal) != null) SharedFormRuntime.Initialize(animal);
                 Patch_GameEnder.InvalidateCache();
                 if (Find.ColonistBar != null) Find.ColonistBar.MarkColonistsDirty();
             }
@@ -420,6 +418,7 @@ namespace WildShift
 
             // Unload before releasing the preserved human or deleting this
             // body. Native drops can fail silently; leave the form for retry.
+            SharedFormRuntime.Release(animal);
             if (!FormPossessions.TryUnload(animal, human))
             {
                 if (sendMessage && faction == Faction.OfPlayer)
@@ -441,7 +440,7 @@ namespace WildShift
             }
 
             animal.jobs?.StopAll(false);
-            SharedFormAbilities.Release(animal);
+            SharedFormRuntime.Release(animal);
 
             if (animal.Spawned)
             {
@@ -484,9 +483,7 @@ namespace WildShift
                     else if (oldOwner != null) FormTransferUtility.TryRestoreOwner(animal, oldOwner);
                     if (wasWorldPawn) FormTransferUtility.TryRegisterWorldPawn(animal);
                     if (!animal.Spawned && animal.holdingOwner == null) FormTransferUtility.PreserveDetachedPawn(animal);
-                    SharedFormIdentity.Initialize(animal);
-                    SharedFormHealth.Initialize(animal);
-                    SharedFormAbilities.Initialize(animal);
+                    SharedFormRuntime.Initialize(animal);
                     return null;
                 }
                 Log.Error("[WildShift] Could not roll back the preserved animal after reversion; retaining both bodies.");

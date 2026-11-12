@@ -113,9 +113,7 @@ namespace WildShift
                     LongEventHandler.ExecuteWhenFinished(delegate
                     {
                         if (!HasStoredPawn) return;
-                        SharedFormIdentity.Initialize(animal);
-                        SharedFormHealth.Initialize(animal);
-                        SharedFormAbilities.Initialize(animal);
+                        SharedFormRuntime.Initialize(animal);
                         AnimalFormTraining.CompleteSpecialTraining(animal);
                         AnimalApparelGraphics.RefreshIfOutOfSync(animal);
                     });

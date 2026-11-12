@@ -22,7 +22,11 @@ namespace WildShift
             if (!tree.Resolved) return;
 
             HashSet<Apparel> expected = new HashSet<Apparel>();
-            foreach (Apparel apparel in animal.apparel.WornApparel)
+            // The renderer uses the physical body's garments. Borrowed human
+            // gear contributes mechanics but deliberately has no animal node.
+            List<Apparel> physical = SharedFormGear.RawApparel(animal);
+            if (physical == null) return;
+            foreach (Apparel apparel in physical)
             {
                 if (!apparel.def.IsWeapon
                     && (apparel.def.apparel.tags == null

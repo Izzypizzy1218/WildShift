@@ -7,11 +7,14 @@ WildShift is a RimWorld 1.6 / 1.7 beta mod about colonists who can transform int
 - Transform a shapeshifter into one eligible animal form before or after drafting.
 - Keep the original person's identity, relationships, memories and canonical skill records. Animal-form learning updates those records once.
 - Share stat offsets and factors from active genes and unsuppressed traits, including conditional gene bonuses and penalties evaluated against the active animal's environment and apparel.
-- Use supported native gene abilities in animal form while retaining the original ability objects, cooldowns, charges and hemogen resource. Custom ability components, xenogerm implantation and psycasts are excluded.
-- Continue reviewed timed buffs from Kiiro, Miho, Ratkin, Ideology and Royalty through transformation. Additional declarative buffs can opt in through a restricted compatibility extension; arbitrary mod effects are not automatically shared.
-- Continue supported native whole-body drug effects, chemical needs and dependency state on the original human while transformed. Drugs ingested by the animal update that same canonical state.
+- Expose canonical genes, traits and personal needs through non-owning animal views, including gene capacity modifiers, metabolism, immunity, periodic gene effects and native trait rules. Source objects remain saved through the original human only.
+- Borrow supported native abilities and psycasts, retaining the original ability objects, cooldowns, charges, psyfocus, neural heat and hemogen. Native targeting and resource requirements still apply; arbitrary custom mod ability state machines need separate integration.
+- Use **Meditate** on a player-controlled psychic animal to recover the same original psyfocus pool. Native focus permissions follow the person, while safety and nearby focus use the animal's current position.
+- Continue native drug and shared buff states, including alcohol, Anomaly serums, neural supercharge, psychic/Ideology buffs and systemic human implant effects. Both benefits and penalties follow the active body, with one canonical source clock.
+- Share inspiration and Ideology role/precept modifiers, and keep mechanitor commands connected to the active body's map and position.
+- Use non-owning views of original human apparel and equipment for their native bonuses, armor, shields, weapon verbs and apparel actions. Original item ownership, condition, energy and charges are retained; human garments do not acquire invented animal textures.
 - Reconcile reviewed native drug effects and chemical needs already saved on an older animal form, preserving their recorded state without a second dose. Custom or incompatible state is not automatically transferred; see [old-save migration rules](Docs/Upgrade-v1.4.0-beta.3.md).
-- Reuse the same animal Pawn across transformations, retaining its prosthetics and serialized custom component state. Human implants remain on the human body; they are not mapped onto the animal.
+- Reuse the same animal Pawn across transformations, retaining its prosthetics and serialized custom component state. Human implants physically remain on the human; their systemic effects and installed-part capacity performance can benefit the active animal without copying human wounds or creating replacement limbs.
 - Preserve the cached animal's real human owner after saving and loading, and restore its own skill view while inactive.
 - Keep transformed animals visible and selectable in the colonist bar.
 - Draft and directly control the transformed animal.
@@ -22,7 +25,7 @@ WildShift is a RimWorld 1.6 / 1.7 beta mod about colonists who can transform int
 - Drag-select player-owned transformed animals together with colonists; ordinary livestock retain the normal selection rules.
 - Keep one grouped draft button on transformed animals when Draftable Animals - Releashed is active, including attack-trained forms and its no-training setting. See `Docs/DraftableAnimals-v1.2.23.md` for the tested 1.6 binary and the incompatible legacy 1.5 download.
 - Return to the stored human body with the revert command. Preserve the animal's drafted state when the human returns safely to a map and remains able to be drafted.
-- Drop the animal form's worn apparel, equipment, inventory and carried items nearby before returning. Anything that cannot be dropped goes to the original human's inventory; off-map returns keep all items there. Original human clothing remains worn.
+- Drop the animal body's own apparel, equipment, inventory and carried items nearby before returning. Anything that cannot be dropped goes to the original human's inventory; off-map returns keep all items there. Borrowed human gear stays in its original owners and is not unloaded as animal belongings.
 - Preserve Animal Gear / Animal Equipment apparel during return, including inventory fallback when nearby ground cannot accept it. Visuals remain subject to the equipment's species support and textures.
 - Prevent a false game over while a lone colonist is transformed.
 - Keep temporary camp/site maps while a living player-owned animal form still holds its original living colonist. Return to human form before using the native solo caravan departure flow.
@@ -112,7 +115,7 @@ The optional VEF compatibility hook prevents fixed-female animal components from
 
 The repository uses RimWorld's standard mod layout. Shared definitions, translations and textures remain at the root; `LoadFolders.xml` selects the compiled DLL in `1.6/Assemblies` or `1.7/Assemblies`. When upgrading a manual installation, replace the old WildShift folder instead of merging it: an old root `Assemblies/WildShift.dll` would load twice.
 
-The current build targets **RimWorld 1.6.4871 rev590** and **1.7.5000 rev1275**. Both version-specific DLLs include the optional custom form settings. Optional mods such as HAR, Releashed and Animal Apparel require compatible releases of their own.
+The current build targets **RimWorld 1.6.4871 rev590** and **1.7.5005 rev1082**. Both version-specific DLLs include the optional custom form settings. Optional mods such as HAR, Releashed and Animal Apparel require compatible releases of their own.
 
 The preceding beta's startup and native-assembly revalidation on **1.7.4982 rev1280** did not reproduce the earlier intermittent CLR/JIT crash; it is not claimed fixed. See the [2026-10-19 investigation](Docs/Startup-1.7-2026-10-19.md) and `Tests/Run-Startup17Tests.ps1` for repeatable actual-game startup checks.
 
@@ -130,15 +133,13 @@ To build 1.6, supply matching 1.6 game or reference assemblies and `-p:RimWorldV
 
 ## Current version
 
-`v1.4.0-beta.4` — beta release
+`v1.4.0-beta.6` — RimWorld 1.6 / 1.7 pre-release
 
-Remove repeated callback/predicate allocations from shared resource and ability lookups while preserving source changes, suppression, cooldowns and first-match behavior. Reconcile duplicate reviewed saved buffs without adding another dose or resetting their age; retain the human-owned object and the larger saved severity, age and remaining timer. Shared genes, abilities, buffs and persistent animal bodies retain [beta.2's documented scope](Docs/SharedState-v1.4.0-beta.2.md), including [beta.3's supported legacy-drug migration](Docs/Upgrade-v1.4.0-beta.3.md).
+Keep the preserved-human transformation structure while sharing supported personal state with the active animal: native gene/trait stats and capacities, drugs and serums, personal needs and thoughts, human implant/prosthesis effects, original equipment, psycasts and psychic resources, meditation, inspiration, ideology roles and mechanitor control. Benefits and penalties both apply; source objects, item ownership, charges and cooldowns survive return and reload.
 
-On 2026-11-08, the frozen candidate passed 526 isolated native checks against actual 1.7.5000 APIs (504 existing plus 22 allocation/buff checks), 533 boundary-stub logic/recovery assertions, and 294 initialized-game save/reload/lifecycle checks on each of actual 1.6.4871 and 1.7.5000. Both native builds and versioned API metadata checks passed. Normal save/configuration inputs remained unchanged.
+The final runtime passes 531 initialized-game checks on each of actual RimWorld 1.6.4871 and 1.7.5005, using three fresh processes per version, plus 273 isolated native checks. Normal user configuration hashes remain unchanged. A short 1.7 headless comparison with 50 total people and 0/20/50 active forms retains the approximately 900 TPS ceiling; mean native tick times are 0.252/0.404/0.592 ms. These are controlled stationary/drafted 60-second measurements, not full-colony, rendering or long-run leak results.
 
-The short actual-1.7 performance comparison kept 50 people total, with 0, 20 or 50 active Warg forms, using 30 seconds warmup and 120 seconds measured per fresh process. All conditions sustained approximately the native 900 TPS ceiling with peak whole-process resident memory of 1,889–1,909 MiB. The candidate's 50-form replay also sustained 900 TPS; managed allocation fell from approximately 3.45 to 2.61 MB/s and generation-0 collections from 44 to 34 in this single controlled comparison. These are stationary drafted, minimal all-DLC, hidden native 60 FPS measurements, not working-colony or long-duration leak results. The graphics runs retain their external Vulkan/Steam startup diagnostics separately; accepted native state does not erase the raw strict diagnostic verdict.
-
-The draft checks exercise the actual Draft command on a healthy warg after transforming from an undrafted colonist. Drafting, persistence across 30 native ticks, undrafting and redrafting passed in RimWorld 1.6, 1.7, and 1.7 with Draftable Animals - Releashed. Historical beta.3 real-save migration and beta.2 Windows UI results are documented in their respective reports.
+See [shared-state behavior and validation](Docs/SharedState-v1.4.0-beta.6.md) for exact rules and compatibility boundaries. Custom mod state machines may need separate adapters, and borrowed human clothes do not acquire animal textures. Physical wounds remain body-specific; ordinary animal wounds still reset on its next transformation. Historical supported drug migration remains documented in [beta.3's upgrade rules](Docs/Upgrade-v1.4.0-beta.3.md).
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
 

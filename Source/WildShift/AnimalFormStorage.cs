@@ -84,6 +84,7 @@ namespace WildShift
             if (transformed == null || transformed.HasStoredPawn) return false;
             if (forms == null) forms = NewOwner();
             if (forms.Count > 0 && !forms.Contains(form)) return false;
+            SharedFormRuntime.Release(form);
             // Release the live human-skill view immediately. This body is now
             // inactive, so direct consumers must see its own preserved records
             // both before saving and after a fresh native reload.

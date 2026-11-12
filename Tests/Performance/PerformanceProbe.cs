@@ -96,6 +96,12 @@ namespace WildShiftPerformanceValidation
         private long peakPrivate, peakWorkingSet, peakManaged;
         private ulong minimumAvailable;
         private readonly List<string> checks = new List<string>();
+        private sealed class NeedReferenceComparer : IEqualityComparer<Need>
+        {
+            public bool Equals(Need a,Need b) { return ReferenceEquals(a,b); }
+            public int GetHashCode(Need need) { return RuntimeHelpers.GetHashCode(need); }
+        }
+        private readonly HashSet<Need> refilledNeeds = new HashSet<Need>(new NeedReferenceComparer());
         private sealed class ExpectedBody
         {
             public readonly System.WeakReference<Pawn> Reference;
@@ -301,6 +307,9 @@ namespace WildShiftPerformanceValidation
         private void Care()
         {
             long startedAt = Stopwatch.GetTimestamp();
+            refilledNeeds.Clear();
+            try
+            {
             foreach (Pawn original in originals)
             {
                 Refill(original);
@@ -321,13 +330,21 @@ namespace WildShiftPerformanceValidation
                     if (hemogen != null) hemogen.Value = .8f;
                 }
             }
+            }
+            finally
+            {
+                // Do not let benchmark maintenance retain an otherwise weak
+                // active body through its Need.pawn after this short pass.
+                refilledNeeds.Clear();
+            }
             interventions++;
             careSeconds += (Stopwatch.GetTimestamp() - startedAt) / (double)Stopwatch.Frequency;
         }
-        private static void Refill(Pawn pawn)
+        private void Refill(Pawn pawn)
         {
             if (pawn.needs == null) return;
-            foreach (Need need in pawn.needs.AllNeeds) need.CurLevel = .95f;
+            foreach (Need need in pawn.needs.AllNeeds)
+                if (refilledNeeds.Add(need)) need.CurLevelPercentage = .95f;
         }
         private void ValidatePopulation()
         {
@@ -428,7 +445,7 @@ namespace WildShiftPerformanceValidation
                 GameVersion = VersionControl.CurrentVersionString, GameAssemblyPath = typeof(Pawn).Assembly.Location, GameAssemblySHA256 = Boot.Hash(typeof(Pawn).Assembly.Location),
                 WildShiftPath = typeof(TransformUtility).Assembly.Location, WildShiftSHA256 = Boot.Hash(typeof(TransformUtility).Assembly.Location), FixtureSHA256 = Boot.Hash(typeof(Boot).Assembly.Location),
                 Mods = LoadedModManager.RunningModsListForReading.Select(m => m.PackageId).ToArray(), NativeErrors = Log.Messages.Where(m => m.type == LogMessageType.Error).Select(m => m.text).ToArray(), Checks = checks.ToArray(),
-                Scope = "Controlled 50-canonical-pawn stationary drafted native-tick benchmark, minimal all-DLC profile. Storyteller/random disease/mental breaks and new wild animals disabled; needs refilled and native auto-undraft notification refreshed once per wall second. Unexpected undrafting still fails the invariant. No AI hauling/combat, graphical mod-pack or actual-colony performance claim. No forced GC during warmup/measurement; final retained-GC diagnostic is separate."
+                Scope = "Controlled 50-canonical-pawn stationary drafted native-tick benchmark, minimal all-DLC profile. Storyteller/random disease/mental breaks and new wild animals disabled; unique need objects refilled to95percent and native auto-undraft notification refreshed once per wall second. Shared canonical needs are filled once, and maintenance retains no need references after each pass. Unexpected undrafting still fails the invariant. No AI hauling/combat, graphical mod-pack or actual-colony performance claim. No forced GC during warmup/measurement; final retained-GC diagnostic is separate."
             });
             Application.Quit();
         }

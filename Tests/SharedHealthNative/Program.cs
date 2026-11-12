@@ -195,7 +195,8 @@ internal static class Program
             "Actual native drug outcome merges dose into original timer without animal high copy");
 
         stage.hediffGivers = new List<HediffGiver> { new RecordingGiver() };
-        try { projection.TickInterval(60); }
+        SetTick(1560);
+        try { SharedFormHealth.TickInterval(animal, 60); }
         catch (StageProbeException) { }
         Check(observedStagePawn == animal && observedLethalScope, "Native stage events run on active animal within precise shared-death scope");
         Check(high.pawn == human && !SharedFormHealth.IsSharedLethalDeath(animal), "Exceptional stage event keeps original ownership and releases lethal scope");
@@ -217,6 +218,7 @@ internal static class Program
         Check(!animal.health.hediffSet.hediffs.Any(h => h.def == highDef),
             "Inactive cached animal rejects the remaining native drug ingestion outcome");
         RunBuffRegressions();
+        RunAdditionalNativeHealthSources();
         RunLegacyDrugRegressions(scratch, highDef, toleranceDef, addictionDef, needDef, healingHighDef, visualHighDef);
         Console.WriteLine("Scope: actual native hediff ownership/comps/chemical needs and isolated caravan holder graph; full map/UI health transitions and need-set rebuilding are fixture boundaries. Full ingestion/return/death/save lifecycle requires the engine fixture.");
     }
@@ -314,9 +316,10 @@ internal static class Program
             "A native visual component outside the reviewed migration set remains on its existing body");
         verify(healingHigh.pawn == human && human.health.hediffSet.hediffs.Contains(healingHigh)
             && !animal.health.hediffSet.hediffs.Contains(healingHigh)
-            && healingHigh.TryGetComp<HediffComp_HealPermanentWounds>().Pawn == human
+            && healingHigh.TryGetComp<HediffComp_HealPermanentWounds>().parent.pawn == human
+            && healingHigh.TryGetComp<HediffComp_HealPermanentWounds>().Pawn == animal
             && (int)healingClock.GetValue(healingHigh.TryGetComp<HediffComp_HealPermanentWounds>()) == 731,
-            "Native luciferium-style healing component follows its exact moved Hediff without a cached animal or reset clock");
+            "Native healing component retains its canonical parent while resolving the active body, without resetting its clock");
         Need migratedNeed = human.needs.TryGetNeed(needDef);
         verify(migratedNeed != null && AccessTools.Field(typeof(Need), "pawn").GetValue(migratedNeed) == human
             && ReferenceEquals(((Hediff_Addiction)addiction).Need, migratedNeed)
@@ -450,7 +453,7 @@ internal static class Program
             && healingHuman.health.hediffSet.hediffs.Contains(canonicalHealing)
             && !healingAnimal.health.hediffSet.hediffs.Contains(legacyHealing),
             "Merging paired luciferium-style highs preserves the earlier pending animal heal and canonical source identity");
-        verify(canonicalHealingComp.Pawn == healingHuman && canonicalHealing.ageTicks == 0
+        verify(canonicalHealingComp.parent.pawn == healingHuman && canonicalHealingComp.Pawn == healingAnimal && canonicalHealing.ageTicks == 0
             && healingAnimal.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>().Count(h => h.source == canonicalHealing) == 1,
             "Paired healing-clock adoption creates one view without ticking, dosing or healing during initialization");
         SharedFormHealth.Initialize(healingAnimal);
@@ -498,6 +501,67 @@ internal static class Program
             FailedExpectations = failures.ToArray()
         }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         if (failures.Count != 0) throw new InvalidOperationException("FAIL: " + failures.Count + " legacy native-drug migration expectations; see legacy-drug-observed.json.");
+    }
+
+    private static void RunAdditionalNativeHealthSources()
+    {
+        Console.WriteLine("Additional scope: native alcohol subclass, UseThing serum collection, non-owning component visibility and single source clock.");
+        SetTick(3000);
+        var alcoholDef = new HediffDef { defName = "FixtureNativeAlcoholHigh", label = "fixture alcohol", hediffClass = typeof(Hediff_Alcohol),
+            initialSeverity = .5f, maxSeverity = 1f, stages = new List<HediffStage> { new HediffStage { painFactor = .5f,
+                capMods = new List<PawnCapacityModifier> { new PawnCapacityModifier { capacity = PawnCapacityDefOf.Consciousness, postFactor = .65f } } } } };
+        var serumDef = new HediffDef { defName = "FixtureUseThingSerum", label = "fixture serum", hediffClass = typeof(HediffWithComps),
+            initialSeverity = .5f, maxSeverity = 1f, stages = new List<HediffStage> { new HediffStage { painFactor = .75f } },
+            comps = new List<HediffCompProperties> { new HediffCompProperties_DisappearsDisableable { disappearsAfterTicks = new IntRange(600,600) } } };
+        var alcoholItem = new ThingDef { defName = "FixtureNativeAlcoholItem", category = ThingCategory.Item,
+            ingestible = new IngestibleProperties { drugCategory = DrugCategory.Social,
+                outcomeDoers = new List<IngestionOutcomeDoer> { new IngestionOutcomeDoer_GiveHediff { hediffDef = alcoholDef } } },
+            comps = new List<CompProperties> { new CompProperties_Drug() } };
+        var serumItem = new ThingDef { defName = "FixtureUseThingSerumItem", category = ThingCategory.Item,
+            ingestible = new IngestibleProperties { drugCategory = DrugCategory.Medical,
+                outcomeDoers = new List<IngestionOutcomeDoer> { new IngestionOutcomeDoer_UseThing() } },
+            comps = new List<CompProperties> { new CompProperties_Drug(), new CompProperties_UseEffectAddHediff { hediffDef = serumDef } } };
+        DefDatabase<HediffDef>.Add(alcoholDef); DefDatabase<HediffDef>.Add(serumDef);
+        DefDatabase<ThingDef>.Add(alcoholItem); DefDatabase<ThingDef>.Add(serumItem);
+        AccessTools.Field(typeof(SharedFormHealth), "drugDefs").SetValue(null, null);
+        Pawn human = Pawn(601, Intelligence.Humanlike), animal = Pawn(602, Intelligence.Animal);
+        Hediff alcohol = HediffMaker.MakeHediff(alcoholDef, human);
+        Hediff serum = HediffMaker.MakeHediff(serumDef, human);
+        human.health.hediffSet.hediffs.AddRange(new[] { alcohol, serum });
+        Check(SharedFormHealth.IsSupported(alcohol), "Native alcohol subclass is accepted as a recognized drug");
+        Check(SharedFormHealth.IsSupported(serum), "UseThing/AddHediff serum is collected without a GiveHediff outcome");
+        Check(Mark(animal).TryStore(human), "Expanded native drug fixture retains its exact original human");
+        SharedFormIdentity.Initialize(animal); SharedFormHealth.Initialize(animal);
+        var views = animal.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>().ToList();
+        Check(views.Count == 2 && views.Single(x => x.source == alcohol).CapMods.Single().postFactor == .65f,
+            "Alcohol view exposes native consciousness penalty instead of omitting the subclass");
+        Hediff_SharedFormDrugEffect serumView = views.Single(x => x.source == serum);
+        HediffComp_DisappearsDisableable timer = serum.TryGetComp<HediffComp_DisappearsDisableable>();
+        Check(ReferenceEquals(serumView.TryGetComp<HediffComp_DisappearsDisableable>(), timer)
+            && timer.parent == serum && serum.pawn == human,
+            "Native comp lookups expose the exact source timer while its parent and ownership remain canonical");
+        int before = timer.ticksToDisappear;
+        serumView.PostTick(); serumView.PostTickInterval(1); serumView.TickInterval(1);
+        Check(timer.ticksToDisappear == before && serum.ageTicks == 0,
+            "Disposable view cannot tick borrowed components or source age a second time");
+        SetTick(3001); SharedFormHealth.Tick(animal); SharedFormHealth.TickInterval(animal, 1);
+        Check(timer.ticksToDisappear == before - 1 && serum.ageTicks == 1 && serum.pawn == human,
+            "Expanded native serum has one advancing disappearance clock and restored canonical ownership");
+        SharedFormHealth.Tick(animal); SharedFormHealth.TickInterval(animal, 1);
+        Check(timer.ticksToDisappear == before - 1 && serum.ageTicks == 1,
+            "Duplicate calls cannot advance serum clocks again in the same game tick");
+        var bodyOnly = new Hediff { pawn=animal,def=new HediffDef{defName="FixtureBodyOnlyImplant",countsAsAddedPartOrImplant=true} };
+        animal.health.hediffSet.hediffs.Add(bodyOnly);
+        int remaining=timer.ticksToDisappear,sourceId=serum.loadID;
+        SharedFormHealth.Release(animal);
+        Check(!animal.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>().Any()
+            && animal.health.hediffSet.hediffs.Contains(bodyOnly) && human.health.hediffSet.hediffs.Contains(serum),
+            "Health release removes only disposable projections and preserves both bodies' actual owned effects");
+        Check(serum.pawn==human && serum.loadID==sourceId && timer.ticksToDisappear==remaining && timer.parent==serum,
+            "Health release cannot reset or remove the original source, component or remaining duration");
+        human.health.RemoveHediff(serum);
+        Check(!animal.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>().Any(),
+            "Removed original source cannot leave a suspended-body dangling view after release");
     }
 
     private static HediffDef BuffDef(string name, bool optIn = true)

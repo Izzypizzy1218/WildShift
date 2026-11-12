@@ -50,6 +50,9 @@ namespace WildShiftSharedStateValidation
                 && !animal.health.hediffSet.hediffs.Any(IsReplayDrug)
                 && original.needs.TryGetNeed(WakeUpNeed()) == null,
                 "legacy/full-engine seed starts without prior canonical wake-up or alcohol-tolerance state", check);
+            // Recreate a real pre-bridge save input, including its native body
+            // needs tracker, rather than injecting old state into a live view.
+            SharedFormRuntime.Release(animal);
             // These native additions are the controlled *input*. No production
             // ingestion/adoption method is patched or called to fake migration.
             high = Add(animal, "WakeUpHigh", .4f, 67);
@@ -95,11 +98,12 @@ namespace WildShiftSharedStateValidation
             CheckEffect(original, animal, addiction, addictionId, addictionAge, addictionSeverity, addictionRate, "wake-up addiction", check);
             Need_Chemical need = original.needs.TryGetNeed(WakeUpNeed()) as Need_Chemical;
             check(need != null && need.GetType() == typeof(Need_Chemical)
-                && ReferenceEquals(AccessTools.Field(typeof(Need), "pawn").GetValue(need), original)
+                && ReferenceEquals(AccessTools.Field(typeof(Need), "pawn").GetValue(need), animal)
                 && Math.Abs(need.CurLevel - SavedChemicalLevel) < .000001f
                 && original.needs.AllNeeds.Count(n => n.def == WakeUpNeed()) == 1
-                && animal.needs.TryGetNeed(WakeUpNeed()) == null,
-                "legacy/full-engine postload recreates exactly one original-owned chemical need without refilling .37");
+                && ReferenceEquals(animal.needs.TryGetNeed(WakeUpNeed()), need)
+                && (animal.needs as SharedPawnNeedsTracker)?.BodyNeeds.TryGetNeed(WakeUpNeed()) == null,
+                "legacy/full-engine postload preserves one canonical chemical need at .37 and exposes it through a non-owning active-body view");
             Hediff canonical = FindEffect(original, "LuciferiumHigh");
             check(canonical != null && canonical.GetUniqueLoadID() == canonicalLuciferiumId
                 && canonical.pawn == original && original.health.hediffSet.hediffs.Count(h => h.def == canonical.def) == 1

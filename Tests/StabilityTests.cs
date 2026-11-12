@@ -307,6 +307,9 @@ namespace WildShift
     }
     public static class SharedFormHealth { public const string ProjectionDefName="WildShift_SharedFormDrugEffect"; public static void Initialize(Pawn animal) {} public static bool IsSharedLethalDeath(Pawn animal) { return false; } }
     public static class SharedFormAbilities { public static void Initialize(Pawn animal) {} public static void Release(Pawn animal) {} }
+    // Shared tracker mechanics are checked against the native game. This
+    // storage/fault harness treats their coordinated lifecycle as a boundary.
+    public static class SharedFormRuntime { public static void Initialize(Pawn animal) {} public static void Release(Pawn animal) {} }
     public class Settings { public float deathChance, spilloverDamageFactor, enemyShapeshifterChance = .05f; public bool forceTraderShapeshifters; }
     public static class WildShiftMod { public static Settings Settings = new Settings(); }
 }

@@ -20,6 +20,13 @@ internal static class Program
         public override bool Active { get { HediffStage unused = carrier.CurStage; return true; } }
     }
 
+    private sealed class FixedCapacityWorker : PawnCapacityWorker
+    {
+        public FixedCapacityWorker() { }
+        public override float CalculateCapacityLevel(HediffSet set, List<PawnCapacityUtility.CapacityImpactor> impactors = null) { return 1f; }
+        public override bool CanHaveCapacity(BodyDef body) { return true; }
+    }
+
     // A mod's condition can inspect the current body and query another stat.
     // No game API is replaced: native StatWorker calls this native extension.
     private sealed class PositionAffecter : ConditionalStatAffecter
@@ -72,14 +79,22 @@ internal static class Program
             var harmony = new Harmony("wildshift.tests.shared-stats");
             harmony.Patch(AccessTools.PropertyGetter(typeof(Hediff), "CurStage"), postfix: new HarmonyMethod(typeof(Patch_SharedFormStatStage), "Postfix"));
             harmony.Patch(AccessTools.Method(typeof(StatWorker), "GetValue", new[] { typeof(Thing), typeof(bool), typeof(int) }), prefix: new HarmonyMethod(typeof(Patch_SharedFormStatCache), "Prefix"));
+            harmony.Patch(AccessTools.PropertyGetter(typeof(HediffSet), "PainTotal"), prefix: new HarmonyMethod(typeof(Patch_SharedFormPainCache), "Prefix"));
+            harmony.Patch(AccessTools.Method(typeof(HediffSet), "FactorForDamage", new[] { typeof(DamageInfo) }), prefix: new HarmonyMethod(typeof(Patch_SharedFormDamageCache), "Prefix"));
+            harmony.Patch(AccessTools.Method(typeof(PawnCapacitiesHandler), "GetLevel"), prefix: new HarmonyMethod(typeof(Patch_SharedAnatomyCapacityContext), "Prefix"));
         }
         TestStats();
-        if (mode != "baseline") TestConditionalStats();
+        if (mode != "baseline")
+        {
+            TestConditionalStats();
+            TestHealthGeneFields();
+            TestCapacityGeneFields();
+        }
         AccessTools.Method(typeof(Log), "DrainOffThreadMessages").Invoke(null, null);
         foreach (LogMessage message in Log.Messages)
             if (message.type == LogMessageType.Error) throw new InvalidOperationException("Native game error: " + message.text);
         Check(true, "native game log contains no errors");
-        Console.WriteLine("Scope: real 1.7 Gene.Active, Trait.Suppressed, Hediff stage and StatWorker APIs with isolated pawn subgraphs; no game launch or graphical verification.");
+        Console.WriteLine("Scope: real 1.7 Gene.Active, Trait.Suppressed, Hediff stage, StatWorker, PainTotal and typed-damage cache APIs with isolated pawn subgraphs; no game launch or graphical verification.");
     }
 
     private static Pawn MakePawn(int id, bool human)
@@ -365,6 +380,150 @@ internal static class Program
             AccessTools.Field(typeof(Thing), "mapIndexOrState").SetValue(animal, (sbyte)-1);
             AccessTools.Field(typeof(Game), "maps").SetValue(Current.Game, new List<Map>());
         }
+    }
+
+    private static void TestHealthGeneFields()
+    {
+        if (DefDatabase<PawnCapacityDef>.DefCount == 0)
+            DefDatabase<PawnCapacityDef>.Add(new PawnCapacityDef { defName = "HealthFixtureCapacity" });
+        Pawn human = MakePawn(30, true), animal = MakeHealthPawn(31), ordinary = MakeHealthPawn(32);
+        Mark(animal, human);
+        var fire = new DamageDef { defName = "SharedFireDamage", label = "fire damage" };
+        var otherDamage = new DamageDef { defName = "OtherDamage", label = "other damage" };
+        var fireInfo = new DamageInfo(fire, 10f);
+        var otherInfo = new DamageInfo(otherDamage, 10f);
+        AddHealthCondition(animal, fire);
+        AddHealthCondition(ordinary, fire);
+
+        // Prime both native caches before changing the original. Queries must
+        // observe later changes without the fixture clearing those caches.
+        Near(animal.health.hediffSet.PainTotal, .4f, "native pain baseline is cached before source genes change");
+        Near(animal.health.hediffSet.FactorForDamage(fireInfo), .8f, "native typed-damage baseline is cached before source genes change");
+        var def = new GeneDef
+        {
+            defName = "SharedHealthFields",
+            painOffset = .2f,
+            painFactor = .5f,
+            damageFactors = new List<DamageFactor> { new DamageFactor { damageDef = fire, factor = .5f } }
+        };
+        Gene source = AddGene(human, def);
+        Near(animal.health.hediffSet.PainTotal, .3f, "native PainTotal applies inherited pain offset before inherited multiplier");
+        Near(animal.health.hediffSet.FactorForDamage(fireInfo), .4f, "native FactorForDamage multiplies own and inherited damage-specific factors");
+        Near(animal.health.hediffSet.FactorForDamage(otherInfo), 1f, "damage-specific inheritance leaves another damage definition unchanged");
+        Near(ordinary.health.hediffSet.PainTotal, .4f, "ordinary animal pain has no inherited human effect");
+        Near(ordinary.health.hediffSet.FactorForDamage(fireInfo), .8f, "ordinary animal retains only its own typed-damage effect");
+
+        source.overriddenByGene = new Gene { def = new GeneDef { defName = "HealthOverride" } };
+        Near(animal.health.hediffSet.PainTotal, .4f, "same-tick suppression invalidates the native pain cache");
+        Near(animal.health.hediffSet.FactorForDamage(fireInfo), .8f, "same-tick suppression invalidates the native typed-damage cache");
+        source.overriddenByGene = null;
+        Near(animal.health.hediffSet.PainTotal, .3f, "same-tick gene reactivation restores inherited pain state");
+        Near(animal.health.hediffSet.FactorForDamage(fireInfo), .4f, "same-tick gene reactivation restores inherited typed-damage state");
+
+        Gene native = AddGene(animal, def);
+        Check(ModLister.BiotechInstalled, "native animal gene comparisons have an installed Biotech definition source");
+        Near(animal.health.hediffSet.PainTotal, .3f, "same active native animal gene supplies pain once");
+        Near(animal.health.hediffSet.FactorForDamage(fireInfo), .8f, "same active native animal gene excludes duplicate stage damage projection");
+        Near(animal.genes.FactorForDamage(fireInfo), .5f, "native animal gene supplies its own damage-specific factor");
+        Near(animal.health.hediffSet.FactorForDamage(fireInfo) * animal.genes.FactorForDamage(fireInfo), .4f,
+            "native health and gene damage consumers combine the inherited definition once");
+        native.overriddenByGene = new Gene { def = new GeneDef { defName = "NativeHealthOverride" } };
+        Near(animal.health.hediffSet.PainTotal, .3f, "inactive native animal gene allows the original pain effect");
+        Near(animal.health.hediffSet.FactorForDamage(fireInfo), .4f, "inactive native animal gene allows the original damage-specific projection");
+
+        human.genes.Endogenes.Remove(source);
+        AccessTools.Field(typeof(Pawn_GeneTracker), "cachedGenes").SetValue(human.genes, null);
+        Near(animal.health.hediffSet.PainTotal, .4f, "removing the original gene clears inherited pain in the same tick");
+        Near(animal.health.hediffSet.FactorForDamage(fireInfo), .8f, "removing the original gene clears inherited typed damage in the same tick");
+        AddGene(human, def);
+        Near(animal.health.hediffSet.PainTotal, .3f, "replacement original gene refreshes the cached pain source");
+        AccessTools.Field(typeof(ModsConfig), "biotechActive").SetValue(null, false);
+        Near(animal.health.hediffSet.PainTotal, .4f, "Biotech deactivation removes inherited gene pain fields");
+        Near(animal.health.hediffSet.FactorForDamage(fireInfo), .8f, "Biotech deactivation removes inherited gene damage fields");
+        AccessTools.Field(typeof(ModsConfig), "biotechActive").SetValue(null, true);
+
+        human.genes.Endogenes.Clear();
+        AccessTools.Field(typeof(Pawn_GeneTracker), "cachedGenes").SetValue(human.genes, null);
+        var traitDef = new TraitDef
+        {
+            defName = "SharedPainTrait",
+            degreeDatas = new List<TraitDegreeData>
+            {
+                new TraitDegreeData { degree = 0, label = "pain trait", painOffset = .2f, painFactor = .5f }
+            }
+        };
+        var trait = new Trait(traitDef) { pawn = human };
+        human.story.traits.allTraits.Add(trait);
+        Near(animal.health.hediffSet.PainTotal, .3f, "native PainTotal includes original trait pain fields");
+        trait.suppressedByTrait = true;
+        Near(animal.health.hediffSet.PainTotal, .3f, "trait pain follows native suppression semantics");
+        animal.story = Bare<Pawn_StoryTracker>();
+        animal.story.traits = new TraitSet(animal);
+        animal.story.traits.allTraits.Add(new Trait(traitDef) { pawn = animal });
+        Near(animal.health.hediffSet.PainTotal, .3f, "same native animal trait supplies pain once");
+        human.story.traits.allTraits.Clear();
+        Near(animal.health.hediffSet.PainTotal, .3f, "removing original trait preserves matching native animal pain");
+        animal.story.traits.allTraits.Clear();
+        Near(animal.health.hediffSet.PainTotal, .4f, "removing the final native pain trait refreshes the native cache");
+
+        AddGene(ordinary, def);
+        ordinary.health.hediffSet.DirtyCache();
+        Near(ordinary.health.hediffSet.PainTotal, .3f, "ordinary animal retains native pain-gene behavior");
+        Near(ordinary.health.hediffSet.FactorForDamage(fireInfo) * ordinary.genes.FactorForDamage(fireInfo), .4f,
+            "ordinary animal retains native typed-damage behavior");
+    }
+
+    private static void TestCapacityGeneFields()
+    {
+        var capacity = new PawnCapacityDef { defName = "SharedNativeCapacity", workerClass = typeof(FixedCapacityWorker), minValue = 0f };
+        DefDatabase<PawnCapacityDef>.Add(capacity);
+        Pawn human = MakeHealthPawn(180), animal = MakeHealthPawn(181), ordinary = MakeHealthPawn(182);
+        human.def.race.intelligence = Intelligence.Humanlike;
+        human.story = Bare<Pawn_StoryTracker>(); human.story.traits = new TraitSet(human);
+        HediffWithComps carrier = Mark(animal, human);
+        var modifier = new PawnCapacityModifier { capacity = capacity, offset = .1f, postFactor = 1.5f, setMax = 2f };
+        Gene source = AddGene(human, new GeneDef { defName = "SharedCapacityGene", capMods = new List<PawnCapacityModifier> { modifier } });
+        Near(animal.health.capacities.GetLevel(capacity), 1.65f, "native capacity applies inherited offset and postfactor");
+        Check(!ReferenceEquals(carrier.CurStage.capMods[0], modifier), "capacity view does not mutate canonical GeneDef modifiers");
+        source.overriddenByGene = new Gene { def = new GeneDef { defName = "SharedCapacityOverride" } };
+        Near(animal.health.capacities.GetLevel(capacity), 1f, "same-tick gene suppression invalidates native capacity cache");
+        source.overriddenByGene = null;
+        Near(animal.health.capacities.GetLevel(capacity), 1.65f, "same-tick gene reactivation restores native capacity");
+        Near(ordinary.health.capacities.GetLevel(capacity), 1f, "ordinary animal capacity is unchanged");
+    }
+
+    private static Pawn MakeHealthPawn(int id)
+    {
+        Pawn pawn = MakePawn(id, false);
+        pawn.def.race.body = new BodyDef
+        {
+            defName = "HealthBody" + id,
+            corePart = new BodyPartRecord { def = new BodyPartDef { defName = "HealthCore", hitPoints = 20 } }
+        };
+        pawn.health.capacities = new PawnCapacitiesHandler(pawn);
+        pawn.health.summaryHealth = new SummaryHealthHandler(pawn);
+        return pawn;
+    }
+
+    private static void AddHealthCondition(Pawn pawn, DamageDef fire)
+    {
+        pawn.health.hediffSet.hediffs.Add(new Hediff
+        {
+            pawn = pawn,
+            def = new HediffDef
+            {
+                defName = "NativeHealthCondition" + pawn.thingIDNumber,
+                label = "health condition",
+                stages = new List<HediffStage>
+                {
+                    new HediffStage
+                    {
+                        painOffset = .4f,
+                        damageFactors = new List<DamageFactor> { new DamageFactor { damageDef = fire, factor = .8f } }
+                    }
+                }
+            }
+        });
     }
 
     private static T Bare<T>() where T : class { return (T)RuntimeHelpers.GetUninitializedObject(typeof(T)); }

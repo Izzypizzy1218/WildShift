@@ -22,10 +22,12 @@ namespace WildShift
         {
             // Sapient Animals can turn the active beast into a humanlike race
             // while migrating this same transformed comp and its real owner.
-            if (animal == null || animal.Destroyed || animal.Dead || animal.RaceProps == null) return null;
+            // Native Scribe constructs story/trait views before loading the
+            // Pawn's health tracker. Such a partial Pawn has no active binding.
+            if (animal == null || animal.Destroyed || animal.health == null || animal.Dead || animal.RaceProps == null) return null;
             HediffComp_Transformed comp = TransformUtility.TryGetTransformedComp(animal);
             Pawn human = comp != null ? comp.StoredPawn : null;
-            return human != null && human != animal && !human.Destroyed && !human.Dead
+            return human != null && human != animal && !human.Destroyed && human.health != null && !human.Dead
                 && human.RaceProps != null && human.RaceProps.Humanlike
                 && human.holdingOwner == comp.GetDirectlyHeldThings() ? human : null;
         }
@@ -59,6 +61,7 @@ namespace WildShift
 
         public static void TickMemories(Pawn animal, int delta)
         {
+            if (SharedFormBiology.SharesPersonalClock(animal)) return;
             Pawn human = HumanFor(animal);
             if (human == null || Find.TickManager == null || human.needs == null
                 || human.needs.mood == null || !human.IsHashIntervalTick(150, delta)) return;

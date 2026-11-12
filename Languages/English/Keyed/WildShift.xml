@@ -71,4 +71,7 @@
   <WildShift_ShiftCachedKindMismatch>The preserved animal form does not match the assigned species. Transformation was cancelled without discarding it.</WildShift_ShiftCachedKindMismatch>
   <WildShift_ReturnFormStorageBlocked>The preserved animal form storage is already occupied. Return was cancelled without discarding either body.</WildShift_ReturnFormStorageBlocked>
   <WildShift_ShiftCachedFormUnavailable>The preserved animal form could not be prepared safely. Its body and modifications have been preserved.</WildShift_ShiftCachedFormUnavailable>
+  <WildShift_Meditate>Meditate</WildShift_Meditate>
+  <WildShift_MeditateDesc>Meditate to restore psyfocus, using a suitable meditation focus near the current position.</WildShift_MeditateDesc>
+  <WildShift_MeditationUnavailable>Cannot meditate here or in the current condition.</WildShift_MeditationUnavailable>
 </LanguageData>

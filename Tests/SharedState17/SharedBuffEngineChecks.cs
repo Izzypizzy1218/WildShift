@@ -18,6 +18,7 @@ namespace WildShiftSharedStateValidation
             if (map == null || check == null) throw new ArgumentNullException();
             BrainBoundOfficialEffects(map, check);
             NativeFoodFinalization(map, check);
+            NativeInvisibilityAndCommands(map, check);
         }
 
         private static void BrainBoundOfficialEffects(Map map, Action<bool, string> check)
@@ -60,8 +61,10 @@ namespace WildShiftSharedStateValidation
             check(implant.pawn == human && implant.Part == arm
                     && human.health.hediffSet.hediffs.Contains(implant)
                     && !animal.health.hediffSet.hediffs.Any(h => h.def == implantDef)
-                    && !SharedFormHealth.IsSupported(implant),
-                "buff/explicit brain exception does not copy or share the original bionic implant");
+                    && SharedFormHealth.IsSupported(implant)
+                    && animal.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>()
+                        .Count(p => ReferenceEquals(p.source, implant)) == 1,
+                "buff/human bionic implant stays attached to its owner while one systemic effect view is shared");
 
             // Invoke the native effect component directly to inspect active-
             // body part mapping. This is not a claim that the vanilla ability's
@@ -149,9 +152,11 @@ namespace WildShiftSharedStateValidation
             }
             check(meal.Destroyed && Mathf.Abs(animal.needs.food.CurLevel - expected) < 0.00001f,
                 "buff/native final ingest consumes the food and grants nutrition to the active animal");
-            check(Mathf.Approximately(human.needs.food.CurLevel, originalBefore)
+            check((SharedFormBiology.SharesNeeds(animal)
+                        ? ReferenceEquals(human.needs.food, animal.needs.food) && Mathf.Abs(human.needs.food.CurLevel - expected) < .00001f
+                        : Mathf.Approximately(human.needs.food.CurLevel, originalBefore))
                     && Mathf.Abs(animal.records.GetValue(RecordDefOf.NutritionEaten) - recordBefore - nutrition) < 0.00001f,
-                "buff/food routing leaves preserved-human hunger unchanged and keeps the native eater record");
+                "buff/food uses the one canonical shared hunger state when enabled and keeps the native eater record");
             Hediff source = human.health.hediffSet.GetFirstHediffOfDef(buffDef);
             Require(source != null && source.pawn == human && source.Part == null,
                 "buff/full native food ingestion stores its effect on the original human", check);
@@ -175,6 +180,43 @@ namespace WildShiftSharedStateValidation
                 "buff/repeated food-form returns preserve the same canonical source and timer");
             Require(TransformUtility.RevertToHuman(reused, false) == human,
                 "buff/food probe leaves its original alive on the map", check);
+        }
+
+        private static void NativeInvisibilityAndCommands(Map map, Action<bool,string> check)
+        {
+            Pawn caster = NewHuman(map, "ExpandedCommandCaster", -20);
+            Pawn recipient = NewHuman(map, "ExpandedCommandRecipient", -23);
+            Pawn casterBody = Transform(map, caster), recipientBody = Transform(map, recipient);
+            ApplyNativeEffect(caster, "Invisibility", recipientBody);
+            Hediff invisible = recipient.health.hediffSet.GetFirstHediffOfDef(DefDatabase<HediffDef>.GetNamed("PsychicInvisibility"));
+            Require(invisible != null && invisible.pawn == recipient,
+                "buff/native invisibility effect on animal has one canonical original source", check);
+            HediffComp_Invisibility comp = invisible.TryGetComp<HediffComp_Invisibility>();
+            Hediff_SharedFormDrugEffect view = recipientBody.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>()
+                .Single(p => ReferenceEquals(p.source, invisible));
+            check(comp != null && ReferenceEquals(view.TryGetComp<HediffComp_Invisibility>(), comp)
+                && comp.Pawn == recipientBody && !comp.PsychologicallyVisible,
+                "buff/native invisibility component uses active animal and actual invisibility state");
+            ApplyNativeEffect(caster, "CombatCommand", casterBody);
+            for (int tick = 0; tick < 20 && !recipient.health.hediffSet.HasHediff(DefDatabase<HediffDef>.GetNamed("CombatCommandBuff")); tick++)
+                Find.TickManager.DoSingleTick();
+            HediffDef buffDef = DefDatabase<HediffDef>.GetNamed("CombatCommandBuff");
+            Hediff buff = recipient.health.hediffSet.GetFirstHediffOfDef(buffDef);
+            Require(buff != null && buff.pawn == recipient,
+                "buff/native command aura reaches transformed human recipient", check);
+            HediffComp_Link link = buff.TryGetComp<HediffComp_Link>();
+            check(link != null && link.other == caster && !link.CompShouldRemove
+                && recipientBody.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>().Count(p => ReferenceEquals(p.source,buff)) == 1,
+                "buff/command source link retains canonical identity and one active-body view");
+            IntVec3 far = map.Center + new IntVec3(24,0,0);
+            casterBody.Position = far.InBounds(map) && far.Standable(map) ? far : CellFinder.RandomClosewalkCellNear(far,map,3);
+            for (int tick=0;tick<60 && recipient.health.hediffSet.HasHediff(buffDef);tick++) Find.TickManager.DoSingleTick();
+            check(!recipient.health.hediffSet.HasHediff(buffDef)
+                && !recipientBody.health.hediffSet.hediffs.OfType<Hediff_SharedFormDrugEffect>().Any(p => p.source == buff),
+                "buff/moving actual command source out of range removes canonical recipient buff and view");
+            Require(TransformUtility.RevertToHuman(casterBody,false)==caster
+                && TransformUtility.RevertToHuman(recipientBody,false)==recipient,
+                "buff/invisibility and command probes return both exact humans",check);
         }
 
         private static void ApplyNativeEffect(Pawn caster, string name, Pawn target)

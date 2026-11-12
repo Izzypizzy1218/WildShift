@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using HarmonyLib;
 using RimWorld;
+using RimWorld.Planet;
 using Verse;
 using Verse.AI;
 
@@ -24,14 +25,6 @@ namespace WildShift
         private static readonly ConditionalWeakTable<Ability, Binding> bindings = new ConditionalWeakTable<Ability, Binding>();
         private static readonly ConditionalWeakTable<Pawn, ResourceClock> resourceClocks = new ConditionalWeakTable<Pawn, ResourceClock>();
         private static readonly FieldInfo cachedGizmo = AccessTools.Field(typeof(Ability), "gizmo");
-        private static readonly HashSet<Type> supportedComps = new HashSet<Type>
-        {
-            typeof(CompAbilityEffect_FireSpew), typeof(CompAbilityEffect_SprayLiquid),
-            typeof(CompAbilityEffect_HemogenCost), typeof(CompAbilityEffect_BloodfeederBite),
-            typeof(CompAbilityEffect_Coagulate), typeof(CompAbilityEffect_FleckOnTarget),
-            typeof(CompAbility_RequiresCapacity), typeof(CompAbilityEffect_LaunchProjectile),
-            typeof(CompAbilityEffect_GiveMentalState), typeof(CompAbilityEffect_Resurrect)
-        };
 
         internal static int Now { get { return Find.TickManager != null ? Find.TickManager.TicksGame : 0; } }
 
@@ -61,18 +54,16 @@ namespace WildShift
 
         public static bool IsSupported(Ability ability)
         {
-            if (ability == null || ability.GetType() != typeof(Ability) || ability.def == null) return false;
+            if (ability == null || ability.def == null || ability.GetType().Assembly != typeof(Ability).Assembly) return false;
             AbilityDef def = ability.def;
-            if (def.targetWorldCell || def.hasExternallyHandledCooldown
-                || (def.gizmoClass != null && def.gizmoClass != typeof(Command_Ability))) return false;
+            if (def.gizmoClass != null && def.gizmoClass.Assembly != typeof(Command_Ability).Assembly) return false;
             Type verb = def.verbProperties != null ? def.verbProperties.verbClass : null;
-            if (verb != typeof(Verb_CastAbility) && verb != typeof(Verb_CastAbilityTouch)
-                && verb != typeof(Verb_CastAbilityJump)) return false;
+            if (verb == null || !typeof(Verb).IsAssignableFrom(verb) || verb.Assembly != typeof(Ability).Assembly) return false;
             // A failed or newly injected custom comp must not bypass the gate.
             int actual = ability.comps != null ? ability.comps.Count : 0;
             if (actual != (def.comps != null ? def.comps.Count : 0)) return false;
             for (int i = 0; i < actual; i++)
-                if (ability.comps[i] == null || !supportedComps.Contains(ability.comps[i].GetType())) return false;
+                if (ability.comps[i] == null || ability.comps[i].GetType().Assembly != typeof(Ability).Assembly) return false;
             return true;
         }
 
@@ -142,11 +133,20 @@ namespace WildShift
 
         internal static bool HasActiveSource(Ability ability, Pawn human)
         {
-            if (human == null || human.genes == null || human.abilities == null || !human.abilities.abilities.Contains(ability)) return false;
+            if (human?.abilities == null || !human.abilities.AllAbilitiesForReading.Contains(ability)) return false;
+            // Temporary role, implant and apparel abilities remain owned by
+            // their original native provider. Only gene-owned permanent entries
+            // need the additional suppression check used by the old bridge.
+            if (!human.abilities.abilities.Contains(ability) || human.genes == null) return true;
             List<Gene> genes = human.genes.GenesListForReading;
+            bool geneGranted = false;
             for (int i = 0; i < genes.Count; i++)
-                if (genes[i].def.abilities != null && genes[i].def.abilities.Contains(ability.def) && genes[i].Active) return true;
-            return false;
+            {
+                if (genes[i].def.abilities == null || !genes[i].def.abilities.Contains(ability.def)) continue;
+                geneGranted = true;
+                if (genes[i].Active) return true;
+            }
+            return !geneGranted;
         }
 
         internal static bool MeetsHumanViolenceRequirement(Ability ability, Pawn human)
@@ -245,25 +245,19 @@ namespace WildShift
                 Pawn human = SharedFormIdentity.HumanFor(activeBody);
                 next.Clear();
                 sourceDefs.Clear();
-                if (human != null && human.genes != null && human.abilities != null)
+                if (human != null && human.abilities != null)
                 {
-                    List<Gene> genes = human.genes.GenesListForReading;
-                    for (int i = 0; i < genes.Count; i++)
+                    List<Ability> sources = human.abilities.AllAbilitiesForReading;
+                    for (int i = 0; i < sources.Count; i++)
                     {
-                        Gene gene = genes[i];
-                        if (!gene.Active || gene.def.abilities == null) continue;
-                        for (int j = 0; j < gene.def.abilities.Count; j++)
-                        {
-                            AbilityDef def = gene.def.abilities[j];
-                            if (sourceDefs.Contains(def)) continue;
-                            Ability ability = FirstWithDef(human.abilities.abilities, def);
-                            if (!SharedFormAbilities.IsSupported(ability)) continue;
-                            bool needsHemogen = ability.CompOfType<CompAbilityEffect_HemogenCost>() != null
-                                || ability.CompOfType<CompAbilityEffect_BloodfeederBite>() != null;
-                            if (needsHemogen && SharedFormAbilities.HemogenFor(human) == null) continue;
-                            sourceDefs.Add(def);
-                            next.Add(ability);
-                        }
+                        Ability ability = sources[i];
+                        if (ability?.def == null || sourceDefs.Contains(ability.def)
+                            || !SharedFormAbilities.IsSupported(ability) || !SharedFormAbilities.HasActiveSource(ability,human)) continue;
+                        bool needsHemogen = ability.CompOfType<CompAbilityEffect_HemogenCost>() != null
+                            || ability.CompOfType<CompAbilityEffect_BloodfeederBite>() != null;
+                        if (needsHemogen && SharedFormAbilities.HemogenFor(human) == null) continue;
+                        sourceDefs.Add(ability.def);
+                        next.Add(ability);
                     }
                 }
                 for (int i = 0; i < borrowed.Count; i++)
@@ -435,6 +429,30 @@ namespace WildShift
                 && (__instance.HemogenCost() <= 0f || (gene != null && gene.Value >= __instance.HemogenCost()))) return true;
             __result = false;
             return false;
+        }
+    }
+
+    // Psycast overrides spend focus before invoking Ability.Activate. Validate
+    // the canonical provider before any derived native implementation can spend
+    // resources, including world-targeted casts such as farskip.
+    [HarmonyPatch]
+    public static class Patch_SharedAbilityDerivedCastSource
+    {
+        public static IEnumerable<MethodBase> TargetMethods()
+        {
+            foreach (Type type in typeof(Ability).Assembly.GetTypes())
+            {
+                if (type == typeof(Ability) || !typeof(Ability).IsAssignableFrom(type)) continue;
+                foreach (MethodInfo method in type.GetMethods(BindingFlags.Instance|BindingFlags.Public|BindingFlags.DeclaredOnly))
+                    if (method.Name == "Activate" && method.ReturnType == typeof(bool)) yield return method;
+            }
+            MethodInfo world = AccessTools.Method(typeof(Ability),"Activate",new[]{typeof(GlobalTargetInfo)});
+            if (world != null) yield return world;
+        }
+
+        public static bool Prefix(Ability __instance,ref bool __result)
+        {
+            return Patch_SharedAbilityCastSource.Prefix(__instance,ref __result);
         }
     }
 

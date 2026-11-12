@@ -57,8 +57,9 @@ namespace WildShift
             if (!changed) return;
             animal.health.hediffSet.DirtyCache();
             human.health.hediffSet.DirtyCache();
-            RefreshNeedFields(animal.needs);
+            RefreshNeedFields(PhysicalNeeds(animal));
             RefreshNeedFields(human.needs);
+            (animal.needs as SharedPawnNeedsTracker)?.Bind();
         }
 
         private static bool CanAdopt(Hediff effect)
@@ -118,13 +119,14 @@ namespace WildShift
         {
             NeedDef def = effect.def.chemicalNeed;
             if (def == null) return true;
-            if (def.needClass != typeof(Need_Chemical) || animal.needs == null || human.needs == null) return false;
+            Pawn_NeedsTracker animalNeeds = PhysicalNeeds(animal);
+            if (def.needClass != typeof(Need_Chemical) || animalNeeds == null || human.needs == null) return false;
             // Do not steal a need still used by an unsupported custom effect.
             foreach (Hediff other in animal.health.hediffSet.hediffs)
                 if (other?.def?.chemicalNeed == def && !CanAdopt(other)) return false;
             foreach (Hediff other in human.health.hediffSet.hediffs)
                 if (other?.def?.chemicalNeed == def && !CanAdopt(other)) return false;
-            Need old = animal.needs.TryGetNeed(def);
+            Need old = animalNeeds.TryGetNeed(def);
             Need existing = human.needs.TryGetNeed(def);
             if ((old != null && (old.GetType() != typeof(Need_Chemical) || !Finite(old.CurLevel)))
                 || (existing != null && (existing.GetType() != typeof(Need_Chemical) || !Finite(existing.CurLevel)))) return false;
@@ -142,8 +144,13 @@ namespace WildShift
                 human.needs.AllNeeds.Add(existing);
             }
             else needLevel(existing) = Math.Min(existing.CurLevel, old.CurLevel);
-            animal.needs.AllNeeds.Remove(old);
+            animalNeeds.AllNeeds.Remove(old);
             return true;
+        }
+
+        private static Pawn_NeedsTracker PhysicalNeeds(Pawn animal)
+        {
+            return (animal?.needs as SharedPawnNeedsTracker)?.BodyNeeds ?? animal?.needs;
         }
 
         private static void RefreshNeedFields(Pawn_NeedsTracker tracker)

@@ -54,7 +54,9 @@ internal static class Program
         WildShiftDefOf.WildShift_Transformed = new HediffDef { defName = "WildShift_Transformed", label = "transformed" };
         var harmony = new Harmony("wildshift.tests.shared-abilities");
         foreach (Type type in typeof(SharedFormAbilities).Assembly.GetTypes())
-            if (type.Name.StartsWith("Patch_SharedAbility", StringComparison.Ordinal) || type.Name.StartsWith("Patch_SharedHemogen", StringComparison.Ordinal))
+            if (type.Name.StartsWith("Patch_SharedAbility", StringComparison.Ordinal) || type.Name.StartsWith("Patch_SharedHemogen", StringComparison.Ordinal)
+                || type.Name=="Patch_SharedSystemSaveOwnership" || type.Name=="Patch_SharedPsychicSingleInterval" || type.Name=="Patch_SharedInspirationSingleInterval"
+                || type.Name=="Patch_SharedPsylinkSource")
                 harmony.CreateClassProcessor(type).Patch();
         Console.WriteLine("Tested shared-ability assembly: " + typeof(SharedFormAbilities).Assembly.Location);
         Console.WriteLine("Production SHA256: " + BitConverter.ToString(System.Security.Cryptography.SHA256.HashData(
@@ -109,8 +111,9 @@ internal static class Program
         Check(!SharedFormAbilities.IsSupported(unknown) && !animal.abilities.AllAbilitiesForReading.Contains(unknown), "Unreviewed custom resource callbacks are gated");
         Ability world = AddAbility(human, MakeDef("WorldOnly", typeof(Verb_CastAbility)));
         world.def.targetWorldCell = true;
-        Check(!SharedFormAbilities.IsSupported(world), "World-targeting ability is outside local active-body casting scope");
-        Check(!SharedFormAbilities.IsSupported(new Psycast(human, MakeDef("Psycast", typeof(Verb_CastAbility)))), "Royalty psychic resources are not silently borrowed");
+        Check(SharedFormAbilities.IsSupported(world), "Native world-targeted abilities retain their original source object");
+        Check(SharedFormAbilities.IsSupported(new Psycast(human, MakeDef("Psycast", typeof(Verb_CastAbility)))), "Native Royalty psycasts qualify for the canonical psychic resource bridge");
+        TestNonGeneAndSystemState(human,animal,scratch);
 
         TestHumanViolence(human, animal);
         TestHemogen(human, animal);
@@ -130,6 +133,84 @@ internal static class Program
         SharedFormAbilities.Release(newAnimal);
         Check(fire.pawn == human, "Swapped body returns original ability to canonical human");
         Console.WriteLine("Scope: actual 1.7 Ability/Verb/Job/Gene/ThingOwner/Scribe APIs; isolated pawn graphs, no game launch or graphical claim.");
+    }
+
+    private static void TestNonGeneAndSystemState(Pawn human,Pawn animal,string scratch)
+    {
+        Ability permanent=AddAbility(human,MakeDef("PermanentNonGene",typeof(Verb_CastAbility)));
+        AbilityDef psychicDef=MakeDef("CanonicalPsycast",typeof(Verb_CastAbility));
+        var psycast=new Psycast(human,psychicDef);
+        human.abilities.abilities.Add(psycast);human.abilities.Notify_TemporaryAbilitiesChanged();
+        SharedFormAbilities.Initialize(animal);
+        Check(animal.abilities.AllAbilitiesForReading.Contains(permanent),"Permanent non-gene ability is borrowed from original provider");
+        Check(animal.abilities.AllAbilitiesForReading.Contains(psycast)&&psycast.pawn==animal,"Exact native Psycast object is borrowed with the active caster");
+        human.abilities.abilities.Remove(permanent);human.abilities.Notify_TemporaryAbilitiesChanged();
+        Check(!animal.abilities.AllAbilitiesForReading.Contains(permanent)&&permanent.pawn==human,"Removing non-gene provider revokes source ability within the same tick");
+
+        human.mindState=Bare<Pawn_MindState>();animal.mindState=Bare<Pawn_MindState>();
+        human.mindState.inspirationHandler=new InspirationHandler(human);
+        animal.mindState.inspirationHandler=new InspirationHandler(animal);
+        human.mindState.mentalBreaker=new MentalBreaker(human);animal.mindState.mentalBreaker=new MentalBreaker(animal);
+        human.mindState.mentalStateHandler=new MentalStateHandler(human);animal.mindState.mentalStateHandler=new MentalStateHandler(animal);
+        MentalBreaker nativeBreaker=animal.mindState.mentalBreaker;
+        MentalStateHandler nativeMental=animal.mindState.mentalStateHandler;
+        var mentalState=new MentalState{pawn=human,def=new MentalStateDef{defName="SourceMentalState"}};
+        AccessTools.Field(typeof(MentalStateHandler),"curStateInt").SetValue(human.mindState.mentalStateHandler,mentalState);
+        var inspiration=new Inspiration{pawn=human,def=new InspirationDef{defName="SourceInspiration",baseDurationDays=5f}};
+        AccessTools.Field(typeof(InspirationHandler),"curState").SetValue(human.mindState.inspirationHandler,inspiration);
+        InspirationHandler nativeHandler=animal.mindState.inspirationHandler;
+        human.psychicEntropy=new Pawn_PsychicEntropyTracker(human);
+        animal.psychicEntropy=new Pawn_PsychicEntropyTracker(animal);
+        var sourcePsylink=new Hediff_Psylink{pawn=human,def=new HediffDef{defName="FixturePsylink"},level=4};
+        human.health.hediffSet.hediffs.Add(sourcePsylink);
+        human.psychicEntropy.RechargePsyfocus();human.psychicEntropy.OffsetPsyfocusDirectly(-.25f);
+        animal.psychicEntropy.RechargePsyfocus();animal.psychicEntropy.OffsetPsyfocusDirectly(-.75f);
+        Pawn_PsychicEntropyTracker nativePsychic=animal.psychicEntropy;
+        human.mechanitor=new Pawn_MechanitorTracker(human);
+        SharedFormSystems.Initialize(animal);
+        Check(ReferenceEquals(animal.psychicEntropy,human.psychicEntropy)&&animal.psychicEntropy.Pawn==animal,"Active psychic interface uses one canonical native resource tracker");
+        Check(animal.GetPsylinkLevel()==4&&human.GetPsylinkLevel()==4&&!animal.health.hediffSet.hediffs.OfType<Hediff_Psylink>().Any(),
+            "Native typed psylink level lookup follows the source without copying implant Hediffs");
+        Check(ReferenceEquals(animal.mechanitor,human.mechanitor)&&animal.mechanitor.Pawn==human,"Mechanitor state preserves the human's permanent overseer identity");
+        Check(ReferenceEquals(animal.mindState.inspirationHandler,human.mindState.inspirationHandler)&&inspiration.pawn==animal,"Native inspiration handler and object are borrowed without making a second duration");
+        Check(ReferenceEquals(animal.mindState.mentalBreaker,human.mindState.mentalBreaker)
+            &&ReferenceEquals(animal.mindState.mentalStateHandler,human.mindState.mentalStateHandler)&&mentalState.pawn==animal,"Active body borrows one original mental controller and current mental state");
+        animal.psychicEntropy.OffsetPsyfocusDirectly(-.10f);
+        Check(Close(human.psychicEntropy.CurrentPsyfocus,.65f),"Active animal psychic spending updates the original pool exactly");
+        SetTick(1003);
+        animal.mindState.inspirationHandler.InspirationHandlerTickInterval(150);
+        human.mindState.inspirationHandler.InspirationHandlerTickInterval(150);
+        Check(inspiration.Age==150,"Two tracker interfaces cannot advance the same inspiration twice in one game tick");
+        Check(SharedFormSystems.CanTickPsychic(animal.psychicEntropy)&&!SharedFormSystems.CanTickPsychic(human.psychicEntropy),"Psychic interval guard permits only one canonical native interval per game tick");
+        Check(SharedFormSystems.CanTickMentalBreaker(animal.mindState.mentalBreaker)&&!SharedFormSystems.CanTickMentalBreaker(human.mindState.mentalBreaker)
+            &&SharedFormSystems.CanTickMentalState(animal.mindState.mentalStateHandler)&&!SharedFormSystems.CanTickMentalState(human.mindState.mentalStateHandler),"Both mental-state clocks advance only once through source and body interfaces");
+
+        string save=Path.Combine(scratch,"shared-system-save.xml");
+        Scribe.saver.InitSaving(save,"sharedSystems");
+        var bodyScope=SharedFormSystems.BeginSave(animal);
+        Check(ReferenceEquals(animal.psychicEntropy,nativePsychic)&&ReferenceEquals(animal.mindState.inspirationHandler,nativeHandler),"Body save exposes only native animal trackers");
+        Check(ReferenceEquals(animal.mindState.mentalBreaker,nativeBreaker)&&ReferenceEquals(animal.mindState.mentalStateHandler,nativeMental),"Body save excludes both canonical mental trackers from duplicate deep ownership");
+        var humanScope=SharedFormSystems.BeginSave(human);
+        Check(human.psychicEntropy.Pawn==human&&inspiration.pawn==human,"Deep source save restores the source-owned pawn references");
+        Check(mentalState.pawn==human,"Deep source save restores current mental-state owner before serialization");
+        Scribe_Deep.Look(ref human.psychicEntropy,"humanPsychic",human);
+        SharedFormSystems.EndSave(humanScope);
+        Check(ReferenceEquals(animal.psychicEntropy,nativePsychic),"Nested human save cannot rebind before outer body tracker fields are serialized");
+        Scribe_Deep.Look(ref animal.psychicEntropy,"bodyPsychic",animal);
+        SharedFormSystems.EndSave(bodyScope);
+        Scribe.saver.FinalizeSaving();
+        string xml=File.ReadAllText(save);
+        var document=new System.Xml.XmlDocument();document.LoadXml(xml);
+        var levels=document.SelectNodes("//currentPsyfocus");
+        Check(levels.Count==2&&Close(float.Parse(document.SelectSingleNode("/sharedSystems/humanPsychic/currentPsyfocus").InnerText,System.Globalization.CultureInfo.InvariantCulture),.65f)
+            &&Close(float.Parse(document.SelectSingleNode("/sharedSystems/bodyPsychic/currentPsyfocus").InnerText,System.Globalization.CultureInfo.InvariantCulture),.25f),"Native Scribe retains distinct original and animal psychic state exactly once");
+        Check(ReferenceEquals(animal.psychicEntropy,human.psychicEntropy)&&human.psychicEntropy.Pawn==animal,"Completed source/body save restores the active borrowed psychic interface");
+        SharedFormSystems.Release(animal);
+        Check(ReferenceEquals(animal.psychicEntropy,nativePsychic)&&human.psychicEntropy.Pawn==human,"Return restores animal-native tracker and original psychic owner");
+        Check(ReferenceEquals(animal.mindState.inspirationHandler,nativeHandler)&&inspiration.pawn==human,"Return restores separate inspiration handlers without resetting source duration");
+        Check(ReferenceEquals(animal.mindState.mentalBreaker,nativeBreaker)&&ReferenceEquals(animal.mindState.mentalStateHandler,nativeMental)
+            &&human.MentalState==mentalState&&mentalState.pawn==human,"Return preserves the original active mental state rather than escaping it");
+        human.mindState.mentalStateHandler.Reset();
     }
 
     private static void TestHumanViolence(Pawn human, Pawn animal)

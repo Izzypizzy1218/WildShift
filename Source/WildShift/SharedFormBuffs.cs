@@ -12,6 +12,23 @@ namespace WildShift
 
     public static class SharedFormBuffs
     {
+        // These are actual vanilla personal states, not generated animal
+        // diseases or arbitrary mod state machines. Their original instances
+        // remain the only owner of timers, links and component state.
+        private static readonly HashSet<string> nativeStates = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "NeuralSupercharge", "Hangover", "AlcoholHigh", "BrainShock",
+            "BerserkTrance", "ImmunityDrive", "WorkFocus", "PsychicFocus",
+            "Voidsight", "Metalblood", "JuggernautSerum", "MindNumbSerum",
+            "PsychicInvisibility", "HoraxianInvisibility", "PsychicLove", "PsychicTrance",
+            "Psychophage", "Regeneration", "RageSpeed", "SleepSuppression", "VoidTouched",
+            "CombatCommand", "CombatCommandBuff", "FarmingCommand", "FarmingCommandBuff",
+            "MarksmanCommand", "MarksmanCommandBuff", "MiningCommand", "MiningCommandBuff",
+            "ProductionCommand", "ProductionCommandBuff", "ResearchCommand", "ResearchCommandBuff",
+            "EntropyLink", "Deathrest", "PsychicBond", "PsychicBondTorn", "PollutionStimulus",
+            "GlucosoidRush", "PsychofluidRush", "HemogenAmplified", "DeathRefusal", "DeathRefusalCreepJoiner",
+            "CubeInterest", "CubeWithdrawal", "CubeRage", "FrenzyField"
+        };
         private static readonly Dictionary<string, string> reviewed = new Dictionary<string, string>
         {
             { "Kiiro_AteCatmint", "ancot.kiirorace" },
@@ -25,8 +42,36 @@ namespace WildShift
         private static readonly AccessTools.FieldRef<Hediff, float> savedSeverity
             = AccessTools.FieldRefAccess<Hediff, float>("severityInt");
 
+        public static bool IsNativeDefinition(HediffDef def)
+        {
+            return def?.modContentPack != null && def.hediffClass != null
+                && def.hediffClass.Assembly == typeof(Hediff).Assembly
+                && def.modContentPack.PackageIdPlayerFacing.StartsWith("ludeon.", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static bool IsSystemicImplant(HediffDef def)
+        {
+            return IsNativeDefinition(def) && (def.countsAsAddedPartOrImplant
+                || typeof(Hediff_Implant).IsAssignableFrom(def.hediffClass)
+                || typeof(Hediff_AddedPart).IsAssignableFrom(def.hediffClass));
+        }
+
+        public static bool CanonicalizeAddition(Hediff effect)
+        {
+            // A prosthesis installed on the animal belongs to that physical
+            // body. Only its human counterpart's systemic effects are views.
+            return effect != null && !IsSystemicImplant(effect.def) && IsSupported(effect);
+        }
+
         public static bool IsSupportedDef(HediffDef def)
         {
+            if (IsNativeDefinition(def) && (nativeStates.Contains(def.defName) || IsSystemicImplant(def)))
+            {
+                if (def.comps != null)
+                    for (int i = 0; i < def.comps.Count; i++)
+                        if (def.comps[i]?.compClass == null || def.comps[i].compClass.Assembly != typeof(Hediff).Assembly) return false;
+                return true;
+            }
             if (def == null || (def.hediffClass != typeof(Hediff) && def.hediffClass != typeof(HediffWithComps))
                 || def.defaultInstallPart != null || def.countsAsAddedPartOrImplant
                 || def.spawnThingOnRemoved != null || def.chemicalNeed != null) return false;
@@ -53,6 +98,15 @@ namespace WildShift
         {
             if (effect == null || !IsSupportedDef(effect.def) || !AllowsPart(effect.def, effect.pawn, effect.Part)) return false;
             Type type = effect.GetType();
+            if (IsNativeDefinition(effect.def) && (nativeStates.Contains(effect.def.defName) || IsSystemicImplant(effect.def)))
+            {
+                if (type != effect.def.hediffClass) return false;
+                HediffWithComps native = effect as HediffWithComps;
+                if (native?.comps != null)
+                    for (int i = 0; i < native.comps.Count; i++)
+                        if (native.comps[i] == null || native.comps[i].GetType().Assembly != typeof(Hediff).Assembly) return false;
+                return true;
+            }
             if ((type != typeof(Hediff) && type != typeof(HediffWithComps)) || type != effect.def.hediffClass) return false;
             HediffWithComps withComps = effect as HediffWithComps;
             if ((withComps?.comps?.Count ?? 0) != (effect.def.comps?.Count ?? 0)) return false;
@@ -76,12 +130,15 @@ namespace WildShift
 
         public static bool AllowsPart(HediffDef def, Pawn pawn, BodyPartRecord part)
         {
-            return part == null || (IsBrainBuff(def) && pawn?.health != null && part == pawn.health.hediffSet.GetBrain());
+            return part == null || IsSystemicImplant(def)
+                || ((IsBrainBuff(def) || (IsNativeDefinition(def) && nativeStates.Contains(def.defName)))
+                    && pawn?.health != null && part == pawn.health.hediffSet.GetBrain());
         }
 
         public static BodyPartRecord SourcePart(HediffDef def, Pawn human, BodyPartRecord part)
         {
-            return part != null && IsBrainBuff(def) ? human.health.hediffSet.GetBrain() : null;
+            return part != null && (IsBrainBuff(def) || (IsNativeDefinition(def) && nativeStates.Contains(def.defName)))
+                ? human.health.hediffSet.GetBrain() : null;
         }
 
         public static Hediff SourceFor(Pawn body, HediffDef def, bool mustBeVisible)
@@ -106,7 +163,7 @@ namespace WildShift
             bool changed = false;
             foreach (Hediff effect in existing)
             {
-                if (effect?.pawn != animal || !IsSupported(effect) || !Finite(effect.Severity)) continue;
+                if (effect?.pawn != animal || !CanonicalizeAddition(effect) || !Finite(effect.Severity)) continue;
                 BodyPartRecord part = SourcePart(effect.def, human, effect.Part);
                 Hediff canonical = null;
                 bool incompatible = false;
@@ -161,7 +218,7 @@ namespace WildShift
         {
             Pawn human = SharedFormIdentity.HumanFor(___pawn);
             BodyPartRecord actualPart = part ?? hediff?.Part;
-            if (human == null || !SharedFormBuffs.IsSupported(hediff)
+            if (human == null || !SharedFormBuffs.CanonicalizeAddition(hediff)
                 || !SharedFormBuffs.AllowsPart(hediff.def, ___pawn, actualPart)) return true;
             hediff.Part = SharedFormBuffs.SourcePart(hediff.def, human, actualPart);
             SharedFormHealth.EnterSource(___pawn);
@@ -178,7 +235,7 @@ namespace WildShift
         public static bool Prefix(Pawn ___pawn, Hediff hediff)
         {
             Pawn human = SharedFormIdentity.HumanFor(___pawn);
-            if (human == null || hediff == null || hediff.pawn != human || !SharedFormBuffs.IsSupported(hediff)
+            if (human == null || hediff == null || !SharedFormBuffs.IsSupported(hediff)
                 || !human.health.hediffSet.hediffs.Contains(hediff)) return true;
             human.health.RemoveHediff(hediff);
             SharedFormHealth.Refresh(___pawn);

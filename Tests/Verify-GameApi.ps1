@@ -1,7 +1,8 @@
 param(
     [string]$Managed = 'C:\Program Files (x86)\Steam\steamapps\common\RimWorld\RimWorldWin64_Data\Managed',
     [string]$VefAssembly = '',
-    [string]$MetadataLoadContextPath = ''
+    [string]$MetadataLoadContextPath = '',
+    [string]$WildShiftPath = ''
 )
 $ErrorActionPreference = 'Stop'
 # Windows PowerShell uses ReflectionOnlyLoad; PowerShell 7 uses an isolated
@@ -29,7 +30,15 @@ if ($PSVersionTable.PSEdition -eq 'Core') {
     $assemblyPaths=@(Get-ChildItem -LiteralPath $Managed,$runtime -Filter '*.dll' -File |
         Group-Object Name | ForEach-Object { $_.Group[0].FullName })
     $resolver=[Reflection.PathAssemblyResolver]::new([string[]]$assemblyPaths)
-    $metadataContext=[Reflection.MetadataLoadContext]::new($resolver,'System.Private.CoreLib')
+    # Primitive signature types are decoded using this core assembly too.
+    # Select the target engine's BCL before loading its metadata so Mono's
+    # bool/int and Nullable<T> all retain their native mscorlib identities.
+    $coreName=if (Test-Path -LiteralPath (Join-Path $Managed 'System.Private.CoreLib.dll')) {
+        'System.Private.CoreLib'
+    } elseif (Test-Path -LiteralPath (Join-Path $Managed 'mscorlib.dll')) {
+        'mscorlib'
+    } else { throw 'Managed must contain the target engine core library.' }
+    $metadataContext=[Reflection.MetadataLoadContext]::new($resolver,$coreName)
 } else {
     [AppDomain]::CurrentDomain.add_ReflectionOnlyAssemblyResolve($resolve)
 }
@@ -52,7 +61,7 @@ try {
         foreach ($name in @($expression,($expression -replace '\.','+'))) {
             $resolved=$game.GetType($name)
             if ($resolved) { return $resolved }
-            foreach ($ns in @('Verse','RimWorld','Verse.AI','Verse.AI.Group','RimWorld.Planet')) {
+            foreach ($ns in @('Verse','RimWorld','Verse.AI','Verse.AI.Group','RimWorld.Planet','RimWorld.Utility')) {
                 $resolved=$game.GetType("$ns.$name")
                 if ($resolved) { return $resolved }
             }
@@ -98,18 +107,30 @@ try {
         }
     }
     $root = Split-Path $PSScriptRoot -Parent
+    if (!$WildShiftPath) {
+        $minor=if ($core.GetName().Name -eq 'mscorlib') { '1.6' } else { '1.7' }
+        $WildShiftPath=Join-Path $root ($minor+'/Assemblies/WildShift.dll')
+    }
+    $ownAssembly=$null
     # Audit every declared Harmony target, not just the recent enemy feature.
     $targetCount = 0
     $injectedFields = @{}
     foreach ($file in Get-ChildItem -LiteralPath "$root/Source/WildShift" -Filter '*.cs') {
         $code = Get-Content -LiteralPath $file.FullName -Raw
-        $patches = [regex]::Matches($code, '\[HarmonyPatch\(typeof\((\w+)\),\s*"([^"]+)".*?\)\]',[Text.RegularExpressions.RegexOptions]::Singleline)
+        $patches = [regex]::Matches($code, '\[HarmonyPatch\(typeof\((\w+)\),\s*(?:"([^"]+)"|nameof\(\w+\.(\w+)\)).*?\)\]',[Text.RegularExpressions.RegexOptions]::Singleline)
         for ($i=0; $i -lt $patches.Count; $i++) {
-            $patch=$patches[$i]; $short=$patch.Groups[1].Value; $methodName=$patch.Groups[2].Value
+            $patch=$patches[$i]; $short=$patch.Groups[1].Value
+            $methodName=if ($patch.Groups[2].Success) { $patch.Groups[2].Value } else { $patch.Groups[3].Value }
             $type=$null
-            foreach ($ns in @('Verse','RimWorld','Verse.AI','Verse.AI.Group','RimWorld.Planet')) {
+            foreach ($ns in @('Verse','RimWorld','Verse.AI','Verse.AI.Group','RimWorld.Planet','RimWorld.Utility')) {
                 $type=$game.GetType("$ns.$short")
                 if ($null -ne $type) { break }
+            }
+            if ($null -eq $type) {
+                # Some targeted patches wrap WildShift's own transfer methods.
+                # Resolve their real metadata too; do not silently skip them.
+                if (!$ownAssembly) { $ownAssembly=Load-MetadataAssembly $WildShiftPath }
+                $type=$ownAssembly.GetType("WildShift.$short")
             }
             if ($null -eq $type) { throw "Missing patch type: $short" }
             $candidates=@($type.GetMethods($flags) | Where-Object Name -eq $methodName)

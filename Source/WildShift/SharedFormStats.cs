@@ -6,9 +6,9 @@ using Verse;
 
 namespace WildShift
 {
-    // Project only declarative stat modifiers, never a human's final stat or
-    // their Gene/Trait/Hediff objects. Native StatWorker supplies the animal's
-    // base, equipment, injuries, age, skills, capacities and final processing.
+    // Project declarative stat and health modifiers, never a human's final
+    // values or their Gene/Trait/Hediff objects. Native calculations retain
+    // the animal's base, equipment, injuries, age, skills and capacities.
     public static class SharedFormStats
     {
         private static readonly ConditionalWeakTable<Hediff, State> states = new ConditionalWeakTable<Hediff, State>();
@@ -41,8 +41,11 @@ namespace WildShift
             public State() { }
 
             private Pawn original;
+            private Pawn activeBody;
             private bool biotech, refreshing, dirty = true;
             private int generation;
+            private int healthGeneration, preparedHealthGeneration = -1;
+            private int systemsVersion = int.MinValue, anatomyVersion = int.MinValue;
             private List<GeneState> humanGenes, animalGenes;
             private List<TraitState> humanTraits, animalTraits;
             private List<ConditionalState> conditions = new List<ConditionalState>();
@@ -56,6 +59,7 @@ namespace WildShift
                 try
                 {
                     Pawn animal = carrier.pawn;
+                    activeBody = animal;
                     Pawn human = Original(animal);
                     bool activeBiotech = ModsConfig.BiotechActive;
                     List<Gene> hg = human != null && activeBiotech ? human.genes?.GenesListForReading : null;
@@ -65,6 +69,11 @@ namespace WildShift
                     bool sourceChanged = !(original == human && biotech == activeBiotech
                         && GenesMatch(hg, humanGenes) && GenesMatch(ag, animalGenes)
                         && TraitsMatch(ht, humanTraits) && TraitsMatch(at, animalTraits));
+                    int nextSystems = human != null ? SharedFormSystems.ModifierVersion(animal) : 0;
+                    int nextAnatomy = human != null ? SharedFormAnatomy.ModifierVersion(animal) : 0;
+                    bool externalChanged = systemsVersion != nextSystems || anatomyVersion != nextAnatomy;
+                    systemsVersion = nextSystems;
+                    anatomyVersion = nextAnatomy;
                     if (sourceChanged)
                     {
                         original = human;
@@ -74,13 +83,15 @@ namespace WildShift
                         humanTraits = CaptureTraits(ht);
                         animalTraits = CaptureTraits(at);
                         CaptureConditions();
+                        healthGeneration++;
                     }
                     // Conditions belong to the active body, not the stored
                     // human. Recheck only this form's relevant affecters on
                     // queries: movement, sunlight or clothes can change twice
                     // in one tick, without changing its gene membership.
                     bool conditionChanged = RefreshConditions(animal);
-                    if (sourceChanged || conditionChanged)
+                    if (externalChanged) healthGeneration++;
+                    if (sourceChanged || conditionChanged || externalChanged)
                     {
                         dirty = true;
                         generation++;
@@ -153,6 +164,17 @@ namespace WildShift
                 }
             }
 
+            public void PrepareHealth(Hediff carrier)
+            {
+                Refresh(carrier);
+                if (refreshing || preparedHealthGeneration == healthGeneration) return;
+                // Pain and damage-factor queries may return native caches
+                // before reading CurStage. Mark this generation first because
+                // DirtyCache also refreshes other health consumers.
+                preparedHealthGeneration = healthGeneration;
+                carrier.pawn.health.hediffSet.DirtyCache();
+            }
+
             private HediffStage Build(HediffStage baseline)
             {
                 if (original == null) return baseline;
@@ -163,6 +185,10 @@ namespace WildShift
                     || baseline.statOffsetEffectMultiplier != null || baseline.statFactorEffectMultiplier != null)) return baseline;
                 var offsets = Copy(baseline?.statOffsets);
                 var factors = Copy(baseline?.statFactors);
+                float painOffset = baseline?.painOffset ?? 0f;
+                float painFactor = baseline?.painFactor ?? 1f;
+                var damageFactors = CopyDamageFactors(baseline?.damageFactors);
+                var capacities = CopyCapacities(baseline?.capMods);
                 bool changed = false;
                 var seenGenes = new HashSet<GeneDef>();
                 for (int i = 0; i < humanGenes.Count; i++)
@@ -173,6 +199,9 @@ namespace WildShift
                     // each stat, both in unconditional and conditional lists.
                     changed |= Merge(offsets, gene.def.statOffsets, false, true);
                     changed |= Merge(factors, gene.def.statFactors, true, true);
+                    changed |= MergePain(ref painOffset, ref painFactor, gene.def.painOffset, gene.def.painFactor);
+                    changed |= AppendDamageFactors(damageFactors, gene.def.damageFactors);
+                    changed |= AppendCapacities(capacities, gene.def.capMods);
                 }
                 for (int i = 0; i < conditions.Count; i++)
                 {
@@ -184,15 +213,25 @@ namespace WildShift
                 for (int i = 0; i < humanTraits.Count; i++)
                 {
                     TraitState trait = humanTraits[i];
-                    if (!trait.active || trait.data == null || HasTrait(animalTraits, trait.def, trait.degree)) continue;
+                    if (trait.data == null) continue;
+                    // Native HediffSet.CalculatePain reads every trait's pain
+                    // fields even when that trait's stat effects are suppressed.
+                    if (!HasPainTrait(animalTraits, trait.def, trait.degree))
+                        changed |= MergePain(ref painOffset, ref painFactor, trait.data.painOffset, trait.data.painFactor);
+                    if (!trait.active || HasTrait(animalTraits, trait.def, trait.degree)) continue;
                     // Trait.OffsetOfStat/MultiplierOfStat combine every entry.
                     changed |= Merge(offsets, trait.data.statOffsets, false, false);
                     changed |= Merge(factors, trait.data.statFactors, true, false);
                 }
+                changed |= SharedFormSystems.AppendModifiers(activeBody, offsets, factors);
                 if (!changed) return baseline;
                 HediffStage result = baseline == null ? new HediffStage() : Gen.MemberwiseClone(baseline);
                 result.statOffsets = offsets;
                 result.statFactors = factors;
+                result.painOffset = painOffset;
+                result.painFactor = painFactor;
+                result.damageFactors = damageFactors;
+                result.capMods = capacities;
                 return result;
             }
         }
@@ -265,6 +304,63 @@ namespace WildShift
             return false;
         }
 
+        private static bool HasPainTrait(List<TraitState> traits, TraitDef def, int degree)
+        {
+            for (int i = 0; i < traits.Count; i++)
+                if (traits[i].def == def && traits[i].degree == degree) return true;
+            return false;
+        }
+
+        private static bool MergePain(ref float offset, ref float factor, float sourceOffset, float sourceFactor)
+        {
+            offset += sourceOffset;
+            factor *= sourceFactor;
+            return sourceOffset != 0f || sourceFactor != 1f;
+        }
+
+        private static List<DamageFactor> CopyDamageFactors(List<DamageFactor> source)
+        {
+            var result = new List<DamageFactor>(source?.Count ?? 0);
+            AppendDamageFactors(result, source);
+            return result;
+        }
+
+        private static List<PawnCapacityModifier> CopyCapacities(List<PawnCapacityModifier> source)
+        {
+            var result = new List<PawnCapacityModifier>(source?.Count ?? 0);
+            AppendCapacities(result, source);
+            return result;
+        }
+
+        private static bool AppendCapacities(List<PawnCapacityModifier> target, List<PawnCapacityModifier> source)
+        {
+            if (source == null) return false;
+            bool changed = false;
+            for (int i = 0; i < source.Count; i++)
+            {
+                PawnCapacityModifier modifier = source[i];
+                if (modifier?.capacity == null) continue;
+                target.Add(SharedFormAnatomy.Clone(modifier));
+                changed = true;
+            }
+            return changed;
+        }
+
+        private static bool AppendDamageFactors(List<DamageFactor> target, List<DamageFactor> source)
+        {
+            if (source == null) return false;
+            bool changed = false;
+            // Native gene and HediffStage lists multiply every matching entry.
+            for (int i = 0; i < source.Count; i++)
+            {
+                DamageFactor modifier = source[i];
+                if (modifier?.damageDef == null || modifier.factor == 1f) continue;
+                target.Add(new DamageFactor { damageDef = modifier.damageDef, factor = modifier.factor });
+                changed = true;
+            }
+            return changed;
+        }
+
         private static List<StatModifier> Copy(List<StatModifier> modifiers)
         {
             var result = new List<StatModifier>(modifiers?.Count ?? 0);
@@ -305,6 +401,12 @@ namespace WildShift
             Hediff carrier = TransformUtility.TryGetTransformedComp(animal)?.parent;
             if (carrier != null) states.GetOrCreateValue(carrier).PrepareWorker(carrier, worker);
         }
+
+        public static void PrepareHealth(Pawn animal)
+        {
+            Hediff carrier = TransformUtility.TryGetTransformedComp(animal)?.parent;
+            if (carrier != null) states.GetOrCreateValue(carrier).PrepareHealth(carrier);
+        }
     }
 
     [HarmonyPatch(typeof(Hediff), "get_CurStage")]
@@ -323,5 +425,17 @@ namespace WildShift
         {
             SharedFormStats.PrepareWorker(__instance, thing);
         }
+    }
+
+    [HarmonyPatch(typeof(HediffSet), "get_PainTotal")]
+    public static class Patch_SharedFormPainCache
+    {
+        public static void Prefix(Pawn ___pawn) { SharedFormStats.PrepareHealth(___pawn); }
+    }
+
+    [HarmonyPatch(typeof(HediffSet), "FactorForDamage", new[] { typeof(DamageInfo) })]
+    public static class Patch_SharedFormDamageCache
+    {
+        public static void Prefix(Pawn ___pawn) { SharedFormStats.PrepareHealth(___pawn); }
     }
 }

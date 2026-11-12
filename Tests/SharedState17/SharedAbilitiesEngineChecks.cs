@@ -47,9 +47,10 @@ namespace WildShiftSharedStateValidation
                 check(!animal.abilities.abilities.Contains(source) && human.abilities.abilities.Contains(source),
                     "abilities/only human deep-owns " + entry.Key);
             }
-            Ability excluded = human.abilities.GetAbility(DefDatabase<AbilityDef>.GetNamed("ReimplantXenogerm"));
-            check(excluded != null && !animal.abilities.AllAbilitiesForReading.Contains(excluded),
-                "abilities/gene reimplantation remains human-only because it mutates donor genetics");
+            Ability reimplant = human.abilities.GetAbility(DefDatabase<AbilityDef>.GetNamed("ReimplantXenogerm"));
+            check(reimplant != null && animal.abilities.AllAbilitiesForReading.Contains(reimplant)
+                && reimplant.pawn==animal && !animal.abilities.abilities.Contains(reimplant),
+                "abilities/native gene reimplantation borrows the original ability while genetics remain canonical");
 
             Foam(map, animal, sourceAbilities["FoamSpray"], check);
             Jump(map, animal, sourceAbilities["Longjump"], hemogen, check);
@@ -126,8 +127,9 @@ namespace WildShiftSharedStateValidation
                 600, "native bloodfeed resource and target blood loss", check);
             check(patient.health.hediffSet.GetFirstHediffOfDef(HediffDefOf.BloodLoss).Severity > .1f,
                 "abilities/actual bloodfeed applies native blood loss to target");
-            check(animal.needs.food.CurLevel > .15f && Math.Abs(human.needs.food.CurLevel - humanFood) < .00001f,
-                "abilities/bloodfeed feeds actual animal while restoring only original hemogen");
+            check(animal.needs.food.CurLevel > .15f && ReferenceEquals(animal.needs.food,human.needs.food)
+                && human.needs.food.CurLevel > humanFood,
+                "abilities/bloodfeed feeds the active animal through one canonical food need and original hemogen");
         }
 
         private static void Coagulate(Pawn animal, Pawn human, Pawn patient, Ability coagulate, Gene_Hemogen hemogen, Action<bool, string> check)

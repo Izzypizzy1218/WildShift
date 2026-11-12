@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.4.0-beta.6 — Shared capacities, personal systems and human gear (2026-11-12)
+
+- Retain native capacity modifiers and systemic health stages while transformed. Elongated fingers, neural supercharge, Anomaly serums and alcohol now supply their benefits and penalties through the animal's native calculations.
+- Expose canonical genes, traits and personal needs through non-owning views. Continue supported native gene callbacks, metabolism, healing, fertility, mental states and inspiration once; preserve the original owners and saved state across return and reload.
+- Share systemic human implant effects and installed-part capacity performance without copying human wounds or creating human limbs on the animal. Apply installed-part performance before native capacity offsets/factors, and preserve stronger animal installations without multiplying the same improvement twice.
+- Share original apparel/equipment bonuses, native armor coverage, shields, weapons and supported actions while preserving original item ownership, condition and resources. Protect armor coverage from recursion when modded human and animal races share a BodyDef. Unload only the animal's own possessions on return.
+- Enable supported native psycasts with canonical psylink level, psyfocus, neural heat and cooldowns. Add an explicit native meditation order with the person's focus permissions and the animal's current location. Keep mechanitor control connected to the active body and retain applicable ideology role/precept modifiers.
+- Evaluate personal thoughts using original relationships and ideology alongside the active body's bed, apparel, map and surroundings. Preserve native animal bonds outside the short thought-query context.
+- Preserve supported old-save drug migration and single ownership when rebuilding the expanded views. Correct the gene audit's price classification: vanilla `GeneDef.marketValueFactor` applies to gene packs, not pawn sale prices.
+- Pass 531 initialized-game checks on each of actual 1.6 and 1.7 through three fresh-process saves/reloads, plus 273 isolated native checks. A short fixed-population 0/20/50-form comparison retains the approximately 900 TPS speed ceiling; mean native tick times are 0.252/0.404/0.592 ms. See the validation document for workload and memory limits.
+- See [behavior, compatibility boundaries and validation](Docs/SharedState-v1.4.0-beta.6.md). Custom mod state machines and species textures may need separate compatibility work.
+
+## v1.4.0-beta.5 — Shared native pain and damage-type modifiers (local candidate, 2026-11-11)
+
+- Apply active original genes' declarative pain offsets, pain multipliers and damage-type multipliers through the animal's native health calculations. Include original trait pain fields using native trait semantics.
+- Refresh cached pain and damage factors when the original source changes, including gene suppression, reactivation and removal. Preserve native animal effects without applying a matching inherited gene twice.
+- Add regression checks for the native pain and damage consumers, including cache changes, trait pain, original ownership and ordinary-animal behavior. Compare vanilla strong melee, Robust, Tough, movement, luciferium, reduced pain and fire resistance in actual 1.6 and 1.7 games.
+
 ## v1.4.0-beta.4 — Ability allocations and saved buff reconciliation (2026-11-10)
 
 - Remove captured callbacks from repeated canonical-resource, ability-refresh and borrowed-ability lookups. Preserve source changes, suppression, cooldowns and first-match lookup behavior; the three isolated native probe paths each change from 88 allocated bytes per call to zero.
