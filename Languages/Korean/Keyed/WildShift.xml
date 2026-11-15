@@ -38,6 +38,12 @@
   <WildShift_SettingsAllowInsects>곤충형 변신 허용</WildShift_SettingsAllowInsects>
   <WildShift_SettingsAllowInsectsDesc>Include insectoid races in the random animal pool.</WildShift_SettingsAllowInsectsDesc>
   <WildShift_SettingsReset>WildShift 설정 초기화</WildShift_SettingsReset>
+  <WildShift_SettingsAllowTransformedSlaughter>변신한 정착민 도축 허용</WildShift_SettingsAllowTransformedSlaughter>
+  <WildShift_SettingsAllowTransformedSlaughterDesc>기본적으로 허용합니다. 체크를 해제하면 원래 정착민의 몸을 보관 중인 아군 변신동물의 수동·자동·정신 이상 도축을 막고, 기존 도축 지정을 취소합니다. 일반 동물에는 영향을 주지 않습니다. 도축을 허용하면 기존처럼 보관된 인간도 사망합니다.</WildShift_SettingsAllowTransformedSlaughterDesc>
+  <WildShift_SettingsAllowTransformedSale>변신한 정착민 판매 허용</WildShift_SettingsAllowTransformedSale>
+  <WildShift_SettingsAllowTransformedSaleDesc>기본적으로 허용합니다. 체크를 해제하면 해당 아군 변신동물을 상인에게 판매하거나 선물할 수 없습니다. 구입과 일반 동물에는 영향을 주지 않습니다. 판매를 허용하면 기존 판매 변신자의 복수 규칙이 적용됩니다.</WildShift_SettingsAllowTransformedSaleDesc>
+  <WildShift_SlaughterBlocked>WildShift 설정에서 변신한 정착민의 도축이 비허용 상태입니다.</WildShift_SlaughterBlocked>
+  <WildShift_SaleBlocked>WildShift 설정에서 변신한 정착민의 판매가 비허용 상태입니다. 거래에서 제외하거나 판매를 허용한 뒤 다시 거래를 확정해 주세요.</WildShift_SaleBlocked>
   <WildShift_SettingsEnemyChance>대상 습격자 1명당 Shapeshifter 확률: {0}%</WildShift_SettingsEnemyChance>
   <WildShift_SettingsSoldRevenge>팔린 변신자의 복수 확률: {0}% (0%면 예정된 복수도 취소)</WildShift_SettingsSoldRevenge>
   <WildShift_RevengeLetterLabel>팔려간 변신자의 귀환</WildShift_RevengeLetterLabel>

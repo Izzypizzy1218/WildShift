@@ -27,7 +27,11 @@ namespace WildShift
             "ProductionCommand", "ProductionCommandBuff", "ResearchCommand", "ResearchCommandBuff",
             "EntropyLink", "Deathrest", "PsychicBond", "PsychicBondTorn", "PollutionStimulus",
             "GlucosoidRush", "PsychofluidRush", "HemogenAmplified", "DeathRefusal", "DeathRefusalCreepJoiner",
-            "CubeInterest", "CubeWithdrawal", "CubeRage", "FrenzyField"
+            "CubeInterest", "CubeWithdrawal", "CubeRage", "FrenzyField",
+            // Native personal states supplied by persona weapons, psychic
+            // pulses and neural-heat recovery; retain their penalties too.
+            "NoPain", "SpeedBoost", "NeuralHeatRecoveryGain", "HungerMaker",
+            "NeurosisPulse", "PleasurePulse", "PsychicHangover"
         };
         private static readonly Dictionary<string, string> reviewed = new Dictionary<string, string>
         {

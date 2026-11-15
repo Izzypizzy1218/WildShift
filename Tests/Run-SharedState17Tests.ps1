@@ -16,6 +16,7 @@ param(
     [string]$FixtureDir='',
     [string]$Output='',
     [string]$DotNet='',
+    [string[]]$AdditionalMods=@(),
     [ValidateRange(30,1800)][int]$TimeoutSeconds=240,
     [switch]$BuildOnly,
     [switch]$SkipBuild
@@ -73,6 +74,7 @@ foreach ($name in @('Royalty','Ideology','Biotech','Anomaly','Odyssey')) {
 }
 if ($installedDlcs.Count -ne 5) { throw 'All five DLCs are required by this shared-state fixture.' }
 $mods+=$installedDlcs
+$mods+=@($AdditionalMods | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ -and $_ -notin $mods } | Select-Object -Unique)
 $mods+=@('wildshift.mod','wildshift.tests.sharedstate17')
 $li=($mods | ForEach-Object { '<li>'+[Security.SecurityElement]::Escape($_)+'</li>' }) -join ''
 $dlcLi=($installedDlcs | ForEach-Object { '<li>'+[Security.SecurityElement]::Escape($_)+'</li>' }) -join ''

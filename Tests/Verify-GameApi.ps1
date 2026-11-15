@@ -117,12 +117,13 @@ try {
     $injectedFields = @{}
     foreach ($file in Get-ChildItem -LiteralPath "$root/Source/WildShift" -Filter '*.cs') {
         $code = Get-Content -LiteralPath $file.FullName -Raw
-        $patches = [regex]::Matches($code, '\[HarmonyPatch\(typeof\((\w+)\),\s*(?:"([^"]+)"|nameof\(\w+\.(\w+)\)).*?\)\]',[Text.RegularExpressions.RegexOptions]::Singleline)
+        $patches = [regex]::Matches($code, '\[HarmonyPatch\(typeof\(([\w.]+)\),\s*(?:"([^"]+)"|nameof\(\w+\.(\w+)\)).*?\)\]',[Text.RegularExpressions.RegexOptions]::Singleline)
         for ($i=0; $i -lt $patches.Count; $i++) {
             $patch=$patches[$i]; $short=$patch.Groups[1].Value
             $methodName=if ($patch.Groups[2].Success) { $patch.Groups[2].Value } else { $patch.Groups[3].Value }
-            $type=$null
+            $type=$game.GetType($short)
             foreach ($ns in @('Verse','RimWorld','Verse.AI','Verse.AI.Group','RimWorld.Planet','RimWorld.Utility')) {
+                if ($null -ne $type) { break }
                 $type=$game.GetType("$ns.$short")
                 if ($null -ne $type) { break }
             }

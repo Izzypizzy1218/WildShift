@@ -262,6 +262,9 @@ namespace WildShiftSharedStateValidation
             SharedGearEngineChecks.Run(Find.CurrentMap, Check);
             SharedBiologyEngineChecks.Run(Find.CurrentMap, Check);
             SharedSystemsEngineChecks.Run(Find.CurrentMap, Check);
+            SharedProtectionEngineChecks.Run(Find.CurrentMap, Check);
+            SharedPassiveHealthEngineChecks.Run(Find.CurrentMap, Check);
+            SharedDinosauriaEngineChecks.Run(Find.CurrentMap, Check);
             caravan = CaravanExitMapUtility.ExitMapAndCreateCaravan(new[] { companion, form }, Faction.OfPlayer,
                 Find.CurrentMap.Tile, Find.CurrentMap.Tile, PlanetTile.Invalid, false);
             Require(caravan != null && caravan.Spawned && caravan.ContainsPawn(form), "native departure creates a caravan with the active form");

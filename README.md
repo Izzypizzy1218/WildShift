@@ -133,7 +133,9 @@ To build 1.6, supply matching 1.6 game or reference assemblies and `-p:RimWorldV
 
 ## Current version
 
-`v1.4.0-beta.6` — RimWorld 1.6 / 1.7 pre-release
+`v1.4.0-beta.7`
+
+Adds independent settings for allowing slaughter and sale of transformed player colonists. Both default to enabled; uncheck an option to protect those active forms. See [optional protection and validation](Docs/AnimalProtection-v1.4.0-beta.7.md). It also shares seven additional native personal health effects and adds passive-health numerical and Dinosauria version/provenance regression coverage. The release passes 722 initialized-game checks on each of actual 1.6 and 1.7 with all five DLCs and Dinosauria; see [the November 15 report recheck](Docs/UserReports-v1.4.0-beta.7.md). The shared-state foundations and historical validation below describe beta.6.
 
 Keep the preserved-human transformation structure while sharing supported personal state with the active animal: native gene/trait stats and capacities, drugs and serums, personal needs and thoughts, human implant/prosthesis effects, original equipment, psycasts and psychic resources, meditation, inspiration, ideology roles and mechanitor control. Benefits and penalties both apply; source objects, item ownership, charges and cooldowns survive return and reload.
 

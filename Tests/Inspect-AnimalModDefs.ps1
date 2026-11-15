@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$ModRoot,
     [string]$GameRoot = 'C:\Program Files (x86)\Steam\steamapps\common\RimWorld',
+    [ValidateSet('Auto','1.6','1.7')][string]$RimWorldVersion = 'Auto',
     [switch]$WithoutOdyssey
 )
 $ErrorActionPreference = 'Stop'
@@ -52,12 +53,32 @@ function Get-CompClasses($chain) {
         if ($container -and $container.GetAttribute('Inherit') -eq 'False') { break }
     }
 }
+if ($RimWorldVersion -eq 'Auto') {
+    $versionFile = Join-Path $GameRoot 'Version.txt'
+    if (!(Test-Path -LiteralPath $versionFile)) { throw 'Game Version.txt is missing; supply -RimWorldVersion 1.6 or 1.7 explicitly.' }
+    $gameVersion = (Get-Content -LiteralPath $versionFile -Raw).Trim()
+    if ($gameVersion -notmatch '^(1\.[67])(?:\.|\s|$)') { throw "Unsupported game version '$gameVersion'; specify 1.6 or 1.7 explicitly." }
+    $RimWorldVersion = $Matches[1]
+}
+# Mirror the native default version-folder choice. This source-only tool does
+# not evaluate explicit LoadFolders.xml conditions or XML PatchOperations.
+$versionFolders = @(Get-ChildItem -LiteralPath $ModRoot -Directory | Where-Object {
+    $_.Name -match '^\d+\.\d+$'
+} | Sort-Object { [version]$_.Name })
+$selectedVersion = $versionFolders | Where-Object { [version]$_.Name -le [version]$RimWorldVersion } | Select-Object -Last 1
+if (!$selectedVersion -and $versionFolders.Count) { $selectedVersion = $versionFolders[0] }
+if (Test-Path -LiteralPath (Join-Path $ModRoot 'LoadFolders.xml')) {
+    Write-Warning 'Explicit LoadFolders.xml is present. Conditional/declared folder selection is outside this source-only inspector; verify actual loaded folders in-game.'
+}
 Read-Defs (Join-Path $GameRoot 'Data/Core/Defs') $false
-# These four packs' core 1.6 definitions are self-contained apart from Core bases.
-# Optional compatibility subfolders and conditional patches are intentionally excluded.
+# Ordinary root/version definitions are self-contained apart from Core bases.
+# Optional compatibility subfolders and conditional patches remain excluded.
 Read-Defs (Join-Path $ModRoot 'Defs') $true
-Read-Defs (Join-Path $ModRoot '1.6/Defs') $true
-if ($WithoutOdyssey) { Read-Defs (Join-Path $ModRoot '1.6NotOdyssey/Defs') $true }
+Read-Defs (Join-Path $ModRoot 'Common/Defs') $true
+if ($selectedVersion) {
+    Read-Defs (Join-Path $selectedVersion.FullName 'Defs') $true
+    if ($WithoutOdyssey) { Read-Defs (Join-Path $ModRoot ($selectedVersion.Name + 'NotOdyssey/Defs')) $true }
+}
 foreach ($item in $kinds) {
     $kindChain = @(Get-Chain $item.Node)
     $raceName = Get-Scalar $kindChain 'race' ''
@@ -95,5 +116,7 @@ foreach ($item in $kinds) {
         PawnClass=(Get-Scalar $raceChain 'thingClass' 'Pawn')
         Comps=(@(Get-CompClasses $raceChain | Sort-Object -Unique) -join ';')
         Source=$item.File
+        GameVersion=$RimWorldVersion
+        SelectedVersionFolder=$(if ($selectedVersion) { $selectedVersion.Name } else { '(root only)' })
     }
 }

@@ -835,9 +835,13 @@ internal static class Program
         DefDatabase<ThingDef>.Add(smallAnimal.def);
         DefDatabase<PawnKindDef>.Add(cat);
         var snapshot = new CustomSettingsSnapshot();
+        Check(snapshot.settings.allowTransformedSlaughter && snapshot.settings.allowTransformedSale,
+            "New safety toggles default to allowing both slaughter and sale");
         Check(!snapshot.settings.customRacialFormsEnabled && snapshot.settings.customRacialForms.Count == 0,
             "Native settings default to existing form rules");
         snapshot.settings.customRacialFormsEnabled = true;
+        snapshot.settings.allowTransformedSlaughter = false;
+        snapshot.settings.allowTransformedSale = false;
         snapshot.settings.customRacialForms.Add(new CustomRacialFormRule {
             targetDefName = human.def.defName, chance = 1f,
             animalKindDefNames = new List<string> { "Cat", "AbsentOptionalAnimal" }
@@ -861,6 +865,8 @@ internal static class Program
         Scribe.loader.FinalizeLoading();
         Check(loaded?.settings != null && loaded.settings.customRacialFormsEnabled,
             "Native Scribe reload preserves opt-in toggle");
+        Check(!loaded.settings.allowTransformedSlaughter && !loaded.settings.allowTransformedSale,
+            "Native Scribe preserves both separately disabled safety toggles");
         Check(loaded.settings.customRacialForms.Count == 2
             && loaded.settings.customRacialForms[0].targetDefName == human.def.defName
             && loaded.settings.customRacialForms[1].xenotype
@@ -874,7 +880,8 @@ internal static class Program
         string legacyPath = Path.Combine(scratch, "custom-rules-legacy.xml");
         var legacyXml = XDocument.Load(path);
         foreach (var element in legacyXml.Descendants().Where(e => new[] {
-            "customRacialFormsEnabled", "customRacialForms", "customAssignedKind"
+            "customRacialFormsEnabled", "customRacialForms", "customAssignedKind",
+            "allowTransformedSlaughter", "allowTransformedSale"
         }.Contains(e.Name.LocalName)).ToArray()) element.Remove();
         legacyXml.Save(legacyPath);
         CustomSettingsSnapshot legacy = null;
@@ -886,12 +893,16 @@ internal static class Program
             "Legacy settings without custom keys retain disabled defaults");
         Check(legacy.comp.assignedKind == cat && legacy.comp.customAssignedKind == null,
             "Legacy save does not invent custom form provenance");
+        Check(legacy.settings.allowTransformedSlaughter && legacy.settings.allowTransformedSale,
+            "Legacy settings without safety keys keep existing slaughter and sale permission");
         loaded.settings.customRacialFormsEnabled = false;
         loaded.settings.customRacialForms.Clear();
         WildShiftMod.Settings = loaded.settings;
         Check(loaded.comp.AllowsAssignedKind(cat),
             "Existing custom small form remains valid after rules are disabled and removed");
         loaded.settings.Reset();
+        Check(loaded.settings.allowTransformedSlaughter && loaded.settings.allowTransformedSale,
+            "Reset restores default permission for both safety toggles");
         Check(!loaded.settings.customRacialFormsEnabled && loaded.settings.customRacialForms.Count == 0,
             "Reset restores original assignment settings");
     }

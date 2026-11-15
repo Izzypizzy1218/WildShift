@@ -38,6 +38,12 @@
   <WildShift_SettingsAllowInsects>Allow insectoid forms</WildShift_SettingsAllowInsects>
   <WildShift_SettingsAllowInsectsDesc>Include insectoid races in the random animal pool.</WildShift_SettingsAllowInsectsDesc>
   <WildShift_SettingsReset>Reset WildShift settings</WildShift_SettingsReset>
+  <WildShift_SettingsAllowTransformedSlaughter>Allow slaughter of transformed colonists</WildShift_SettingsAllowTransformedSlaughter>
+  <WildShift_SettingsAllowTransformedSlaughterDesc>Enabled by default. Turn off to prevent manual, automatic and mental-break slaughter of player-owned animal forms holding their original colonists. Existing slaughter designations are removed. Ordinary animals are unaffected. When allowed, slaughter still kills the preserved human.</WildShift_SettingsAllowTransformedSlaughterDesc>
+  <WildShift_SettingsAllowTransformedSale>Allow sale of transformed colonists</WildShift_SettingsAllowTransformedSale>
+  <WildShift_SettingsAllowTransformedSaleDesc>Enabled by default. Turn off to prevent selling or gifting these player-owned animal forms to traders. Purchases and ordinary animals are unaffected. When allowed, the existing sold-shapeshifter revenge rules still apply.</WildShift_SettingsAllowTransformedSaleDesc>
+  <WildShift_SlaughterBlocked>Slaughter of transformed colonists is disabled in WildShift settings.</WildShift_SlaughterBlocked>
+  <WildShift_SaleBlocked>Sale of transformed colonists is disabled in WildShift settings. Remove them from the trade, or enable sale, then confirm the trade again.</WildShift_SaleBlocked>
   <WildShift_SettingsEnemyChance>Shapeshifter chance per eligible raider: {0}%</WildShift_SettingsEnemyChance>
   <WildShift_SettingsSoldRevenge>Sold shapeshifter revenge chance: {0}% (0% disables pending revenge)</WildShift_SettingsSoldRevenge>
   <WildShift_RevengeLetterLabel>The sold shapeshifter returns</WildShift_RevengeLetterLabel>

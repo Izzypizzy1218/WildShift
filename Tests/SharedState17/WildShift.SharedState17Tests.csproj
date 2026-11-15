@@ -24,5 +24,8 @@
     <Compile Include="SharedGearEngineChecks.cs" />
     <Compile Include="SharedBiologyEngineChecks.cs" />
     <Compile Include="SharedSystemsEngineChecks.cs" />
+    <Compile Include="SharedProtectionEngineChecks.cs" />
+    <Compile Include="SharedPassiveHealthEngineChecks.cs" />
+    <Compile Include="SharedDinosauriaEngineChecks.cs" />
   </ItemGroup>
 </Project>

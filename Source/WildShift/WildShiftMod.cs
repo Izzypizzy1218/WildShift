@@ -13,6 +13,8 @@ namespace WildShift
         public bool forceTraderShapeshifters;
         public float enemyShapeshifterChance = 0.05f;
         public float soldRevengeChance = 0.5f;
+        public bool allowTransformedSlaughter = true;
+        public bool allowTransformedSale = true;
         public float deathChance = 0.2f;
         public float spilloverDamageFactor = 0f;
         public bool allowInsectoids;
@@ -35,6 +37,8 @@ namespace WildShift
             Scribe_Values.Look(ref forceTraderShapeshifters, "forceTraderShapeshifters", false);
             Scribe_Values.Look(ref enemyShapeshifterChance, "enemyShapeshifterChance", 0.05f);
             Scribe_Values.Look(ref soldRevengeChance, "soldRevengeChance", 0.5f);
+            Scribe_Values.Look(ref allowTransformedSlaughter, "allowTransformedSlaughter", true);
+            Scribe_Values.Look(ref allowTransformedSale, "allowTransformedSale", true);
             Scribe_Values.Look(ref deathChance, "deathChance", 0.2f);
             Scribe_Values.Look(ref spilloverDamageFactor, "spilloverDamageFactor", 0f);
             Scribe_Values.Look(ref allowInsectoids, "allowInsectoids", false);
@@ -50,6 +54,8 @@ namespace WildShift
             forceTraderShapeshifters = false;
             enemyShapeshifterChance = 0.05f;
             soldRevengeChance = 0.5f;
+            allowTransformedSlaughter = true;
+            allowTransformedSale = true;
             deathChance = 0.2f;
             spilloverDamageFactor = 0f;
             allowInsectoids = false;
@@ -164,6 +170,20 @@ namespace WildShift
                 0.01f);
 
             listing.GapLine();
+            bool previousSlaughter = Settings.allowTransformedSlaughter;
+            listing.CheckboxLabeled(
+                "WildShift_SettingsAllowTransformedSlaughter".Translate(),
+                ref Settings.allowTransformedSlaughter,
+                "WildShift_SettingsAllowTransformedSlaughterDesc".Translate());
+            listing.Gap();
+            listing.CheckboxLabeled(
+                "WildShift_SettingsAllowTransformedSale".Translate(),
+                ref Settings.allowTransformedSale,
+                "WildShift_SettingsAllowTransformedSaleDesc".Translate());
+            if (previousSlaughter != Settings.allowTransformedSlaughter)
+                TransformedAnimalProtection.SettingsChanged();
+
+            listing.GapLine();
             listing.CheckboxLabeled(
                 "WildShift_SettingsForceTrader".Translate(),
                 ref Settings.forceTraderShapeshifters,
@@ -181,6 +201,7 @@ namespace WildShift
             if (listing.ButtonText("WildShift_SettingsReset".Translate()))
             {
                 Settings.Reset();
+                TransformedAnimalProtection.SettingsChanged();
             }
 
             settingsViewHeight = listing.CurHeight + 12f;

@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.4.0-beta.7 — Optional protection and passive health effects (2026-11-15)
+
+- Add separate **Allow slaughter of transformed colonists** and **Allow sale of transformed colonists** settings. Both default to enabled, preserve existing behavior for older settings and return to enabled on reset.
+- When slaughter is disabled, block designation, automatic slaughter and slaughterer targeting; cancel existing slaughter marks and protect queued/forced slaughter jobs before execution.
+- When sale is disabled, filter protected forms from trader offers and reject stale transactions before currency, goodwill or ownership changes. Keep buying and ordinary animals unaffected; allowed sales retain existing revenge behavior.
+- Include English and Korean settings/tooltips. See [behavior and validation](Docs/AnimalProtection-v1.4.0-beta.7.md).
+- Pass 722 initialized-game checks on each of actual 1.6 and 1.7 with all DLCs and Dinosauria, including 55 protection, 75 passive-health and 61 Dinosauria checks through three-process save/reload coverage. Accepted runs preserve normal user configuration.
+- Share seven additional native personal health effects: persona weapon painlessness, speed, neural cooling and hunger, plus NeurosisPulse, PleasurePulse and PsychicHangover. Preserve their downsides, original source ownership and native timers.
+- Make the offline animal-definition inspection version-aware and add native Dinosauria version/provenance and passive-health numerical regression checks. See [the November 15 report recheck](Docs/UserReports-v1.4.0-beta.7.md).
+
 ## v1.4.0-beta.6 — Shared capacities, personal systems and human gear (2026-11-12)
 
 - Retain native capacity modifiers and systemic health stages while transformed. Elongated fingers, neural supercharge, Anomaly serums and alcohol now supply their benefits and penalties through the animal's native calculations.
