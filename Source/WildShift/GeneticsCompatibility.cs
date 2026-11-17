@@ -39,8 +39,8 @@ namespace WildShift
 
     public static class GeneticsCompatibility
     {
-        private static readonly Type Hybrid = AccessTools.TypeByName("GeneticRim.CompHybrid");
-        private static readonly Type Age = AccessTools.TypeByName("GeneticRim.CompApplyAgeDiseases");
+        private static readonly Type Hybrid = OptionalModTypes.FindExact("GeneticRim.CompHybrid");
+        private static readonly Type Age = OptionalModTypes.FindExact("GeneticRim.CompApplyAgeDiseases");
         private static readonly FieldInfo Quality = Hybrid == null ? null : AccessTools.Field(Hybrid, "quality");
         private static readonly FieldInfo Counter = Age == null ? null : AccessTools.Field(Age, "tickCounter");
         private static readonly FieldInfo Threshold = Age == null ? null : AccessTools.Field(Age, "ticksToApply");

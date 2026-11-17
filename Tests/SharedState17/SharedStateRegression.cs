@@ -260,9 +260,14 @@ namespace WildShiftSharedStateValidation
             SharedBuffEngineChecks.Run(Find.CurrentMap, Check);
             SharedAbilitiesEngineChecks.Run(Find.CurrentMap, Check);
             SharedGearEngineChecks.Run(Find.CurrentMap, Check);
+            SharedModifierCacheEngineChecks.Run(Find.CurrentMap, Check);
+            SharedSemanticCacheEngineChecks.Run(Find.CurrentMap, Check);
+            SharedRoamerThreatEngineChecks.Run(Find.CurrentMap, Check);
             SharedBiologyEngineChecks.Run(Find.CurrentMap, Check);
+            SharedInteractionClockEngineChecks.Run(Find.CurrentMap, Check);
             SharedSystemsEngineChecks.Run(Find.CurrentMap, Check);
             SharedProtectionEngineChecks.Run(Find.CurrentMap, Check);
+            SharedAutomaticCombatEngineChecks.Run(Find.CurrentMap, Check);
             SharedPassiveHealthEngineChecks.Run(Find.CurrentMap, Check);
             SharedDinosauriaEngineChecks.Run(Find.CurrentMap, Check);
             caravan = CaravanExitMapUtility.ExitMapAndCreateCaravan(new[] { companion, form }, Faction.OfPlayer,

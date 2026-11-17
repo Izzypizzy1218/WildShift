@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+  <name>WildShift Combat Performance 1.6 TEST ONLY</name>
+  <author>Codex</author>
+  <packageId>wildshift.tests.combatperformance16</packageId>
+  <supportedVersions><li>1.6</li></supportedVersions>
+  <modDependencies><li><packageId>brrainz.harmony</packageId><displayName>Harmony</displayName></li><li><packageId>wildshift.mod</packageId><displayName>WildShift</displayName></li></modDependencies>
+  <loadAfter><li>brrainz.harmony</li><li>wildshift.mod</li></loadAfter>
+  <description>Disposable isolated native Unity 1.6 combat timing fixture. Never distribute with the production mod.</description>
+</ModMetaData>

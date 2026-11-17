@@ -36,6 +36,151 @@ namespace WildShift
             public bool applies;
         }
 
+        // A personal thought query temporarily exposes the person's ideology
+        // on the animal. Its identity can change without changing any stat
+        // modifier. Observe actual declarative payloads only after the cheap
+        // version changes; stable reads neither allocate nor re-evaluate them.
+        private sealed class SystemsPayload
+        {
+            public bool known;
+            private readonly List<StatModifier> projectedOffsets = new List<StatModifier>();
+            private readonly List<StatModifier> projectedFactors = new List<StatModifier>();
+            private readonly List<StatModifier> nativeOffsets = new List<StatModifier>();
+            private readonly List<StatModifier> nativeFactors = new List<StatModifier>();
+            private readonly List<StatModifier> inspirationOffsets = new List<StatModifier>();
+            private readonly List<StatModifier> inspirationFactors = new List<StatModifier>();
+            private readonly List<Apparel> sourceApparel = new List<Apparel>();
+            private ThingWithComps sourceWeapon;
+            private Ideo sourceIdeo;
+            private InspirationDef sourceInspiration, nativeInspiration;
+            private Precept_Role sourceRole, nativeRole;
+            private readonly List<PreceptDef> sourcePrecepts = new List<PreceptDef>();
+
+            public void Capture(Pawn body, Pawn human)
+            {
+                known = false;
+                projectedOffsets.Clear(); projectedFactors.Clear();
+                nativeOffsets.Clear(); nativeFactors.Clear();
+                inspirationOffsets.Clear(); inspirationFactors.Clear();
+                sourceApparel.Clear(); sourceWeapon = null;
+                sourceIdeo = null; sourceInspiration = nativeInspiration = null;
+                sourceRole = nativeRole = null; sourcePrecepts.Clear();
+                if (human == null) { known = true; return; }
+                // Do not evaluate a conditional affecter or fallback gear stat
+                // an extra time. Retain conservative invalidation for those
+                // consumers, including native-only physical render scopes.
+                if (SharedFormGear.IsNativeOnly || HasConditions(human.Ideo) || HasConditions(body.Ideo)
+                    || HasFallbackGear(body, human)) return;
+                // Native-visible gear is absent from the projected stage, but
+                // replacing an item can change a native equipped-stat bonus.
+                // Preserve membership conservatively without evaluating gear
+                // stat callbacks a second time. HP/quality-only changes stay
+                // on the existing native-stat generation path.
+                List<Apparel> apparel = human.apparel?.WornApparel;
+                if (apparel != null) sourceApparel.AddRange(apparel);
+                sourceWeapon = human.equipment?.Primary;
+                // Limit equivalence to temporary body-ideology views. Actual
+                // source belief, role, inspiration and item replacements keep
+                // their conservative invalidation even with equal numbers.
+                sourceIdeo = human.Ideo;
+                sourceInspiration = human.mindState?.inspirationHandler?.CurStateDef;
+                nativeInspiration = body.mindState?.inspirationHandler?.CurStateDef;
+                sourceRole = sourceIdeo?.GetRole(human);
+                nativeRole = body.Ideo?.GetRole(body);
+                if (sourceIdeo != null)
+                    for (int i = 0; i < sourceIdeo.PreceptsListForReading.Count; i++)
+                        sourcePrecepts.Add(sourceIdeo.PreceptsListForReading[i].def);
+                SharedFormSystems.AppendModifiers(body, projectedOffsets, projectedFactors);
+                InspirationDef inspiration = body.mindState?.inspirationHandler?.CurStateDef;
+                // Native inspiration offsets apply after gene/health factors;
+                // ideology/role offsets apply before those factors. Keep the
+                // categories separate even when their numbers are identical.
+                Append(inspirationOffsets, inspiration?.statOffsets, false);
+                Append(inspirationFactors, inspiration?.statFactors, true);
+                Ideo ideo = body.Ideo;
+                if (ideo != null)
+                {
+                    List<Precept> precepts = ideo.PreceptsListForReading;
+                    for (int i = 0; i < precepts.Count; i++)
+                    {
+                        Append(nativeOffsets, precepts[i].def.statOffsets, false);
+                        Append(nativeFactors, precepts[i].def.statFactors, true);
+                    }
+                    List<RoleEffect> effects = ideo.GetRole(body)?.def.roleEffects;
+                    if (effects != null) for (int i = 0; i < effects.Count; i++)
+                    {
+                        RoleEffect_PawnStatOffset offset = effects[i] as RoleEffect_PawnStatOffset;
+                        RoleEffect_PawnStatFactor factor = effects[i] as RoleEffect_PawnStatFactor;
+                        if (offset?.statDef != null && offset.modifier != 0f)
+                            nativeOffsets.Add(new StatModifier { stat = offset.statDef, value = offset.modifier });
+                        if (factor?.statDef != null && factor.modifier != 1f)
+                            nativeFactors.Add(new StatModifier { stat = factor.statDef, value = factor.modifier });
+                    }
+                }
+                known = true;
+            }
+
+            public bool SameAs(SystemsPayload other)
+            {
+                return known && other.known
+                    && Same(projectedOffsets, other.projectedOffsets) && Same(projectedFactors, other.projectedFactors)
+                    && Same(nativeOffsets, other.nativeOffsets) && Same(nativeFactors, other.nativeFactors)
+                    && Same(inspirationOffsets, other.inspirationOffsets) && Same(inspirationFactors, other.inspirationFactors)
+                    && SameSources(other);
+            }
+
+            private bool SameSources(SystemsPayload other)
+            {
+                if (sourceIdeo != other.sourceIdeo || sourceInspiration != other.sourceInspiration
+                    || nativeInspiration != other.nativeInspiration || sourceRole != other.sourceRole || nativeRole != other.nativeRole
+                    || sourceWeapon != other.sourceWeapon || sourceApparel.Count != other.sourceApparel.Count
+                    || sourcePrecepts.Count != other.sourcePrecepts.Count) return false;
+                for (int i = 0; i < sourceApparel.Count; i++) if (sourceApparel[i] != other.sourceApparel[i]) return false;
+                for (int i = 0; i < sourcePrecepts.Count; i++) if (sourcePrecepts[i] != other.sourcePrecepts[i]) return false;
+                return true;
+            }
+
+            private static bool HasConditions(Ideo ideo)
+            {
+                List<Precept> precepts = ideo?.PreceptsListForReading;
+                if (precepts != null) for (int i = 0; i < precepts.Count; i++)
+                    if (precepts[i].def.conditionalStatAffecters?.Count > 0) return true;
+                return false;
+            }
+
+            private static bool HasFallbackGear(Pawn body, Pawn human)
+            {
+                List<Apparel> source = human.apparel?.WornApparel, native = body.apparel?.WornApparel;
+                if (source != null) for (int i = 0; i < source.Count; i++)
+                    if (native == null || !native.Contains(source[i])) return true;
+                ThingWithComps weapon = human.equipment?.Primary;
+                return weapon != null && body.equipment?.Primary != weapon;
+            }
+
+            private static void Append(List<StatModifier> target, List<StatModifier> source, bool factor)
+            {
+                if (source == null) return;
+                for (int i = 0; i < source.Count; i++)
+                {
+                    StatModifier modifier = source[i];
+                    if (modifier?.stat == null || modifier.value == (factor ? 1f : 0f)) continue;
+                    // Native precept/inspiration list lookups use the first
+                    // entry, including a first entry with a neutral value.
+                    bool duplicate = false;
+                    for (int j = 0; j < i; j++) if (source[j]?.stat == modifier.stat) { duplicate = true; break; }
+                    if (!duplicate) target.Add(new StatModifier { stat = modifier.stat, value = modifier.value });
+                }
+            }
+
+            private static bool Same(List<StatModifier> first, List<StatModifier> second)
+            {
+                if (first.Count != second.Count) return false;
+                for (int i = 0; i < first.Count; i++)
+                    if (first[i].stat != second[i].stat || !first[i].value.Equals(second[i].value)) return false;
+                return true;
+            }
+        }
+
         private sealed class State
         {
             public State() { }
@@ -45,7 +190,8 @@ namespace WildShift
             private bool biotech, refreshing, dirty = true;
             private int generation;
             private int healthGeneration, preparedHealthGeneration = -1;
-            private int systemsVersion = int.MinValue, anatomyVersion = int.MinValue;
+            private int systemsVersion = int.MinValue, projectedSystemsVersion = int.MinValue, anatomyVersion = int.MinValue;
+            private SystemsPayload systemsPayload = new SystemsPayload(), nextSystemsPayload = new SystemsPayload();
             private List<GeneState> humanGenes, animalGenes;
             private List<TraitState> humanTraits, animalTraits;
             private List<ConditionalState> conditions = new List<ConditionalState>();
@@ -69,10 +215,31 @@ namespace WildShift
                     bool sourceChanged = !(original == human && biotech == activeBiotech
                         && GenesMatch(hg, humanGenes) && GenesMatch(ag, animalGenes)
                         && TraitsMatch(ht, humanTraits) && TraitsMatch(at, animalTraits));
-                    int nextSystems = human != null ? SharedFormSystems.ModifierVersion(animal) : 0;
+                    int nextProjectedSystems=0;
+                    int nextSystems = human != null ? SharedFormSystems.ModifierVersion(animal,out nextProjectedSystems) : 0;
                     int nextAnatomy = human != null ? SharedFormAnatomy.ModifierVersion(animal) : 0;
-                    bool externalChanged = systemsVersion != nextSystems || anatomyVersion != nextAnatomy;
+                    bool externalStatsChanged = systemsVersion != nextSystems;
+                    bool systemsProjectionChanged = projectedSystemsVersion != nextProjectedSystems;
+                    bool anatomyChanged = anatomyVersion != nextAnatomy;
+                    bool systemsEffectsChanged = systemsProjectionChanged;
+                    if (systemsProjectionChanged)
+                    {
+                        // Skip only a proven declarative no-op. Genuine stat
+                        // changes retain full invalidation because a custom
+                        // capacity worker can itself depend on those stats.
+                        // In particular, do not clear capacity caches during
+                        // a nested no-op thought query: native DirtyCache
+                        // would reset its in-progress recursion guards.
+                        nextSystemsPayload.Capture(animal, human);
+                        systemsEffectsChanged = !nextSystemsPayload.SameAs(systemsPayload);
+                        SystemsPayload previous = systemsPayload;
+                        systemsPayload = nextSystemsPayload;
+                        nextSystemsPayload = previous;
+                    }
+                    bool externalProjectionChanged = systemsProjectionChanged || anatomyChanged;
+                    bool healthProjectionChanged = systemsEffectsChanged || anatomyChanged;
                     systemsVersion = nextSystems;
+                    projectedSystemsVersion = nextProjectedSystems;
                     anatomyVersion = nextAnatomy;
                     if (sourceChanged)
                     {
@@ -90,10 +257,17 @@ namespace WildShift
                     // queries: movement, sunlight or clothes can change twice
                     // in one tick, without changing its gene membership.
                     bool conditionChanged = RefreshConditions(animal);
-                    if (externalChanged) healthGeneration++;
-                    if (sourceChanged || conditionChanged || externalChanged)
+                    if (healthProjectionChanged) healthGeneration++;
+                    if (sourceChanged || conditionChanged || healthProjectionChanged)
                     {
                         dirty = true;
+                    }
+                    // Native gear HP, quality and persona traits can change
+                    // cached pawn stats without changing the shared stage or
+                    // any capacity modifier. Keep their invalidation immediate
+                    // without rebuilding that stage or dirtying all health.
+                    if (sourceChanged || conditionChanged || externalProjectionChanged || externalStatsChanged)
+                    {
                         generation++;
                     }
                 }

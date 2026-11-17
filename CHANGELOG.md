@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.4.0-beta.8 — Combat fixes and first-transform latency (2026-11-17)
+
+- Keep manual-only apparel/weapon actions out of automatic combat for player-controlled animal forms. An unarmed form borrowing a jump pack now uses its natural melee attack, while explicit manual jump orders remain available.
+- Scope the policy to native effective-verb and start-attack entry points; restore nested/exception contexts and retain ordinary animal, NPC, mental-state and turret behavior.
+- Resolve fully qualified B&S/VGE compatibility types directly from loaded assemblies. Avoid enumerating every installed assembly's types when an optional mod is absent; a matched 60-hostile colony comparison reduced first transformation from 294.91 ms / 52.22 MB allocated to 41.01 ms / 2.88 MB.
+- Read shared apparel views once per modifier pass and separate native stat-cache invalidation from projected-stage/health invalidation. Armor condition, quality and persona traits still update long-lived stat caches immediately without rebuilding unrelated shared health effects.
+- Avoid rebuilding unchanged health/stage caches when personal thought queries temporarily expose the original ideology. Preserve real stat changes, source/item replacement, conditional effects and native modifier application order.
+- Remove an extra social-interaction interval call on active animal forms. Native code already owns the map-only clock; restored off-map forms no longer enter map-only random interaction code. Gene callbacks, aging and shared needs continue normally.
+- Treat a controllable drafted shapeshifter in a roaming livestock form as a combat target immediately. Preserve ordinary livestock protection and the native outer downed/invisibility checks.
+- Add real native battle/target-search probes and automatic/manual selection regression checks. Reproduce unsolicited jump-pack use and resulting native slow-time in a 120-hostile scenario; distinguish native speed restrictions from CPU/FPS lag. See [combat findings and limits](Docs/Combat-v1.4.0-beta.8.md).
+- Pass 751 initialized-game checks on each of actual 1.6 and 1.7 with all five DLCs through three-process save/reload coverage. A frozen wounded-state HUD comparison retains approximately 60 FPS; the reporter's severe selected-combat stall is not confirmed reproduced or resolved. See [the deeper selection investigation](Docs/Selection-UI-deep-20261117.md).
+- Repair the Korean Workshop title and require explicit titles alongside localized descriptions in the metadata publishing tool. Verify both language records with uncached reads after publication. See [bilingual release notes](Docs/Release-v1.4.0-beta.8.md).
+
 ## v1.4.0-beta.7 — Optional protection and passive health effects (2026-11-15)
 
 - Add separate **Allow slaughter of transformed colonists** and **Allow sale of transformed colonists** settings. Both default to enabled, preserve existing behavior for older settings and return to enabled on reset.

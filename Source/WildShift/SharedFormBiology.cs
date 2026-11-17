@@ -32,7 +32,7 @@ namespace WildShift
             public readonly List<Gene> xenogenes = new List<Gene>();
             public readonly List<Gene> endogenes = new List<Gene>();
             public int signature = int.MinValue;
-            public int lastTick = int.MinValue, lastInterval = int.MinValue, lastInteraction = int.MinValue;
+            public int lastTick = int.MinValue, lastInterval = int.MinValue;
             public int lastBindTick = int.MinValue;
             public bool binding, releasing, initialized;
         }
@@ -316,11 +316,10 @@ namespace WildShift
             }
             if (SharedFormIdentity.HumanFor(animal) == human)
                 human.ageTracker?.AgeTickInterval(delta);
-            if (!animal.RaceProps.Humanlike && animal.interactions != null && state.lastInteraction != state.lastInterval)
-            {
-                state.lastInteraction = state.lastInterval;
-                animal.interactions.InteractionsTrackerTickInterval(delta);
-            }
+            // Pawn.TickInterval already advances the borrowed interaction
+            // tracker exactly once while spawned. Replaying it here doubled
+            // map interactions and called map-only random social code for
+            // caravan/world forms, whose Map is null.
         }
 
         public static void Tick(Pawn animal)

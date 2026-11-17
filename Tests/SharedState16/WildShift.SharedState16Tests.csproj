@@ -21,9 +21,14 @@
     <Compile Include="..\SharedState17\SharedBuffEngineChecks.cs" Link="SharedBuffEngineChecks.cs" Condition="Exists('..\SharedState17\SharedBuffEngineChecks.cs')" />
     <Compile Include="..\SharedState17\SharedLegacyDrugEngineChecks.cs" Link="SharedLegacyDrugEngineChecks.cs" />
     <Compile Include="..\SharedState17\SharedGearEngineChecks.cs" Link="SharedGearEngineChecks.cs" />
+    <Compile Include="..\SharedState17\SharedModifierCacheEngineChecks.cs" Link="SharedModifierCacheEngineChecks.cs" />
+    <Compile Include="..\SharedState17\SharedSemanticCacheEngineChecks.cs" Link="SharedSemanticCacheEngineChecks.cs" />
+    <Compile Include="..\SharedState17\SharedInteractionClockEngineChecks.cs" Link="SharedInteractionClockEngineChecks.cs" />
+    <Compile Include="..\SharedState17\SharedRoamerThreatEngineChecks.cs" Link="SharedRoamerThreatEngineChecks.cs" />
     <Compile Include="..\SharedState17\SharedBiologyEngineChecks.cs" Link="SharedBiologyEngineChecks.cs" />
     <Compile Include="..\SharedState17\SharedSystemsEngineChecks.cs" Link="SharedSystemsEngineChecks.cs" />
     <Compile Include="..\SharedState17\SharedProtectionEngineChecks.cs" Link="SharedProtectionEngineChecks.cs" />
+    <Compile Include="..\SharedState17\SharedAutomaticCombatEngineChecks.cs" Link="SharedAutomaticCombatEngineChecks.cs" />
     <Compile Include="..\SharedState17\SharedPassiveHealthEngineChecks.cs" Link="SharedPassiveHealthEngineChecks.cs" />
     <Compile Include="..\SharedState17\SharedDinosauriaEngineChecks.cs" Link="SharedDinosauriaEngineChecks.cs" />
     <Compile Include="Engine16Context.cs" />

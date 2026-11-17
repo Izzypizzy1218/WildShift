@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <GeneDef>
+    <defName>WildShift_TestInteractionClockGene</defName>
+    <label>interaction clock fixture</label>
+    <description>Test-only observer for canonical gene interval forwarding.</description>
+    <geneClass>WildShiftSharedStateValidation.InteractionClockGene</geneClass>
+    <selectionWeight>0</selectionWeight>
+    <modExtensions>
+      <li Class="WildShift.SharedFormGeneCallbacksExtension" />
+    </modExtensions>
+  </GeneDef>
+</Defs>

@@ -350,11 +350,13 @@ namespace WildShift
                         if (factor?.statDef != null) changed |= MergeOne(factors,factor.statDef,factor.modifier,true);
                     }
             }
-            if (human.apparel != null)
-                for (int i=0;i<human.apparel.WornApparel.Count;i++)
+            List<Apparel> sourceApparel=human.apparel?.WornApparel;
+            List<Apparel> bodyApparel=body.apparel?.WornApparel;
+            if (sourceApparel != null)
+                for (int i=0;i<sourceApparel.Count;i++)
                 {
-                    Apparel gear=human.apparel.WornApparel[i];
-                    if (body.apparel != null && body.apparel.WornApparel.Contains(gear)) continue;
+                    Apparel gear=sourceApparel[i];
+                    if (bodyApparel != null && bodyApparel.Contains(gear)) continue;
                     changed |= AddGear(offsets,gear);
                 }
             ThingWithComps weapon=human.equipment?.Primary;
@@ -404,6 +406,16 @@ namespace WildShift
 
         public static int ModifierVersion(Pawn body)
         {
+            int projectedVersion;
+            return ModifierVersion(body,out projectedVersion);
+        }
+
+        // Native-visible gear still invalidates cached pawn stats immediately,
+        // but only missing gear contributes to the projected stage. Return both
+        // signatures from one pass through the source and body's gear views.
+        public static int ModifierVersion(Pawn body,out int projectedVersion)
+        {
+            projectedVersion=0;
             Pawn human=SharedFormIdentity.HumanFor(body);
             if(human==null)return 0;
             unchecked
@@ -428,13 +440,38 @@ namespace WildShift
                         }
                     }
                 }
-                if(human.apparel!=null)for(int i=0;i<human.apparel.WornApparel.Count;i++)hash=HashGear(hash,human.apparel.WornApparel[i]);
-                hash=HashGear(hash,human.equipment?.Primary);
+                // Shared getters can refresh the full non-owning gear view.
+                // Read each list once, rather than once per loop test/item.
+                List<Apparel> sourceApparel=human.apparel?.WornApparel;
+                List<Apparel> bodyApparel=body.apparel?.WornApparel;
+                hash=hash*31+(sourceApparel?.Count??0);
+                projectedVersion=hash;
+                if(sourceApparel!=null)for(int i=0;i<sourceApparel.Count;i++)
+                {
+                    Apparel gear=sourceApparel[i];
+                    HashGearVersions(ref hash,ref projectedVersion,gear,bodyApparel!=null&&bodyApparel.Contains(gear));
+                }
+                ThingWithComps weapon=human.equipment?.Primary;
+                HashGearVersions(ref hash,ref projectedVersion,weapon,weapon!=null&&body.equipment?.Primary==weapon);
                 return hash;
             }
         }
 
         private static int Hash(int seed,object value) { unchecked{return seed*31+(value==null?0:RuntimeHelpers.GetHashCode(value));} }
+        private static void HashGearVersions(ref int stats,ref int projected,Thing gear,bool nativeVisible)
+        {
+            unchecked
+            {
+                int value=HashGear(17,gear);
+                stats=stats*31+value;
+                projected=Hash(projected,gear);
+                projected=projected*31+(nativeVisible?1:0);
+                // Match AppendModifiers: native-visible gear needs no projected
+                // modifier. Preserve identity/presence so entering or leaving
+                // the fallback changes its stage in the same tick.
+                if(!nativeVisible)projected=projected*31+value;
+            }
+        }
         private static int HashGear(int seed,Thing gear)
         {
             unchecked

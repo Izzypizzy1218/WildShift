@@ -133,7 +133,9 @@ To build 1.6, supply matching 1.6 game or reference assemblies and `-p:RimWorldV
 
 ## Current version
 
-`v1.4.0-beta.7`
+`v1.4.0-beta.8` — 2026-11-17
+
+Correct automatic selection of manual-only apparel/weapon actions on player-controlled animal forms, preserving explicit manual orders. Reduce first-transform compatibility lookup stalls, avoid unnecessary shared-health cache rebuilds, and make freshly drafted roaming forms targetable immediately. Remove duplicate social-interaction ticking and its restored off-map error. The final runtime passes 751 initialized-game checks on each of actual 1.6 and 1.7, with all five DLCs and three-process save/load coverage. The reported severe selected-combat slowdown is still not confirmed fully resolved. See [bilingual release notes](Docs/Release-v1.4.0-beta.8.md), [combat findings and limits](Docs/Combat-v1.4.0-beta.8.md) and [the deeper selection investigation](Docs/Selection-UI-deep-20261117.md). Earlier beta.7 features follow below.
 
 Adds independent settings for allowing slaughter and sale of transformed player colonists. Both default to enabled; uncheck an option to protect those active forms. See [optional protection and validation](Docs/AnimalProtection-v1.4.0-beta.7.md). It also shares seven additional native personal health effects and adds passive-health numerical and Dinosauria version/provenance regression coverage. The release passes 722 initialized-game checks on each of actual 1.6 and 1.7 with all five DLCs and Dinosauria; see [the November 15 report recheck](Docs/UserReports-v1.4.0-beta.7.md). The shared-state foundations and historical validation below describe beta.6.
 

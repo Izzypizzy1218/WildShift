@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <!-- TEST ONLY. Registered before Pawn capacity DefMaps are constructed. -->
+  <PawnCapacityDef>
+    <defName>WildShift_TestSemanticStatCapacity</defName>
+    <label>semantic cache fixture</label>
+    <workerClass>WildShiftSharedStateValidation.SharedSemanticStatCapacityWorker</workerClass>
+    <minValue>0</minValue>
+  </PawnCapacityDef>
+  <GeneDef>
+    <defName>WildShift_TestSemanticMoveFactor</defName>
+    <label>semantic cache move factor</label>
+    <description>Test-only gene for native modifier ordering.</description>
+    <selectionWeight>0</selectionWeight>
+    <statFactors>
+      <MoveSpeed>2</MoveSpeed>
+    </statFactors>
+  </GeneDef>
+</Defs>

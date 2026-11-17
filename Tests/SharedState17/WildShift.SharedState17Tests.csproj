@@ -22,9 +22,14 @@
     <Compile Include="SharedAbilitiesEngineChecks.cs" />
     <Compile Include="SharedLegacyDrugEngineChecks.cs" />
     <Compile Include="SharedGearEngineChecks.cs" />
+    <Compile Include="SharedModifierCacheEngineChecks.cs" />
+    <Compile Include="SharedSemanticCacheEngineChecks.cs" />
+    <Compile Include="SharedInteractionClockEngineChecks.cs" />
+    <Compile Include="SharedRoamerThreatEngineChecks.cs" />
     <Compile Include="SharedBiologyEngineChecks.cs" />
     <Compile Include="SharedSystemsEngineChecks.cs" />
     <Compile Include="SharedProtectionEngineChecks.cs" />
+    <Compile Include="SharedAutomaticCombatEngineChecks.cs" />
     <Compile Include="SharedPassiveHealthEngineChecks.cs" />
     <Compile Include="SharedDinosauriaEngineChecks.cs" />
   </ItemGroup>

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework><OutputType>Library</OutputType>
+    <AssemblyName>WildShiftCombatPerformance16</AssemblyName><LangVersion>7.3</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems><AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath><GenerateDependencyFile>false</GenerateDependencyFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp" HintPath="$(RimWorldManaged)\Assembly-CSharp.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(RimWorldManaged)\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.IMGUIModule" HintPath="$(RimWorldManaged)\UnityEngine.IMGUIModule.dll" Private="false" />
+    <Reference Include="netstandard" HintPath="$(RimWorldManaged)\netstandard.dll" Private="false" />
+    <Reference Include="0Harmony" HintPath="$(HarmonyPath)" Private="false" />
+    <Reference Include="WildShift" HintPath="$(WildShiftPath)" Private="false" />
+    <Compile Include="$(GeneratedSourceDir)\*.cs" />
+    <Compile Include="Allocation16.cs" />
+    <Compile Include="JsonSerializer.cs" />
+  </ItemGroup>
+  <Target Name="ValidateInputs" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(RimWorldManaged)\Assembly-CSharp.dll')" Text="Actual native 1.6 managed references required." />
+    <Error Condition="!Exists('$(GeneratedSourceDir)\CombatProbe16.cs')" Text="Use Run-CombatPerformance16.ps1 to generate external adapted shared sources." />
+    <Error Condition="!Exists('$(WildShiftPath)')" Text="Matching separately staged 1.6 WildShift DLL required." />
+  </Target>
+</Project>

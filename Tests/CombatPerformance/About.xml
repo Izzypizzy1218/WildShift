@@ -1,0 +1,7 @@
+<ModMetaData>
+  <name>WildShift Combat Performance (TEST ONLY)</name><author>WildShift validation</author>
+  <packageId>wildshift.tests.combatperformance</packageId><supportedVersions><li>1.7</li></supportedVersions>
+  <modDependencies><li><packageId>brrainz.harmony</packageId><displayName>Harmony</displayName></li><li><packageId>wildshift.mod</packageId><displayName>WildShift</displayName></li></modDependencies>
+  <loadAfter><li>brrainz.harmony</li><li>wildshift.mod</li></loadAfter>
+  <description>TEST ONLY. Native target-search and combat benchmark in a disposable profile. Never enable in a real colony or package with runtime files.</description>
+</ModMetaData>

@@ -8,10 +8,10 @@ namespace WildShift
 {
     public static class SapientAnimalsCompatibility
     {
-        private static readonly Type Helpers = AccessTools.TypeByName("BigAndSmall.HumanlikeAnimals");
+        private static readonly Type Helpers = OptionalModTypes.FindExact("BigAndSmall.HumanlikeAnimals");
         private static readonly MethodInfo Source = Helpers == null ? null : AccessTools.Method(Helpers, "AnimalSourceFor", new[] { typeof(ThingDef) });
         private static readonly MethodInfo Lookup = Helpers == null ? null : AccessTools.Method(Helpers, "GetHumanlikeAnimalFor", new[] { typeof(ThingDef) });
-        private static readonly Type Entry = AccessTools.TypeByName("BigAndSmall.HumanlikeAnimal");
+        private static readonly Type Entry = OptionalModTypes.FindExact("BigAndSmall.HumanlikeAnimal");
         private static readonly FieldInfo Kind = Entry == null ? null : AccessTools.Field(Entry, "animalKind");
 
         public static ThingDef AnimalSource(ThingDef race)
@@ -40,7 +40,7 @@ namespace WildShift
 
         public static void Install(Harmony harmony)
         {
-            Type type = AccessTools.TypeByName("BigAndSmall.RaceMorpher");
+            Type type = OptionalModTypes.FindExact("BigAndSmall.RaceMorpher");
             if (type == null) return;
             var method = AccessTools.DeclaredMethod(type, "SwapAnimalToSapientVersion", new[] { typeof(Pawn) });
             if (method == null || method.ReturnType != typeof(Pawn))
