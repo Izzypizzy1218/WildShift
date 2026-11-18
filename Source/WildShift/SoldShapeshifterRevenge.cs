@@ -79,6 +79,8 @@ namespace WildShift
 
         public bool Retains(Pawn pawn) => pawn != null && retained.Contains(pawn) && !pawn.Dead && !pawn.Destroyed;
 
+        internal void AddRetainedPawns(HashSet<Pawn> pawns) => pawns.UnionWith(retained);
+
         private void Reindex()
         {
             retained.Clear();

@@ -137,6 +137,10 @@ To build 1.6, supply matching 1.6 game or reference assemblies and `-p:RimWorldV
 
 ## Current version
 
+`v1.4.0-beta.10` — 2026-11-18
+
+Reduce repeated injury grouping and text measurement in crowded health tabs. Add a removal preparation action that returns shapeshifters to human form and writes a separate recovery save. Fix stored insectoid forms, interrupted body swaps, shared health links, quest recruitment rolls and revenge raid budgets. See [bilingual release notes](Docs/Release-v1.4.0-beta.10.md) for validation and the scope of the performance changes.
+
 `v1.4.0-beta.9` — 2026-11-18
 
 Fix duplicate ISEKAI creature draft toggles, reduce repeated shared-state work and temporary allocations, and protect nested state during exceptions or callback-driven return to human. Both initialized game versions pass 875 checks. The severe selected-combat slowdown remains unconfirmed resolved. See [bilingual release notes](Docs/Release-v1.4.0-beta.9.md), [ISEKAI compatibility](Docs/IsekaiDraftCompatibility.md) and [the final review](Docs/Final-review-20261118.md). Earlier beta.8 changes follow below.

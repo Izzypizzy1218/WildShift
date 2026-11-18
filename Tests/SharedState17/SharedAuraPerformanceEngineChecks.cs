@@ -15,6 +15,19 @@ namespace WildShiftSharedStateValidation
     {
         private static Pawn watchedForm, watchedOrdinary;
         private static int farFormQueries, farOrdinaryQueries;
+        private static HediffComp_GiveHediffsInRange skippedAura;
+        private static HediffComp_Link skippedLink;
+
+        public static bool SkipAura(HediffComp_GiveHediffsInRange __instance)
+        {
+            return !ReferenceEquals(__instance, skippedAura);
+        }
+
+        public static bool SkipLink(HediffComp_Link __instance)
+        {
+            return !ReferenceEquals(__instance, skippedLink);
+        }
+
         public static void ObserveIdentity(Pawn __0)
         {
             bool form = ReferenceEquals(__0, watchedForm), ordinary = ReferenceEquals(__0, watchedOrdinary);
@@ -70,6 +83,7 @@ namespace WildShiftSharedStateValidation
                 Hediff nearBuff = Raw(near, buffDef), ordinaryBuff = Raw(nearOrdinary, buffDef);
                 CheckRecipients(source, near, nearBody, far, farBody, nearOrdinary, farOrdinary, buffDef, check, "ordinary-source");
                 Require(nearBuff != null && ordinaryBuff != null, "aura-performance/direct native CompPostTick creates real recipient buffs", check);
+                CheckSkippedTicks(comp, source, nearBuff, ordinaryBuff, check);
                 nearBuff.TryGetComp<HediffComp_Disappears>().ticksToDisappear = 1;
                 ordinaryBuff.TryGetComp<HediffComp_Disappears>().ticksToDisappear = 1;
                 Invoke(comp);
@@ -107,6 +121,43 @@ namespace WildShiftSharedStateValidation
                 foreach (Pawn human in humans) if (!human.Destroyed) human.Destroy(DestroyMode.Vanish);
             }
         }
+
+        private static void CheckSkippedTicks(HediffComp_GiveHediffsInRange aura, Pawn source,
+            Hediff transformedBuff, Hediff ordinaryBuff, Action<bool, string> check)
+        {
+            var skipper = new Harmony("wildshift.tests.skipped-native-health-tick");
+            MethodInfo auraTick = AccessTools.Method(typeof(HediffComp_GiveHediffsInRange), "CompPostTick");
+            MethodInfo linkTick = AccessTools.Method(typeof(HediffComp_Link), "CompPostTick");
+            MethodInfo skipAura = AccessTools.Method(typeof(SharedAuraPerformanceEngineChecks), nameof(SkipAura));
+            MethodInfo skipLink = AccessTools.Method(typeof(SharedAuraPerformanceEngineChecks), nameof(SkipLink));
+            try
+            {
+                skippedAura = aura;
+                skippedLink = ordinaryBuff.TryGetComp<HediffComp_Link>();
+                Require(skippedLink?.other == source, "aura-performance/ordinary recipient starts with its native link", check);
+                skipper.Patch(auraTick, prefix: new HarmonyMethod(skipAura) { priority = Priority.First });
+                skipper.Patch(linkTick, prefix: new HarmonyMethod(skipLink) { priority = Priority.First });
+
+                float adjustment = 0f;
+                skippedLink.CompPostTick(ref adjustment);
+                check(skippedLink.other == source,
+                    "aura-performance/foreign prefix skipping a native link tick leaves its target intact");
+
+                HediffComp_Disappears timer = transformedBuff.TryGetComp<HediffComp_Disappears>();
+                timer.ticksToDisappear = 1;
+                Invoke(aura);
+                check(timer.ticksToDisappear == 1,
+                    "aura-performance/foreign prefix skipping a native aura also skips shared recipients");
+            }
+            finally
+            {
+                skippedAura = null;
+                skippedLink = null;
+                skipper.Unpatch(auraTick, skipAura);
+                skipper.Unpatch(linkTick, skipLink);
+            }
+        }
+
         private static void ResetCounts() { farFormQueries = farOrdinaryQueries = 0; }
         private static string Counts()
         {

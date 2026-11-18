@@ -40,11 +40,19 @@ namespace WildShift
             if (owner != null) human = owner;
         }
 
+        internal PawnKindDef LiveStoredKind
+        {
+            get
+            {
+                Pawn form = StoredForm;
+                if (form == null || form.Destroyed || form.Dead) return null;
+                return sourceKind ?? TransformUtility.TryGetTransformedComp(form)?.sourceKind ?? form.kindDef;
+            }
+        }
+
         public bool Matches(PawnKindDef kind)
         {
-            Pawn form = StoredForm;
-            PawnKindDef original = sourceKind ?? TransformUtility.TryGetTransformedComp(form)?.sourceKind ?? form?.kindDef;
-            return form != null && kind != null && original != null && original.race == kind.race;
+            return kind?.race != null && LiveStoredKind?.race == kind.race;
         }
 
         public Pawn TryTake(PawnKindDef kind)

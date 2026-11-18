@@ -21,6 +21,8 @@ namespace WildShift {
  // keep it as a boundary rather than modeling native ownership here.
  public sealed class AnimalFormStorage {
   public AnimalFormStorage(Verse.Pawn pawn) { }
+  internal Verse.PawnKindDef LiveStoredKind;
+  public bool Matches(Verse.PawnKindDef kind) { return kind?.race != null && LiveStoredKind?.race == kind.race; }
   internal void BindOwner(Verse.Pawn pawn) { }
   public Verse.ThingOwner GetDirectlyHeldThings() { return null; }
   public void GetChildHolders(System.Collections.Generic.List<Verse.IThingHolder> holders) { }
@@ -43,7 +45,7 @@ $validationEnd = $transform.LastIndexOf("`n    }")
 if ($validationStart -lt 0 -or $validationEnd -le $validationStart) { throw 'Cannot locate production transformation guard.' }
 $source += "`nnamespace WildShift { public static partial class TransformUtility {`n" + $transform.Substring($validationStart, $validationEnd - $validationStart) + "`n} }"
 # Shared using directives are already in the harness header.
-foreach ($name in @('AnimalPool', 'RacialAnimalForms', 'CustomRacialForms', 'AnimalFormGender', 'AwakeningRaceSelection', 'HediffComp_Shapeshifter', 'StartingFormPreviewCache', 'SoldRevengeBalance', 'RevengeCompanions')) {
+foreach ($name in @('AnimalPool', 'RacialAnimalForms', 'CustomRacialForms', 'AnimalFormGender', 'AwakeningRaceSelection', 'HediffComp_Shapeshifter', 'StartingFormPreviewCache', 'SoldRevengeBalance', 'RevengeCompanions', 'Patch_JoinerShapeshifter')) {
     $source += "`n" + ((Get-Content "$root/Source/WildShift/$name.cs" -Raw) -replace '(?m)^using [^;]+;\r?\n', '')
 }
 $source += "`n" + (Get-Content "$PSScriptRoot/AwakeningRaceSelectionTests.cs" -Raw)

@@ -278,8 +278,18 @@ namespace WildShift
         public static void EndStore(Pawn pawn) { if (pawn != null) storing?.Remove(pawn); }
         public static bool IsStoring(Pawn pawn) { return pawn != null && storing != null && storing.Contains(pawn); }
 
-        // Only the ideology's belief census uses this list. Do not inject
-        // hidden humans into global map/world pawn enumeration or ticking.
+        internal static bool HasSpawnedBodyOn(Map map)
+        {
+            for (int i = 0; i < activeBodies.Count; i++)
+                if (activeBodies[i].TryGetTarget(out Pawn body) && body != null
+                    && body.Spawned && body.Map == map)
+                    return true;
+
+            return false;
+        }
+
+        // Only the ideology's belief census uses the resulting list. Do not
+        // inject hidden humans into global map/world pawn enumeration or ticking.
         public static List<Pawn> WithActivePeople(IEnumerable<Pawn> native)
         {
             var result=new List<Pawn>();var seen=new HashSet<Pawn>();

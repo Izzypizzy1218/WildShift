@@ -68,5 +68,20 @@ namespace WildShift
             if (!FormTransferUtility.DestroyEmptyForm(human))
                 rollbacks.Add(new AwakeningRollback { animalId = animal.thingIDNumber, human = human });
         }
+
+        internal bool PreserveDetachedForRemoval(out Pawn blocked)
+        {
+            foreach (AwakeningRollback entry in rollbacks)
+            {
+                Pawn human = entry.human;
+                if (human == null || human.Destroyed || human.Spawned
+                    || human.holdingOwner != null || human.IsWorldPawn()) continue;
+                if (FormTransferUtility.TryRegisterWorldPawn(human)) continue;
+                blocked = human;
+                return false;
+            }
+            blocked = null;
+            return true;
+        }
     }
 }

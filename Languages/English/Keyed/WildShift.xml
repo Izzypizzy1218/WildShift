@@ -38,6 +38,12 @@
   <WildShift_SettingsAllowInsects>Allow insectoid forms</WildShift_SettingsAllowInsects>
   <WildShift_SettingsAllowInsectsDesc>Include insectoid races in the random animal pool.</WildShift_SettingsAllowInsectsDesc>
   <WildShift_SettingsReset>Reset WildShift settings</WildShift_SettingsReset>
+  <WildShift_RemovalPrepare>Prepare save for WildShift removal</WildShift_RemovalPrepare>
+  <WildShift_RemovalPrepareConfirm>Return active shapeshifters to their human bodies in this game and create a separate recovery save. Your previous save will be kept. Continue?</WildShift_RemovalPrepareConfirm>
+  <WildShift_RemovalPrepareBlocked>Restored {0} shapeshifters. Could not safely restore or preserve {1}. No recovery save was created. Resolve the problem with that pawn and try again.</WildShift_RemovalPrepareBlocked>
+  <WildShift_RemovalPrepareFailed>WildShift could not finish preparing the recovery save. Check the game log. Your previous save is still available.</WildShift_RemovalPrepareFailed>
+  <WildShift_RemovalPrepareSaveFailed>WildShift could not write the recovery save. Check the game log. Your previous save is still available.</WildShift_RemovalPrepareSaveFailed>
+  <WildShift_RemovalPrepareDone>Restored {0} shapeshifters and saved to {1}. Check this copy first after disabling WildShift. The load log can still report missing WildShift entries.</WildShift_RemovalPrepareDone>
   <WildShift_SettingsAllowTransformedSlaughter>Allow slaughter of transformed colonists</WildShift_SettingsAllowTransformedSlaughter>
   <WildShift_SettingsAllowTransformedSlaughterDesc>Enabled by default. Turn off to prevent manual, automatic and mental-break slaughter of player-owned animal forms holding their original colonists. Existing slaughter designations are removed. Ordinary animals are unaffected. When allowed, slaughter still kills the preserved human.</WildShift_SettingsAllowTransformedSlaughterDesc>
   <WildShift_SettingsAllowTransformedSale>Allow sale of transformed colonists</WildShift_SettingsAllowTransformedSale>

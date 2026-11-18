@@ -135,6 +135,7 @@ namespace WildShift
         {
             if (comp == null || !comp.HasStoredPawn || Find.WorldPawns == null) return null;
             Pawn human = comp.ReleaseStoredPawn();
+            if (human == null) return null;
             try
             {
                 Find.WorldPawns.PassToWorld(human, PawnDiscardDecideMode.KeepForever);

@@ -186,6 +186,9 @@ namespace WildShiftSharedStateValidation
         {
             Pawn caster = NewHuman(map, "ExpandedCommandCaster", -20);
             Pawn recipient = NewHuman(map, "ExpandedCommandRecipient", -23);
+            // A blocked requested cell can put a pawn back near the map center.
+            // Establish a valid pair before transforming so terrain cannot split them.
+            recipient.Position = CellFinder.RandomClosewalkCellNear(caster.Position, map, 2);
             Pawn casterBody = Transform(map, caster), recipientBody = Transform(map, recipient);
             ApplyNativeEffect(caster, "Invisibility", recipientBody);
             Hediff invisible = recipient.health.hediffSet.GetFirstHediffOfDef(DefDatabase<HediffDef>.GetNamed("PsychicInvisibility"));
@@ -198,6 +201,8 @@ namespace WildShiftSharedStateValidation
                 && comp.Pawn == recipientBody && !comp.PsychologicallyVisible,
                 "buff/native invisibility component uses active animal and actual invisibility state");
             ApplyNativeEffect(caster, "CombatCommand", casterBody);
+            Require(casterBody.Position.DistanceTo(recipientBody.Position) <= 3f,
+                "buff/native command starts with both forms in range", check);
             for (int tick = 0; tick < 20 && !recipient.health.hediffSet.HasHediff(DefDatabase<HediffDef>.GetNamed("CombatCommandBuff")); tick++)
                 Find.TickManager.DoSingleTick();
             HediffDef buffDef = DefDatabase<HediffDef>.GetNamed("CombatCommandBuff");

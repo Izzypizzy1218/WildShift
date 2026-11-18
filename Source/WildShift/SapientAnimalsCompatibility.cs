@@ -73,7 +73,27 @@ namespace WildShift
 
         public static void AfterSwap(Pawn __result, SwapState __state)
         {
-            if (__state == null || __result == null || __result == __state.oldPawn || __result.Destroyed) return;
+            if (__state == null) return;
+            Pawn oldPawn = __state.oldPawn;
+            if (__result == null || __result == oldPawn || __result.Destroyed)
+            {
+                // B&S may return the old pawn after detaching its hediffs, but
+                // before the replacement received them. Reattach the same holder.
+                HediffComp_Transformed storage = __state.storage;
+                Hediff holding = storage?.parent;
+                HediffSet hediffSet = oldPawn?.health?.hediffSet;
+                if (hediffSet != null && !oldPawn.Destroyed && !oldPawn.Dead
+                    && storage?.HasStoredPawn == true && holding?.pawn == oldPawn && !hediffSet.hediffs.Contains(holding))
+                {
+                    // B&S removed the hediff directly. Restore it without native
+                    // add callbacks that can merge it or reset its existing state.
+                    hediffSet.hediffs.Add(holding);
+                    hediffSet.DirtyCache();
+                    Patch_GameEnder.InvalidateCache();
+                    Find.ColonistBar?.MarkColonistsDirty();
+                }
+                return;
+            }
             GeneticsCompatibility.Restore(__result, __state.genetics);
             if (__state.storage != null)
             {

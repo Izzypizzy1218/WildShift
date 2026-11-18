@@ -47,8 +47,9 @@ namespace WildShift
                     TransformUtility.AddOrGetShapeshifter(ally, assigned, useCustomRules);
                     var comp = TransformUtility.TryGetShapeshifterComp(ally);
                     PawnKindDef actual = comp?.assignedKind;
+                    float remaining = (added == 0 ? available : target) - used;
                     if (actual == null || actual.forceDeathOnDowned || actual.combatPower <= 0f
-                        || float.IsNaN(actual.combatPower) || actual.combatPower > available - used) continue;
+                        || float.IsNaN(actual.combatPower) || actual.combatPower > remaining) continue;
                     comp.enemyRaidParticipant = true;
                     comp.enemyShiftUsed = false;
                     companions.Add(ally);

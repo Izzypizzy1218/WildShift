@@ -89,7 +89,7 @@ namespace WildShift
             Settings = GetSettings<WildShiftSettings>();
             Settings.Normalize();
             harmony = new Harmony("wildshift.mod");
-            harmony.PatchAll();
+            harmony.PatchAll(typeof(WildShiftMod).Assembly);
             AnimalModCompatibility.Install(harmony);
             SapientAnimalsCompatibility.Install(harmony);
         }
@@ -202,6 +202,13 @@ namespace WildShift
             {
                 Settings.Reset();
                 TransformedAnimalProtection.SettingsChanged();
+            }
+
+            if (Current.ProgramState == ProgramState.Playing && Current.Game != null)
+            {
+                listing.GapLine();
+                if (listing.ButtonText("WildShift_RemovalPrepare".Translate()))
+                    WildShiftRemovalPreparation.Confirm();
             }
 
             settingsViewHeight = listing.CurHeight + 12f;

@@ -51,7 +51,8 @@ namespace WildShift
         private static readonly FieldInfo mote = AccessTools.Field(typeof(HediffComp_GiveHediffsInRange), "mote");
         public static void Prefix(HediffComp_GiveHediffsInRange __instance)
         {
-            Pawn body = __instance.parent.pawn;
+            Pawn body = __instance.parent?.pawn;
+            if (body == null) return;
             Owner previous;
             if (!owners.TryGetValue(__instance, out previous))
             {
@@ -64,14 +65,20 @@ namespace WildShift
             mote?.SetValue(__instance, null);
             previous.pawn = body;
         }
-        public static void Postfix(HediffComp_GiveHediffsInRange __instance)
+        public static void Postfix(HediffComp_GiveHediffsInRange __instance, bool __runOriginal)
         {
-            Pawn source = __instance.parent.pawn;
+            if (!__runOriginal) return;
+            Pawn source = __instance.parent?.pawn;
             if (source?.health == null || !source.Spawned || !source.Awake() || source.health.InPainShock) return;
-            HediffCompProperties_GiveHediffsInRange props = __instance.Props;
+            Map map = source.Map;
+            if (map == null) return;
             Pawn identity = SharedFormIdentity.HumanFor(source) ?? source;
-            IReadOnlyList<Pawn> pawns = props.onlyPawnsInSameFaction && source.Faction != null
-                ? source.Map.mapPawns.SpawnedPawnsInFaction(source.Faction) : source.Map.mapPawns.AllPawnsSpawned;
+            if (identity == source && !SharedFormSystems.HasSpawnedBodyOn(map)) return;
+
+            HediffCompProperties_GiveHediffsInRange props = __instance.Props;
+            Faction faction = props.onlyPawnsInSameFaction ? source.Faction : null;
+            IReadOnlyList<Pawn> pawns = faction != null
+                ? map.mapPawns.SpawnedPawnsInFaction(faction) : map.mapPawns.AllPawnsSpawned;
             for (int i = 0; i < pawns.Count; i++)
             {
                 Pawn body = pawns[i];
@@ -79,11 +86,15 @@ namespace WildShift
                     || body.Position.DistanceTo(source.Position) > props.range) continue;
                 Pawn human = SharedFormIdentity.HumanFor(body);
                 if (human == null
-                    || (props.targetingParameters != null && !props.targetingParameters.CanTarget(human))) continue;
+                    || (props.targetingParameters != null && !props.targetingParameters.CanTarget(human))
+                    || !body.Spawned || body.Map != map) continue;
+                if (!source.Spawned || source.Map != map) return;
                 Hediff buff = body.health.hediffSet.GetFirstHediffOfDef(props.hediff);
                 if (buff == null)
                 {
                     buff = body.health.AddHediff(props.hediff, body.health.hediffSet.GetBrain());
+                    if (!source.Spawned || source.Map != map) return;
+                    if (buff == null || !body.Spawned || body.Map != map) continue;
                     buff.Severity = props.initialSeverity;
                 }
                 HediffComp_Link link = buff.TryGetComp<HediffComp_Link>();
@@ -96,7 +107,7 @@ namespace WildShift
             if (identity != source)
                 for (int i = 0; i < pawns.Count; i++)
                 {
-                    Hediff buff = pawns[i].health?.hediffSet.GetFirstHediffOfDef(props.hediff);
+                    Hediff buff = pawns[i]?.health?.hediffSet.GetFirstHediffOfDef(props.hediff);
                     HediffComp_Link link = buff?.TryGetComp<HediffComp_Link>();
                     if (link != null && link.other == source) link.other = identity;
                 }
@@ -143,17 +154,24 @@ namespace WildShift
             public Pawn owner;
             public Thing other;
         }
+        public struct LinkRestore
+        {
+            internal bool Applied;
+            internal Thing Original;
+            internal Thing Temporary;
+        }
         private static readonly ConditionalWeakTable<HediffComp_Link, Targets> targets = new ConditionalWeakTable<HediffComp_Link, Targets>();
         private static readonly FieldInfo mote = AccessTools.Field(typeof(HediffComp_Link), "mote");
-        public static void Prefix(HediffComp_Link __instance, out Thing __state)
+        public static void Prefix(HediffComp_Link __instance, out LinkRestore __state)
         {
-            __state = __instance.other;
-            Pawn owner = __instance.parent.pawn;
-            Pawn other = __state as Pawn;
-            Thing visibleOther = SharedFormIdentity.ActiveFormFor(other) ?? __state;
+            __state = default;
+            Pawn owner = __instance.parent?.pawn;
+            if (owner == null) return;
+            Thing original = __instance.other;
+            Thing visibleOther = SharedFormIdentity.ActiveFormFor(original as Pawn) ?? original;
             Targets previous;
             bool existing = targets.TryGetValue(__instance, out previous);
-            if (!existing && visibleOther == __state && SharedFormIdentity.HumanFor(owner) == null) return;
+            if (!existing && visibleOther == original && SharedFormIdentity.HumanFor(owner) == null) return;
             if (!existing) previous = targets.GetOrCreateValue(__instance);
             if (previous.owner != owner || previous.other != visibleOther)
             {
@@ -162,9 +180,15 @@ namespace WildShift
                 mote?.SetValue(__instance, null);
                 previous.owner = owner; previous.other = visibleOther;
             }
+            if (visibleOther == original) return;
+            __state = new LinkRestore { Applied = true, Original = original, Temporary = visibleOther };
             __instance.other = visibleOther;
         }
-        public static void Finalizer(HediffComp_Link __instance, Thing __state) { __instance.other = __state; }
+        public static void Finalizer(HediffComp_Link __instance, LinkRestore __state)
+        {
+            if (__state.Applied && ReferenceEquals(__instance.other, __state.Temporary))
+                __instance.other = __state.Original;
+        }
     }
 
     internal static class SharedHealthDefinitionFlags

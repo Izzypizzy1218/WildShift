@@ -339,7 +339,7 @@ namespace WildShiftSharedStateValidation
             CheckIdentity();
             CheckDrugTicks(300, "reloaded caravan");
             CheckPersistentSharedEffects(true);
-            Require(TransformUtility.RevertToHuman(form, false) == original, "off-map production return restores the original human");
+            CheckRemovalPreparation();
             Check(caravan.ContainsPawn(original) && !original.Spawned && WorldPawnsUtility.IsWorldPawn(original),
                 "off-map return retains the exact world-registered caravan member");
             Check(AnimalFormStorage.IsStored(form) && !form.Destroyed && TransformUtility.TryGetTransformedComp(form).StoredPawn == null,
@@ -350,6 +350,30 @@ namespace WildShiftSharedStateValidation
             CheckPersistentSharedEffects(false);
             CheckIdentity();
             Finish("complete");
+        }
+
+        private void CheckRemovalPreparation()
+        {
+            Pawn onMap = NewHuman(Find.CurrentMap, "RemovalMapOriginal", 4, Gender.Female);
+            TransformUtility.AddOrGetShapeshifter(onMap, Kind());
+            Require(TransformUtility.TransformToAnimal(onMap, Kind()), "removal preparation fixture creates an additional map form");
+            Pawn mapForm = SharedFormIdentity.ActiveFormFor(onMap);
+            Require(mapForm != null && mapForm.Spawned, "removal preparation fixture has map and caravan forms");
+
+            string oldSave = GenFilePaths.FilePathForSavedGame("autostart");
+            byte[] oldContent = File.ReadAllBytes(oldSave);
+            string saveFolder = Path.GetDirectoryName(oldSave);
+            string[] oldSlots = Directory.GetFiles(saveFolder, "WildShift-Recovery-*.rws");
+            var preparation = AccessTools.TypeByName("WildShift.WildShiftRemovalPreparation");
+            AccessTools.Method(preparation, "PrepareAndSave").Invoke(null, null);
+
+            Require(onMap.Spawned && TransformUtility.TryGetTransformedComp(mapForm)?.StoredPawn == null,
+                "removal preparation returns the exact map human");
+            Require(caravan.ContainsPawn(original), "off-map production return restores the original human");
+            Check(Directory.GetFiles(saveFolder, "WildShift-Recovery-*.rws").Except(oldSlots).Count() == 1,
+                "removal preparation writes a separate native recovery slot");
+            Check(File.ReadAllBytes(oldSave).SequenceEqual(oldContent),
+                "removal preparation leaves the original saved file byte-for-byte intact");
         }
 
         private void SeedPersistentSharedEffects()

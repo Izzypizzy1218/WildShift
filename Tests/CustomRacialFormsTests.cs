@@ -135,6 +135,23 @@ namespace WildShift.Tests
                     && TransformUtility.TryGetShapeshifterComp(companions[0]).assignedKind == fallback
                     && TransformUtility.TryGetShapeshifterComp(companions[0]).customAssignedKind == null,
                     "missing companion custom animals fall back without invalid provenance");
+
+                fallback.combatPower = 20f;
+                expensive.combatPower = 120f;
+                Rand.Force = true;
+                Rules(Rule("Human", 1f, false, "Thrumbo"));
+                companions.Clear();
+                PawnGenerator.Generated.Clear();
+                used = RevengeCompanions.Prepare(300f, leader, Faction.OfPlayer, companions);
+                Check(used == 120f && companions.Count == 1 && PawnGenerator.Generated.Count == 2,
+                    "second companion is refused when its actual form exceeds the remaining share");
+                Check(PawnGenerator.Generated[1].Destroyed, "budget-rejected second companion is cleaned up");
+
+                expensive.combatPower = 200f;
+                companions.Clear();
+                PawnGenerator.Generated.Clear();
+                used = RevengeCompanions.Prepare(300f, leader, Faction.OfPlayer, companions);
+                Check(used == 200f && companions.Count == 1, "first companion still has the full mixed-force allowance");
             }
             finally
             {
@@ -143,6 +160,64 @@ namespace WildShift.Tests
                 PawnGenerator.Generate = oldGenerator;
                 PawnGenerator.Generated.Clear();
             }
+        }
+
+        private static void TestStoredInsectoidAssignment(PawnKindDef insect, PawnKindDef fallback)
+        {
+            WildShiftMod.Settings.allowInsectoids = true;
+            Pawn human = Person("Human");
+            HediffComp_Shapeshifter comp = TransformUtility.AddOrGetShapeshifter(human, insect);
+            comp.FormStorage.LiveStoredKind = insect;
+            WildShiftMod.Settings.allowInsectoids = false;
+
+            int rolls = Rand.Calls;
+            int selections = Rand.RangeCalls;
+            comp.EnsureAssignedKind();
+            Check(comp.assignedKind == insect && TransformUtility.TransformToAnimal(human, insect),
+                "turning off new insect draws preserves the previous stored insect form");
+            Check(!AnimalPool.IsEligible(insect) && !TransformUtility.TransformToAnimal(Person("Human"), insect),
+                "the stored-form exception does not reopen insects for new assignments");
+
+            comp.SetAssignedKind(fallback, false);
+            comp.EnsureAssignedKind();
+            Check(comp.assignedKind == insect && TransformUtility.TransformToAnimal(human, insect),
+                "legacy saves with a mismatched assignment recover their original stored form");
+            Check(Rand.Calls == rolls && Rand.RangeCalls == selections, "stored form recovery does not roll another assignment");
+
+            GeneticsCompatibility.ExcludedNames.Add(insect.race.defName);
+            Check(!comp.AllowsAssignedKind(insect), "stored insects still respect hard pool exclusions");
+            GeneticsCompatibility.ExcludedNames.Remove(insect.race.defName);
+        }
+
+        private static void TestJoinerRolls()
+        {
+            bool? previous = Rand.Force;
+            try
+            {
+                Rand.Force = false;
+                Pawn member = Person("Human");
+                member.Faction = Faction.OfPlayer;
+                int rolls = Rand.Calls;
+                Patch_RecruitedJoinerShapeshifter.Prefix(member, Faction.OfPlayer, out bool state);
+                Patch_RecruitedJoinerShapeshifter.Postfix(member, state);
+                Check(!state && Rand.Calls == rolls, "recruiting an existing free colonist never rerolls assignment");
+
+                member.IsPrisonerOfColony = true;
+                Patch_RecruitedJoinerShapeshifter.Prefix(member, Faction.OfPlayer, out state);
+                member.IsPrisonerOfColony = false;
+                Patch_RecruitedJoinerShapeshifter.Postfix(member, state);
+                Check(state && Rand.Calls == rolls + 1, "prisoner release to a same-faction recruit still rolls once");
+
+                Pawn recruit = Person("Human");
+                var quest = new QuestPart_JoinPlayer { joinPlayer = true, inSignal = "join",
+                    pawns = new List<Pawn> { recruit, recruit, member } };
+                Patch_QuestJoinerShapeshifter.Prefix(quest, new Signal { tag = "join" }, out List<Pawn> candidates);
+                recruit.Faction = Faction.OfPlayer;
+                Patch_QuestJoinerShapeshifter.Postfix(candidates);
+                Check(candidates.Count == 1 && Rand.Calls == rolls + 2,
+                    "duplicate quest entries generate one roll only, and existing colonists are skipped");
+            }
+            finally { Rand.Force = previous; }
         }
 
         public static string Run()
@@ -299,6 +374,7 @@ namespace WildShift.Tests
                 Check(CustomRacialForms.IsSelectable(insect), "insect toggle enabled permits eligible insect");
                 Check(RacialAnimalForms.Choose(human, warg, out custom) == insect && custom, "enabled insect rule assigns insect");
                 WildShiftMod.Settings.allowInsectoids = false;
+                TestStoredInsectoidAssignment(insect, warg);
 
                 Rules(Rule("Human", 1f, false, "Cat"));
                 Pawn customHuman = Person("Human");
@@ -348,6 +424,7 @@ namespace WildShift.Tests
                 Check(TransformUtility.AddOrGetShapeshifter(tamed, warg).assignedKind == warg,
                     "explicit tamed or purchased animal kind keeps its original form");
                 TestRevengeCompanionAssignment();
+                TestJoinerRolls();
                 return "PASS: " + assertions + " custom form assertions (production logic with engine stubs).";
             }
             finally

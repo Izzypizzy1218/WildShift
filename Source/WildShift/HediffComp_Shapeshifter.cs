@@ -140,6 +140,15 @@ namespace WildShift
 
         public void EnsureAssignedKind()
         {
+            // Recover saves whose assignment changed while the original body was in storage.
+            PawnKindDef storedKind = formStorage?.LiveStoredKind;
+            if (storedKind?.race != null && storedKind.race != assignedKind?.race
+                && (AllowsAssignedKind(storedKind) || AnimalPool.IsEligibleStoredInsectoid(storedKind)))
+            {
+                SetAssignedKind(storedKind, storedKind == customAssignedKind);
+                return;
+            }
+
             if (assignedKind != null && AllowsAssignedKind(assignedKind))
             {
                 return;
@@ -163,7 +172,9 @@ namespace WildShift
         public bool AllowsAssignedKind(PawnKindDef kind)
         {
             return RacialAnimalForms.IsAllowed(ParentPawn, kind)
-                || (kind != null && kind == assignedKind && kind == customAssignedKind && CustomRacialForms.IsSelectable(kind));
+                || (kind != null && kind == assignedKind
+                    && ((kind == customAssignedKind && CustomRacialForms.IsSelectable(kind))
+                        || (AnimalPool.IsEligibleStoredInsectoid(kind) && formStorage?.Matches(kind) == true)));
         }
 
         public void RemoveLegacyAbilities()

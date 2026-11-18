@@ -13,10 +13,11 @@ namespace WildShift
         public static void TryAssign(Pawn pawn)
         {
             if (pawn == null
+                || pawn.Destroyed
                 || pawn.Dead
                 || pawn.RaceProps == null
                 || !pawn.RaceProps.Humanlike
-                || pawn.Faction != Faction.OfPlayer
+                || pawn.Faction?.IsPlayer != true
                 || pawn.IsPrisonerOfColony
                 || pawn.IsSlaveOfColony
                 || TransformUtility.IsShapeshifter(pawn)
@@ -44,9 +45,15 @@ namespace WildShift
     [HarmonyPatch(typeof(RecruitUtility), "Recruit")]
     public static class Patch_RecruitedJoinerShapeshifter
     {
-        public static void Postfix(Pawn pawn)
+        public static void Prefix(Pawn pawn, Faction faction, out bool __state)
         {
-            JoinerShapeshifterUtility.TryAssign(pawn);
+            __state = pawn != null && !pawn.Destroyed && !pawn.Dead && faction?.IsPlayer == true
+                && (pawn.Faction != faction || pawn.IsPrisonerOfColony || pawn.IsSlaveOfColony);
+        }
+
+        public static void Postfix(Pawn pawn, bool __state)
+        {
+            if (__state) JoinerShapeshifterUtility.TryAssign(pawn);
         }
     }
 
@@ -68,17 +75,19 @@ namespace WildShift
             // QuestPart_JoinPlayer uses RecruitUtility for existing colonists,
             // prisoners, and slaves. Record only its direct SetFaction branch so
             // every joining pawn receives exactly one five-percent roll.
-            __state = new List<Pawn>();
             for (int i = 0; i < __instance.pawns.Count; i++)
             {
                 Pawn pawn = __instance.pawns[i];
                 if (pawn != null
+                    && !pawn.Destroyed
+                    && !pawn.Dead
                     && !pawn.IsColonist
                     && !pawn.IsPrisonerOfColony
                     && !pawn.IsSlaveOfColony
-                    && pawn.Faction != Faction.OfPlayer)
+                    && pawn.Faction?.IsPlayer != true)
                 {
-                    __state.Add(pawn);
+                    if (__state == null) __state = new List<Pawn>();
+                    if (!__state.Contains(pawn)) __state.Add(pawn);
                 }
             }
         }

@@ -16,9 +16,9 @@ namespace Verse
     public enum Gender { None, Male, Female }
     public struct PawnGenerationRequest
     {
-        public PawnKindDef KindDef; public object Faction; public bool ForceGenerateNewPawn; public Gender? FixedGender;
+        public PawnKindDef KindDef; public Faction Faction; public bool ForceGenerateNewPawn; public Gender? FixedGender;
         public XenotypeDef ForcedXenotype;
-        public PawnGenerationRequest(PawnKindDef kind, object faction, bool forceGenerateNewPawn, Gender? fixedGender=null, XenotypeDef forcedXenotype=null,
+        public PawnGenerationRequest(PawnKindDef kind, Faction faction, bool forceGenerateNewPawn, Gender? fixedGender=null, XenotypeDef forcedXenotype=null,
             bool canGeneratePawnRelations=true, bool mustBeCapableOfViolence=false)
         { KindDef = kind; Faction = faction; ForceGenerateNewPawn = forceGenerateNewPawn; FixedGender = fixedGender; ForcedXenotype=forcedXenotype; }
     }
@@ -28,7 +28,9 @@ namespace Verse
         public ThingDef def; public PawnKindDef kindDef; public Genes genes; public Gender gender;
         public RaceProperties RaceProps { get { return def.race; } }
         public Health health = new Health(); public Abilities abilities; public object drafter;
-        public object Faction; public bool Dead, Downed, Destroyed, Spawned = true; public object Map = new object();
+        public Faction Faction; public bool Dead, Downed, Destroyed, Spawned = true; public object Map = new object();
+        public bool IsPrisonerOfColony, IsSlaveOfColony;
+        public bool IsColonist { get { return Faction?.IsPlayer == true && !IsPrisonerOfColony && !IsSlaveOfColony; } }
         public object holdingOwner;
         public bool SpawnedOrAnyParentSpawned { get { return Spawned; } }
         public void Destroy(DestroyMode mode) { Destroyed = true; }
@@ -64,6 +66,7 @@ namespace Verse
         public virtual IEnumerable<Gizmo> CompGetGizmos() { yield break; }
     }
     public struct DamageInfo { }
+    public struct Signal { public string tag; }
     public class Gizmo { }
     public class Command_Action : Gizmo
     {
@@ -120,7 +123,10 @@ namespace RimWorld
     public static class PawnKindDefOf { public static PawnKindDef Colonist = new PawnKindDef { defName = "Colonist",race=new ThingDef {defName="Human",race=new RaceProperties {Humanlike=true}} }; }
     public static class FleshTypeDefOf { public static object Insectoid = new object(); }
     public class FactionDef { public bool isPlayer; public PawnKindDef basicMemberKind; }
-    public class Faction { public static Faction OfPlayer = new Faction(); public FactionDef def=new FactionDef {isPlayer=true,basicMemberKind=PawnKindDefOf.Colonist}; public Dictionary<XenotypeDef,float> xenotypes; }
+    public class Faction { public static Faction OfPlayer = new Faction(); public FactionDef def=new FactionDef {isPlayer=true,basicMemberKind=PawnKindDefOf.Colonist}; public Dictionary<XenotypeDef,float> xenotypes; public bool IsPlayer { get { return def.isPlayer; } } }
+    public static class RecruitUtility { }
+    public sealed class IncidentWorker_WandererJoin { }
+    public sealed class QuestPart_JoinPlayer { public bool joinPlayer; public string inSignal; public List<Pawn> pawns; }
     public class XenotypeDef : Def { }
     public static class XenotypeDefOf { public static XenotypeDef Baseliner=new XenotypeDef {defName="Baseliner"}; }
     public static class ModsConfig { public static bool BiotechActive; }
@@ -141,6 +147,10 @@ namespace RimWorld
     }
     public static class MessageTypeDefOf { public static object RejectInput; }
 }
+namespace HarmonyLib
+{
+    public sealed class HarmonyPatch : Attribute { public HarmonyPatch(Type target, string method) { } }
+}
 namespace WildShift
 {
     public static class WildShiftMod { public static Settings Settings = new Settings(); }
@@ -156,6 +166,7 @@ namespace WildShift
     public static partial class TransformUtility
     {
         public static bool IsTransformedAnimal(Pawn p) { return false; }
+        public static bool IsShapeshifter(Pawn p) { return TryGetShapeshifterComp(p) != null; }
         public static HediffComp_Shapeshifter TryGetShapeshifterComp(Pawn p)
         { return p == null ? null : p.health.hediffSet.Value == null ? null : p.health.hediffSet.Value.Comp; }
         // Exercise the actual production guard without spawning an engine pawn.

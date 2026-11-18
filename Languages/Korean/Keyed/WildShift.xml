@@ -38,6 +38,12 @@
   <WildShift_SettingsAllowInsects>곤충형 변신 허용</WildShift_SettingsAllowInsects>
   <WildShift_SettingsAllowInsectsDesc>Include insectoid races in the random animal pool.</WildShift_SettingsAllowInsectsDesc>
   <WildShift_SettingsReset>WildShift 설정 초기화</WildShift_SettingsReset>
+  <WildShift_RemovalPrepare>WildShift 제거용 저장 준비</WildShift_RemovalPrepare>
+  <WildShift_RemovalPrepareConfirm>현재 게임에서 변신 중인 폰을 인간으로 복귀시키고 별도의 복구용 저장을 만듭니다. 기존 저장은 보존됩니다. 계속할까요?</WildShift_RemovalPrepareConfirm>
+  <WildShift_RemovalPrepareBlocked>변신자 {0}명을 복귀시켰습니다. {1}의 복귀 또는 보존에 실패해 복구용 저장을 만들지 않았습니다. 해당 폰의 문제를 해결한 뒤 다시 시도하세요.</WildShift_RemovalPrepareBlocked>
+  <WildShift_RemovalPrepareFailed>WildShift가 복구용 저장 준비를 마치지 못했습니다. 게임 로그를 확인하세요. 기존 저장은 그대로 불러올 수 있습니다.</WildShift_RemovalPrepareFailed>
+  <WildShift_RemovalPrepareSaveFailed>복구용 저장 파일을 쓰지 못했습니다. 게임 로그를 확인하세요. 기존 저장은 그대로 불러올 수 있습니다.</WildShift_RemovalPrepareSaveFailed>
+  <WildShift_RemovalPrepareDone>변신자 {0}명을 복귀시키고 {1}에 저장했습니다. WildShift를 끈 뒤 이 저장부터 확인하세요. 로드 로그에는 WildShift 항목 누락이 표시될 수 있습니다.</WildShift_RemovalPrepareDone>
   <WildShift_SettingsAllowTransformedSlaughter>변신한 정착민 도축 허용</WildShift_SettingsAllowTransformedSlaughter>
   <WildShift_SettingsAllowTransformedSlaughterDesc>기본적으로 허용합니다. 체크를 해제하면 원래 정착민의 몸을 보관 중인 아군 변신동물의 수동·자동·정신 이상 도축을 막고, 기존 도축 지정을 취소합니다. 일반 동물에는 영향을 주지 않습니다. 도축을 허용하면 기존처럼 보관된 인간도 사망합니다.</WildShift_SettingsAllowTransformedSlaughterDesc>
   <WildShift_SettingsAllowTransformedSale>변신한 정착민 판매 허용</WildShift_SettingsAllowTransformedSale>

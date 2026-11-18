@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using RimWorld;
 using Verse;
@@ -80,8 +81,18 @@ namespace WildShift
                 return null;
             }
 
-            storedPawns.Remove(human);
-            return human;
+            try
+            {
+                storedPawns.Remove(human);
+            }
+            catch (Exception ex)
+            {
+                // Native removal updates ownership before notifying listeners.
+                Log.Warning("[WildShift] Stored pawn removal callback failed: " + ex);
+            }
+
+            return !storedPawns.Contains(human) && human.holdingOwner == null
+                && !human.Spawned && !human.Destroyed ? human : null;
         }
 
         public override void CompExposeData()

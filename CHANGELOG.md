@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.4.0-beta.10 — Health tab optimization and recovery fixes (2026-11-18)
+
+See [bilingual release notes](Docs/Release-v1.4.0-beta.10.md).
+
+- Reuse injury groups and text measurements within a health tab draw for shapeshifters with many health conditions.
+- Add **Prepare save for WildShift removal**. Return active forms to their original humans and create a separate recovery save after all returns succeed.
+- Recover the original human holder after a failed B&S sapience swap or a failing ownership callback during return.
+- Keep valid stored insectoid bodies usable after disabling the insectoid option and repair stored form assignment mismatches.
+- Preserve health links when another Harmony patch skips the native tick. Skip the extra aura scan when there are no active shapeshifters on the map.
+- Prevent repeat quest recruitment rolls for existing colonists, charge actual custom forms against the companion budget in revenge raids, and use explicit Harmony assembly registration.
+
 ## v1.4.0-beta.9 — ISEKAI drafting and runtime optimization (2026-11-18)
 
 See [bilingual release notes](Docs/Release-v1.4.0-beta.9.md).

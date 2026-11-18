@@ -310,7 +310,15 @@ internal static class Program
         FormTransferUtility.EndReturn(animal);
         Check(FormTransferUtility.TryBeginReturn(animal), "Return can be retried after guard release");
         FormTransferUtility.EndReturn(animal);
-        Check(comp.ReleaseStoredPawn() == human && !comp.HasStoredPawn && human.holdingOwner == null, "Release returns exact original body and clears ownership");
+        ThingOwner owner = comp.GetDirectlyHeldThings();
+        void ThrowAfterRemoval() => throw new InvalidOperationException("Test listener failed after ThingOwner removal");
+        owner.OnContentsChanged += ThrowAfterRemoval;
+        try
+        {
+            Check(comp.ReleaseStoredPawn() == human && !comp.HasStoredPawn && human.holdingOwner == null,
+                "Release returns the detached original even if the native ThingOwner removal listener throws");
+        }
+        finally { owner.OnContentsChanged -= ThrowAfterRemoval; }
         Check(comp.ReleaseStoredPawn() == null, "Second release cannot duplicate body");
         Check(!(bool)drag.Invoke(null, new object[] { animal }), "Empty animal shell loses drag priority");
     }

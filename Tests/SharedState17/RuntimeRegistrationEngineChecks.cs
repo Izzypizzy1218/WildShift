@@ -94,10 +94,33 @@ namespace WildShiftSharedStateValidation
                     check(Contains(registry, body), "runtime-registration/successful retry registers after a failed initialization");
                 }
 
-                // Registration is not a cached identity answer. Even a still
-                // registered body must reject a detached canonical original.
                 HediffComp_Transformed comp = TransformUtility.TryGetTransformedComp(body);
-                Pawn detached = comp.ReleaseStoredPawn();
+                Hediff holding = comp.parent;
+                holding.ageTicks = 25;
+                var hediffs = body.health.hediffSet.hediffs;
+                int hediffCount = hediffs.Count;
+                Require(hediffs.Remove(holding), "runtime-registration/B&S fixture detaches the real holder hediff", check);
+                try
+                {
+                    var swap = new SapientAnimalsCompatibility.SwapState { oldPawn = body, storage = comp };
+                    SapientAnimalsCompatibility.AfterSwap(body, swap);
+                    SapientAnimalsCompatibility.AfterSwap(body, swap);
+                    Require(hediffs.Count == hediffCount && hediffs.Contains(holding) && holding.ageTicks == 25
+                        && SharedFormIdentity.HumanFor(body) == human,
+                        "runtime-registration/failed B&S swap restores the exact original holder once", check);
+                }
+                finally
+                {
+                    if (!hediffs.Contains(holding)) hediffs.Add(holding);
+                }
+
+                // Even a still-registered body must reject a detached original.
+                ThingOwner owner = comp.GetDirectlyHeldThings();
+                Action failRemoval = delegate { throw new InvalidOperationException("Test listener failed after native removal"); };
+                Pawn detached;
+                owner.OnContentsChanged += failRemoval;
+                try { detached = comp.ReleaseStoredPawn(); }
+                finally { owner.OnContentsChanged -= failRemoval; }
                 Require(detached == human, "runtime-registration/native holder releases the exact source", check);
                 try
                 {

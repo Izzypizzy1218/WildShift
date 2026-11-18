@@ -49,6 +49,18 @@ namespace WildShift
 
         public static bool IsEligibleRace(ThingDef raceDef)
         {
+            return IsEligibleRace(raceDef, WildShiftMod.Settings?.allowInsectoids == true);
+        }
+
+        internal static bool IsEligibleStoredInsectoid(PawnKindDef kind)
+        {
+            ThingDef race = kind?.race;
+            return race?.race != null && race.race.FleshType == FleshTypeDefOf.Insectoid
+                && IsEligibleRace(race, true);
+        }
+
+        private static bool IsEligibleRace(ThingDef raceDef, bool allowInsectoids)
+        {
             RaceProperties race = raceDef != null ? raceDef.race : null;
             if (race == null || !race.Animal)
             {
@@ -67,7 +79,6 @@ namespace WildShift
                 return false;
             }
 
-            bool allowInsectoids = WildShiftMod.Settings != null && WildShiftMod.Settings.allowInsectoids;
             if (!allowInsectoids && race.FleshType == FleshTypeDefOf.Insectoid)
             {
                 return false;
