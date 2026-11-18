@@ -137,6 +137,10 @@ To build 1.6, supply matching 1.6 game or reference assemblies and `-p:RimWorldV
 
 ## Current version
 
+`v1.4.0-beta.11` — 2026-11-19
+
+Reduce repeated neural heat stat reads in the psycast command bar. Verify human and Triceratops forms in a 60-hostile battle and sweep all 63 animal forms available in the tested setup. See the [bilingual release notes](Docs/Release-v1.4.0-beta.11.md) for the measurements and test scope.
+
 `v1.4.0-beta.10` — 2026-11-18
 
 Reduce repeated injury grouping and text measurement in crowded health tabs. Add a removal preparation action that returns shapeshifters to human form and writes a separate recovery save. Fix stored insectoid forms, interrupted body swaps, shared health links, quest recruitment rolls and revenge raid budgets. See [bilingual release notes](Docs/Release-v1.4.0-beta.10.md) for validation and the scope of the performance changes.

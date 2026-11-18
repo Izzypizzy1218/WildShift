@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.4.0-beta.11 — Psycast command performance (2026-11-19)
+
+See [bilingual release notes](Docs/Release-v1.4.0-beta.11.md).
+
+- Reuse each pawn's neural heat gain and limit during a command bar draw. The game still checks current heat, queued costs and the heat limiter each time, with fresh stat reads for input and casting.
+- Retest human and Triceratops forms in a 60-hostile battle with the reported ability set and verify that Painblock still casts on both forms.
+- Check all 63 animal forms available in the tested Ratkin and Dinosauria setup and retest the five forms with anomalous short samples.
+
 ## v1.4.0-beta.10 — Health tab optimization and recovery fixes (2026-11-18)
 
 See [bilingual release notes](Docs/Release-v1.4.0-beta.10.md).
