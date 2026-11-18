@@ -32,10 +32,13 @@ namespace WildShift
             public readonly List<ThingWithComps> equipment = new List<ThingWithComps>();
             public readonly List<ThingWithComps> borrowed = new List<ThingWithComps>();
 
-            public bool Refresh(Pawn body)
+            public bool Refresh(Pawn body, Pawn source = null)
             {
                 if (suspended || refreshing) return false;
-                Pawn source = SharedFormIdentity.HumanFor(body);
+                // For already validated this exact source immediately before
+                // entering here; no gameplay callback runs between the reads.
+                // Other callers still resolve and validate their own source.
+                source = source ?? SharedFormIdentity.HumanFor(body);
                 if (source == null) return false;
                 List<Apparel> sa = RawApparel(source), ba = RawApparel(body);
                 List<ThingWithComps> se = RawEquipment(source), be = RawEquipment(body);
@@ -69,6 +72,11 @@ namespace WildShift
             public void Dispose() { if (!disposed) { nativeOnly--; disposed=true; } }
         }
         public static IDisposable NativeOnly() { return new NativeScope(); }
+        // The render tree checks this path even when its graph is already
+        // resolved. Keep its nested, thread-local scope free of heap objects.
+        // Zero means our prefix never ran (another prefix threw or skipped).
+        internal static int BeginNativeRender() { return ++nativeOnly; }
+        internal static void EndNativeRender(int enteredDepth) { if(enteredDepth>0)nativeOnly=enteredDepth-1; }
         public static bool IsNativeOnly { get { return nativeOnly>0 || Scribe.mode!=LoadSaveMode.Inactive; } }
         private static bool Same<T>(List<T> snapshot,List<T> actual) where T:class
         {
@@ -103,9 +111,11 @@ namespace WildShift
         }
         private static State For(Pawn body)
         {
-            if(body==null||IsNativeOnly||SharedFormIdentity.HumanFor(body)==null)return null;
+            if(body==null||IsNativeOnly)return null;
+            Pawn source=SharedFormIdentity.HumanFor(body);
+            if(source==null)return null;
             State state=states.GetOrCreateValue(body);
-            return state.Refresh(body)?state:null;
+            return state.Refresh(body,source)?state:null;
         }
         public static List<Apparel> ApparelFor(Pawn body,List<Apparel> native)
         { State state=For(body);return state!=null?state.apparel:native; }
@@ -312,7 +322,7 @@ namespace WildShift
     {
         public static IEnumerable<MethodBase> TargetMethods()
         {return AccessTools.GetDeclaredMethods(typeof(PawnRenderTree)).Where(m=>m.Name=="TrySetupGraphIfNeeded").Cast<MethodBase>();}
-        public static void Prefix(out IDisposable __state){__state=SharedFormGear.NativeOnly();}
-        public static void Finalizer(IDisposable __state){__state?.Dispose();}
+        public static void Prefix(out int __state){__state=SharedFormGear.BeginNativeRender();}
+        public static void Finalizer(int __state){SharedFormGear.EndNativeRender(__state);}
     }
 }

@@ -183,7 +183,7 @@ namespace WildShift
             for (int i = actual.Count - 1; i >= 0; i--)
             {
                 Hediff_SharedFormDrugEffect projection = actual[i] as Hediff_SharedFormDrugEffect;
-                if (projection != null && !clock.sources.Contains(projection.source))
+                if (projection != null && !clock.sourceSet.Contains(projection.source))
                     animal.health.RemoveHediff(projection);
             }
             HediffDef def = DefDatabase<HediffDef>.GetNamedSilentFail(ProjectionDefName);
@@ -344,21 +344,34 @@ namespace WildShift
                 if (effect == null || body == null || owner == body) return;
                 effect.pawn = body;
                 if (part == null) return;
-                PartMapping mapping = partMappings.GetOrCreateValue(effect);
-                Pawn previous;
-                if (mapping.original != part || mapping.body == null || !mapping.body.TryGetTarget(out previous)
-                    || previous != body || (mapping.mapped != null && body.health.hediffSet.PartIsMissing(mapping.mapped)))
+                try
                 {
-                    mapping.original = part;
-                    mapping.body = new System.WeakReference<Pawn>(body);
-                    mapping.mapped = null;
-                    List<BodyPartRecord> parts = body.RaceProps?.body?.AllParts;
-                    if (parts != null)
-                        for (int i = 0; i < parts.Count; i++)
-                            if (parts[i].def == part.def && !body.health.hediffSet.PartIsMissing(parts[i]))
-                            { mapping.mapped = parts[i]; break; }
+                    PartMapping mapping = partMappings.GetOrCreateValue(effect);
+                    Pawn previous;
+                    if (mapping.original != part || mapping.body == null || !mapping.body.TryGetTarget(out previous)
+                        || previous != body || (mapping.mapped != null && body.health.hediffSet.PartIsMissing(mapping.mapped)))
+                    {
+                        mapping.original = part;
+                        mapping.body = new System.WeakReference<Pawn>(body);
+                        mapping.mapped = null;
+                        List<BodyPartRecord> parts = body.RaceProps?.body?.AllParts;
+                        if (parts != null)
+                            for (int i = 0; i < parts.Count; i++)
+                                if (parts[i].def == part.def && !body.health.hediffSet.PartIsMissing(parts[i]))
+                                { mapping.mapped = parts[i]; break; }
+                    }
+                    effect.Part = mapping.mapped;
                 }
-                effect.Part = mapping.mapped;
+                catch
+                {
+                    // A failed constructor never reaches using's Dispose.
+                    // Restore ownership here and discard a half-built map so
+                    // the next native query can rebuild it normally.
+                    effect.pawn = owner;
+                    effect.Part = part;
+                    partMappings.Remove(effect);
+                    throw;
+                }
             }
             public void Dispose()
             {
@@ -368,7 +381,7 @@ namespace WildShift
 
         internal static void OnBody(Hediff source, Pawn animal, Action action)
         {
-            ReadOnBody(source, animal, delegate { action(); return true; });
+            using (new BodyScope(source, animal)) action();
         }
 
         internal static T ReadOnBody<T>(Hediff source, Pawn animal, Func<T> action)
@@ -510,19 +523,23 @@ namespace WildShift
         }
         public override void Notify_PawnPostApplyDamage(DamageInfo dinfo, float totalDamageDealt)
         {
-            if (source != null) SharedFormHealth.OnBody(source, pawn, delegate { source.Notify_PawnPostApplyDamage(dinfo, totalDamageDealt); });
+            if (source == null) return;
+            using (new SharedFormHealth.BodyScope(source, pawn)) source.Notify_PawnPostApplyDamage(dinfo, totalDamageDealt);
         }
         public override void Notify_PawnUsedVerb(Verb verb, LocalTargetInfo target)
         {
-            if (source != null) SharedFormHealth.OnBody(source, pawn, delegate { source.Notify_PawnUsedVerb(verb, target); });
+            if (source == null) return;
+            using (new SharedFormHealth.BodyScope(source, pawn)) source.Notify_PawnUsedVerb(verb, target);
         }
         public override void Notify_EntropyGained(float baseAmount, float finalAmount, Thing src = null)
         {
-            if (source != null) SharedFormHealth.OnBody(source, pawn, delegate { source.Notify_EntropyGained(baseAmount, finalAmount, src); });
+            if (source == null) return;
+            using (new SharedFormHealth.BodyScope(source, pawn)) source.Notify_EntropyGained(baseAmount, finalAmount, src);
         }
         public override void Notify_KilledPawn(Pawn victim, DamageInfo? dinfo)
         {
-            if (source != null) SharedFormHealth.OnBody(source, pawn, delegate { source.Notify_KilledPawn(victim, dinfo); });
+            if (source == null) return;
+            using (new SharedFormHealth.BodyScope(source, pawn)) source.Notify_KilledPawn(victim, dinfo);
         }
         public override void ExposeData()
         {

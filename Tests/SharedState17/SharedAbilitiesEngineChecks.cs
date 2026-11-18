@@ -86,8 +86,10 @@ namespace WildShiftSharedStateValidation
         {
             Command_Ability command = animal.abilities.GetGizmos().OfType<Command_Ability>().Single(c => c.Ability == foam);
             Require(command.Pawn == animal && !command.Disabled, "abilities/native foam command belongs to active animal and is enabled", check);
-            IntVec3 target = Open(map, animal.Position + new IntVec3(3, 0, 0));
-            Require(foam.verb.ValidateTarget(target, false), "abilities/native foam range and line of sight are evaluated from animal", check);
+            IntVec3 target = NearTarget(map, animal);
+            bool valid = foam.verb.ValidateTarget(target, false);
+            Require(valid, "abilities/native foam range and line of sight are evaluated from animal"
+                + (valid ? "" : TargetFailureDetails(foam, animal, target)), check);
             int charges = foam.RemainingCharges;
             foam.QueueCastingJob(target, LocalTargetInfo.Invalid);
             Require(animal.CurJob != null && animal.CurJob.ability == foam && animal.CurJob.verbToUse == foam.verb,
@@ -104,8 +106,10 @@ namespace WildShiftSharedStateValidation
         private static void Jump(Map map, Pawn animal, Ability jump, Gene_Hemogen hemogen, Action<bool, string> check)
         {
             animal.jobs.StopAll();
-            IntVec3 target = Open(map, animal.Position + new IntVec3(3, 0, 0));
-            Require(jump.verb.ValidateTarget(target, false), "abilities/native longjump validates active animal destination", check);
+            IntVec3 target = NearTarget(map, animal);
+            bool valid = jump.verb.ValidateTarget(target, false);
+            Require(valid, "abilities/native longjump validates active animal destination"
+                + (valid ? "" : TargetFailureDetails(jump, animal, target)), check);
             float start = hemogen.Value;
             jump.QueueCastingJob(target, LocalTargetInfo.Invalid);
             AdvanceUntil(delegate { return animal.Spawned && animal.Position == target && hemogen.Value < start - .049f; },
@@ -186,6 +190,32 @@ namespace WildShiftSharedStateValidation
         {
             return requested.InBounds(map) && requested.Standable(map)
                 ? requested : CellFinder.RandomClosewalkCellNear(map.Center, map, 8);
+        }
+        private static IntVec3 NearTarget(Map map, Pawn animal)
+        {
+            // A protected generated monolith can survive ClearMap. Targeting a
+            // blocked requested cell must not fall back far away at map center.
+            // Choose geometry only; the native ValidateTarget assertion still
+            // decides whether the actual active caster can use this ability.
+            IntVec3 requested = animal.Position + new IntVec3(3, 0, 0);
+            if (TargetGeometry(map, animal.Position, requested)) return requested;
+            foreach (IntVec3 cell in GenRadial.RadialCellsAround(animal.Position, 3f, false))
+                if (TargetGeometry(map, animal.Position, cell)) return cell;
+            throw new InvalidOperationException("Shared-ability fixture has no standable target with line of sight within three cells of "
+                + animal.Position);
+        }
+        private static bool TargetGeometry(Map map, IntVec3 origin, IntVec3 target)
+        {
+            return target.InBounds(map) && target.Standable(map)
+                && GenSight.LineOfSight(origin, target, map, true);
+        }
+        private static string TargetFailureDetails(Ability ability, Pawn animal, IntVec3 target)
+        {
+            Apparel blocked = ability.verb.FirstApparelPreventingShooting();
+            return " [animal=" + animal.Position + ", owner=" + ability.pawn.Position
+                + ", caster=" + ability.verb.CasterPawn?.Position + ", target=" + target
+                + ", range=" + ability.verb.EffectiveRange + ", blockingApparel="
+                + (blocked == null ? "none" : blocked.def.defName) + "]";
         }
         private static void Require(bool passed, string label, Action<bool, string> check)
         {

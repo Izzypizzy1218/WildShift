@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <GeneDef>
+    <defName>WildShift_TestReturnDuringTick</defName>
+    <label>return-during-tick fixture</label>
+    <description>Test-only reviewed callback reentry input.</description>
+    <geneClass>WildShiftSharedStateValidation.ReturnDuringTickGene</geneClass>
+    <selectionWeight>0</selectionWeight>
+    <modExtensions><li Class="WildShift.SharedFormGeneCallbacksExtension" /></modExtensions>
+  </GeneDef>
+  <GeneDef>
+    <defName>WildShift_TestTrailingTick</defName>
+    <label>trailing-tick fixture</label>
+    <description>Test-only reviewed callback observes released-body forwarding.</description>
+    <geneClass>WildShiftSharedStateValidation.TrailingTickGene</geneClass>
+    <selectionWeight>0</selectionWeight>
+    <modExtensions><li Class="WildShift.SharedFormGeneCallbacksExtension" /></modExtensions>
+  </GeneDef>
+</Defs>

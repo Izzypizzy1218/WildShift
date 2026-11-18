@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.4.0-beta.9 — ISEKAI drafting and runtime optimization (2026-11-18)
+
+See [bilingual release notes](Docs/Release-v1.4.0-beta.9.md).
+
+- Restore canonical health-effect ownership and discard incomplete part mappings if temporary body-scope construction throws. Preserve biological appearance scopes when an earlier foreign prefix skips or throws, and stop subsequent reviewed gene callbacks after a callback returns the active form.
+- Cache immutable draft-toggle producer metadata while checking the current key and callback on each command. Pass 875 initialized-game assertions per engine, 50 native scope checks and actual ISEKAI dispatch checks in both engines, including reversed 1.7 load order. See [the final review](Docs/Final-review-20261118.md).
+- Remove the ISEKAI add-on's duplicate draft toggle only on player transformed forms. Native command grouping previously toggled the same pawn twice, leaving its draft state unchanged. Ordinary tamed ISEKAI creatures keep their own command; unrelated actions and the existing Draftable Animals integration are preserved.
+- Reproduce the fault and pass the fixed command-dispatch cases in actual 1.6 and 1.7, including both incoming draft states, ordinary tamed controls, native tick persistence, return to human and a reversed 1.7 load order. See [scope and evidence](Docs/IsekaiDraftCompatibility.md).
+- Dispatch shared runtime ticks only for successfully initialized active forms, using weak registration that is cleared on release and failed initialization. Registered forms retain live ownership validation.
+- Remove per-call render-scope allocation and temporary delegates from four shared-health notifications. Preserve nested scopes and cleanup when another Harmony prefix skips or throws before WildShift runs.
+- Reuse a just-validated source within gear and raw-capacity queries, and the existing source set during health projection cleanup. Keep immediate gene, trait, health and equipment invalidation.
+- Reject out-of-range aura recipients before the first identity lookup; retain the separate canonical-link reconciliation pass and native effects.
+- Preserve outer automatic-combat state when an earlier external prefix skips or throws. See [the bottom-up review and bounded measurements](Docs/Performance-bottom-up-20261117.md); the reported severe selected-combat stall is not confirmed resolved.
+
 ## v1.4.0-beta.8 — Combat fixes and first-transform latency (2026-11-17)
 
 - Keep manual-only apparel/weapon actions out of automatic combat for player-controlled animal forms. An unarmed form borrowing a jump pack now uses its natural melee attack, while explicit manual jump orders remain available.

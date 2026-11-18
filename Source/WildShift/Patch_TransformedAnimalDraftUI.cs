@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using HarmonyLib;
 using RimWorld;
@@ -120,9 +121,15 @@ namespace WildShift
     [HarmonyPatch(typeof(Pawn), "GetGizmos")]
     public static class Patch_TransformedDraftableAnimalsGizmos
     {
+        // Producer metadata cannot change for a loaded Type. Cache both
+        // matches and misses without retaining pawns, commands or delegates.
+        private static readonly ConcurrentDictionary<Type, bool> externalDraftOwners
+            = new ConcurrentDictionary<Type, bool>();
+        private static readonly Func<Type, bool> classifyExternalDraftOwner = IsExternalDraftOwner;
+
         // A passthrough postfix must run after the other mod's passthrough
         // postfix. A ref-result (void) postfix runs before that iterator.
-        [HarmonyAfter("DraftableAnimals.Mod")]
+        [HarmonyAfter("DraftableAnimals.Mod", "Poupun.IsekaiCreaturesAddon")]
         [HarmonyPriority(Priority.Last)]
         public static IEnumerable<Gizmo> Postfix(IEnumerable<Gizmo> __result, Pawn __instance)
         {
@@ -137,15 +144,36 @@ namespace WildShift
             if (original == null) yield break;
             foreach (Gizmo gizmo in original)
             {
-                // Releashed adds its own button and only removes vanilla's
-                // description. Preserve WildShift's grouped button and every
-                // unrelated command, including other mods' custom actions.
-                if (gizmo is Command_Toggle command
-                    && command.hotKey == KeyBindingDefOf.Command_ColonistDraft
-                    && command.toggleAction?.Method.DeclaringType?.Assembly.GetName().Name == "DraftableAnimals")
+                // Both mods add a draft toggle for the same animal. Native
+                // grouping can execute both callbacks, undoing the first toggle.
+                // Keep WildShift's command and unrelated abilities; ordinary
+                // companions never enter this transformed-only filter.
+                if (gizmo is Command_Toggle command && IsExternalDraftToggle(command))
                     continue;
                 yield return gizmo;
             }
+        }
+
+        private static bool IsExternalDraftToggle(Command_Toggle command)
+        {
+            if (command.hotKey != KeyBindingDefOf.Command_ColonistDraft) return false;
+            Type owner = command.toggleAction?.Method.DeclaringType;
+            if (owner == null) return false;
+            return externalDraftOwners.GetOrAdd(owner, classifyExternalDraftOwner);
+        }
+
+        private static bool IsExternalDraftOwner(Type owner)
+        {
+            string assembly = owner.Assembly.GetName().Name;
+            if (assembly == "DraftableAnimals") return true;
+            if (assembly != "IsekaiCreatures") return false;
+
+            // Match the actual producer, including its compiler-generated
+            // closure. Do not hide every Isekai command bound to this key.
+            for (Type current = owner; current != null; current = current.DeclaringType)
+                if (current.FullName == "IsekaiCreatures.Taming.Pawn_GetGizmos_Pet_Patch")
+                    return true;
+            return false;
         }
     }
 }

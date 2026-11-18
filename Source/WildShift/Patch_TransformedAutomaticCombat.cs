@@ -13,6 +13,14 @@ namespace WildShift
     {
         [ThreadStatic] private static Pawn automaticActor;
 
+        // Harmony can run a finalizer even when an earlier foreign prefix
+        // skipped or threw before ours. A default state has nothing to undo.
+        public struct ScopeState
+        {
+            public Pawn previous;
+            public bool entered;
+        }
+
         public static void Enter(Pawn actor, out Pawn previous)
         {
             // Assign the saved state before eligibility checks. A finalizer
@@ -49,14 +57,16 @@ namespace WildShift
     public static class Patch_TransformedAutomaticEffectiveVerb
     {
         [HarmonyPriority(Priority.First)]
-        public static void Prefix(Pawn __instance, out Pawn __state)
+        public static void Prefix(Pawn __instance, out TransformedAutomaticCombat.ScopeState __state)
         {
-            TransformedAutomaticCombat.Enter(__instance, out __state);
+            __state = new TransformedAutomaticCombat.ScopeState { entered = true };
+            // Enter writes previous before any eligibility getter can throw.
+            TransformedAutomaticCombat.Enter(__instance, out __state.previous);
         }
 
-        public static void Finalizer(Pawn __state)
+        public static void Finalizer(TransformedAutomaticCombat.ScopeState __state)
         {
-            TransformedAutomaticCombat.Restore(__state);
+            if (__state.entered) TransformedAutomaticCombat.Restore(__state.previous);
         }
     }
 
@@ -64,14 +74,15 @@ namespace WildShift
     public static class Patch_TransformedAutomaticStartAttack
     {
         [HarmonyPriority(Priority.First)]
-        public static void Prefix(Pawn __instance, out Pawn __state)
+        public static void Prefix(Pawn __instance, out TransformedAutomaticCombat.ScopeState __state)
         {
-            TransformedAutomaticCombat.Enter(__instance, out __state);
+            __state = new TransformedAutomaticCombat.ScopeState { entered = true };
+            TransformedAutomaticCombat.Enter(__instance, out __state.previous);
         }
 
-        public static void Finalizer(Pawn __state)
+        public static void Finalizer(TransformedAutomaticCombat.ScopeState __state)
         {
-            TransformedAutomaticCombat.Restore(__state);
+            if (__state.entered) TransformedAutomaticCombat.Restore(__state.previous);
         }
     }
 

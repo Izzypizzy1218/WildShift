@@ -9,6 +9,7 @@ using RimWorld;
 using RimWorld.Planet;
 using UnityEngine;
 using Verse;
+using Verse.AI.Group;
 using WildShift;
 
 namespace WildShiftSharedStateValidation
@@ -125,6 +126,14 @@ namespace WildShiftSharedStateValidation
             Map map = Find.CurrentMap;
             Require(map != null, "quicktest initializes a native map");
             ClearMap(map);
+            if (Environment.GetEnvironmentVariable("WildShift_TestMicroOnly") == "True")
+            {
+                Rand.PushState(177018);
+                try { SharedPerformanceEngineChecks.Run(map, Check); }
+                finally { Rand.PopState(); }
+                Finish("micro-only");
+                return;
+            }
             original = NewHuman(map, "SharedOriginal", 0, Gender.Male);
             companion = NewHuman(map, "SharedCompanion", -3, Gender.Female);
             originalId = original.GetUniqueLoadID();
@@ -270,6 +279,10 @@ namespace WildShiftSharedStateValidation
             SharedAutomaticCombatEngineChecks.Run(Find.CurrentMap, Check);
             SharedPassiveHealthEngineChecks.Run(Find.CurrentMap, Check);
             SharedDinosauriaEngineChecks.Run(Find.CurrentMap, Check);
+            SharedPerformanceEngineChecks.Run(Find.CurrentMap, Check);
+            RuntimeRegistrationEngineChecks.Run(Find.CurrentMap, Check);
+            SharedAuraPerformanceEngineChecks.Run(Find.CurrentMap, Check);
+            SharedTickReentrancyEngineChecks.Run(Find.CurrentMap, Check);
             caravan = CaravanExitMapUtility.ExitMapAndCreateCaravan(new[] { companion, form }, Faction.OfPlayer,
                 Find.CurrentMap.Tile, Find.CurrentMap.Tile, PlanetTile.Invalid, false);
             Require(caravan != null && caravan.Spawned && caravan.ContainsPawn(form), "native departure creates a caravan with the active form");
@@ -495,6 +508,13 @@ namespace WildShiftSharedStateValidation
                 forceGenerateNewPawn: true, canGeneratePawnRelations: false, mustBeCapableOfViolence: true,
                 fixedGender: gender, forcedXenotype: XenotypeDefOf.Baseliner));
             pawn.Name = new NameSingle(name);
+            // A generated colonist can already have chemical interests,
+            // addictions or injuries. This persistence fixture seeds its own
+            // native effects below and requires a controlled starting state.
+            pawn.health.RemoveAllHediffs();
+            foreach(Trait trait in pawn.story.traits.allTraits.ToList())pawn.story.traits.RemoveTrait(trait);
+            foreach(Gene gene in pawn.genes.GenesListForReading.ToList())pawn.genes.RemoveGene(gene);
+            pawn.needs.AddOrRemoveNeedsAsAppropriate();
             GenSpawn.Spawn(pawn, map.Center + new IntVec3(offset, 0, 0), map);
             return pawn;
         }
@@ -502,6 +522,9 @@ namespace WildShiftSharedStateValidation
         {
             foreach (Pawn pawn in map.mapPawns.AllPawnsSpawned.ToList())
             {
+                // Generated hive defenders can belong to a Lord. A native
+                // map exit must detach that membership before world transfer.
+                pawn.GetLord()?.Notify_PawnLost(pawn,PawnLostCondition.ExitedMap);
                 pawn.DeSpawn();
                 if (pawn.Faction == Faction.OfPlayer) pawn.SetFaction(null);
                 Find.WorldPawns.PassToWorld(pawn, PawnDiscardDecideMode.KeepForever);

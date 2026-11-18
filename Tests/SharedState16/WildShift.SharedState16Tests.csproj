@@ -31,6 +31,10 @@
     <Compile Include="..\SharedState17\SharedAutomaticCombatEngineChecks.cs" Link="SharedAutomaticCombatEngineChecks.cs" />
     <Compile Include="..\SharedState17\SharedPassiveHealthEngineChecks.cs" Link="SharedPassiveHealthEngineChecks.cs" />
     <Compile Include="..\SharedState17\SharedDinosauriaEngineChecks.cs" Link="SharedDinosauriaEngineChecks.cs" />
+    <Compile Include="..\SharedState17\SharedPerformanceEngineChecks.cs" Link="SharedPerformanceEngineChecks.cs" />
+    <Compile Include="..\SharedState17\RuntimeRegistrationEngineChecks.cs" Link="RuntimeRegistrationEngineChecks.cs" />
+    <Compile Include="..\SharedState17\SharedAuraPerformanceEngineChecks.cs" Link="SharedAuraPerformanceEngineChecks.cs" />
+    <Compile Include="..\SharedState17\SharedTickReentrancyEngineChecks.cs" Link="SharedTickReentrancyEngineChecks.cs" />
     <Compile Include="Engine16Context.cs" />
     <Compile Include="JsonSerializer.cs" />
   </ItemGroup>

@@ -32,5 +32,9 @@
     <Compile Include="SharedAutomaticCombatEngineChecks.cs" />
     <Compile Include="SharedPassiveHealthEngineChecks.cs" />
     <Compile Include="SharedDinosauriaEngineChecks.cs" />
+    <Compile Include="SharedPerformanceEngineChecks.cs" />
+    <Compile Include="RuntimeRegistrationEngineChecks.cs" />
+    <Compile Include="SharedAuraPerformanceEngineChecks.cs" />
+    <Compile Include="SharedTickReentrancyEngineChecks.cs" />
   </ItemGroup>
 </Project>

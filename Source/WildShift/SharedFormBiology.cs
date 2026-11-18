@@ -338,6 +338,7 @@ namespace WildShift
                 Pawn owner = gene.pawn;
                 try { gene.pawn = animal; gene.Tick(); }
                 finally { gene.pawn = owner; }
+                if (SharedFormIdentity.HumanFor(animal) != human) break;
             }
         }
 
@@ -403,6 +404,12 @@ namespace WildShift
 
         public static void BeginNativeAppearance() { nativeGenesOnly++; }
         public static void EndNativeAppearance() { if (nativeGenesOnly > 0) nativeGenesOnly--; }
+        // A finalizer may run before our prefix was reached. Positive tokens
+        // identify an entered scope; the default zero leaves an outer scope
+        // untouched when another prefix aborts this iterator invocation.
+        internal static int BeginNativeAppearanceScope() { return ++nativeGenesOnly; }
+        internal static void EndNativeAppearanceScope(int enteredDepth)
+        { if (enteredDepth > 0) nativeGenesOnly = enteredDepth - 1; }
 
         public static Pawn_InteractionsTracker BodyInteractionsForSave(Pawn pawn)
         {
@@ -725,8 +732,9 @@ namespace WildShift
                 if (moveNext != null && nested.Name.Contains("GetDynamicNodes")) yield return moveNext;
             }
         }
-        public static void Prefix() { SharedFormBiology.BeginNativeAppearance(); }
-        public static Exception Finalizer(Exception __exception) { SharedFormBiology.EndNativeAppearance(); return __exception; }
+        public static void Prefix(out int __state) { __state = SharedFormBiology.BeginNativeAppearanceScope(); }
+        public static Exception Finalizer(int __state, Exception __exception)
+        { SharedFormBiology.EndNativeAppearanceScope(__state); return __exception; }
     }
 
     [HarmonyPatch]

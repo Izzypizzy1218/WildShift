@@ -2,6 +2,9 @@
 
 WildShift is a RimWorld 1.6 / 1.7 beta mod about colonists who can transform into an assigned animal form and later return to their preserved human body.
 
+The [runtime performance review](Docs/Performance-bottom-up-20261117.md) documents narrow optimizations, regression coverage and the remaining limits of the selected-combat investigation.
+The [final review](Docs/Final-review-20261118.md) adds constructor/appearance exception recovery, callback re-entry protection and matched JIT measurements.
+
 ## Features
 
 - Transform a shapeshifter into one eligible animal form before or after drafting.
@@ -24,6 +27,7 @@ WildShift is a RimWorld 1.6 / 1.7 beta mod about colonists who can transform int
 - Use the native right-click movement, attack and interaction menus for transformed animals, including mixed selections with human colonists. Use the explicit attack command for deliberate attacks on colony objects.
 - Drag-select player-owned transformed animals together with colonists; ordinary livestock retain the normal selection rules.
 - Keep one grouped draft button on transformed animals when Draftable Animals - Releashed is active, including attack-trained forms and its no-training setting. See `Docs/DraftableAnimals-v1.2.23.md` for the tested 1.6 binary and the incompatible legacy 1.5 download.
+- Keep one working draft button on ISEKAI creature forms without changing ordinary tamed companions. See [the compatibility fix and native checks](Docs/IsekaiDraftCompatibility.md).
 - Return to the stored human body with the revert command. Preserve the animal's drafted state when the human returns safely to a map and remains able to be drafted.
 - Drop the animal body's own apparel, equipment, inventory and carried items nearby before returning. Anything that cannot be dropped goes to the original human's inventory; off-map returns keep all items there. Borrowed human gear stays in its original owners and is not unloaded as animal belongings.
 - Preserve Animal Gear / Animal Equipment apparel during return, including inventory fallback when nearby ground cannot accept it. Visuals remain subject to the equipment's species support and textures.
@@ -133,7 +137,9 @@ To build 1.6, supply matching 1.6 game or reference assemblies and `-p:RimWorldV
 
 ## Current version
 
-`v1.4.0-beta.8` — 2026-11-17
+`v1.4.0-beta.9` — 2026-11-18
+
+Fix duplicate ISEKAI creature draft toggles, reduce repeated shared-state work and temporary allocations, and protect nested state during exceptions or callback-driven return to human. Both initialized game versions pass 875 checks. The severe selected-combat slowdown remains unconfirmed resolved. See [bilingual release notes](Docs/Release-v1.4.0-beta.9.md), [ISEKAI compatibility](Docs/IsekaiDraftCompatibility.md) and [the final review](Docs/Final-review-20261118.md). Earlier beta.8 changes follow below.
 
 Correct automatic selection of manual-only apparel/weapon actions on player-controlled animal forms, preserving explicit manual orders. Reduce first-transform compatibility lookup stalls, avoid unnecessary shared-health cache rebuilds, and make freshly drafted roaming forms targetable immediately. Remove duplicate social-interaction ticking and its restored off-map error. The final runtime passes 751 initialized-game checks on each of actual 1.6 and 1.7, with all five DLCs and three-process save/load coverage. The reported severe selected-combat slowdown is still not confirmed fully resolved. See [bilingual release notes](Docs/Release-v1.4.0-beta.8.md), [combat findings and limits](Docs/Combat-v1.4.0-beta.8.md) and [the deeper selection investigation](Docs/Selection-UI-deep-20261117.md). Earlier beta.7 features follow below.
 

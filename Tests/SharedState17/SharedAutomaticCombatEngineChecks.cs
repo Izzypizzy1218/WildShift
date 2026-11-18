@@ -16,6 +16,8 @@ namespace WildShiftSharedStateValidation
         private static Pawn probeOuter, probeNpc, probePartial;
         private static Verb probeNpcManual;
         private static bool nestedBefore, nestedNpc, nestedPartial, nestedAfter;
+        private static bool earlyAttack, earlyBefore, earlyAfter, earlyExpected;
+        private static int earlyMode, earlyCalls, eligibilityCalls;
 
         public static void Run(Map map, Action<bool,string> check)
         {
@@ -85,6 +87,7 @@ namespace WildShiftSharedStateValidation
                     "autocombat/recovered player form immediately regains its normal automatic melee policy", check);
 
                 ScopeCleanup(body, jump, npc, npcManual, check);
+                EarlierPrefixCleanup(body, jump, npc, npcManual, check);
 
                 ThingWithComps rifle = (ThingWithComps)ThingMaker.MakeThing(DefDatabase<ThingDef>.GetNamed("Gun_AssaultRifle"));
                 human.equipment.AddEquipment(rifle);
@@ -157,8 +160,103 @@ namespace WildShiftSharedStateValidation
             throw new InvalidOperationException(FaultMessage);
         }
 
+        private static void EarlierPrefixCleanup(Pawn body, Verb manual, Pawn npc, Verb npcManual, Action<bool,string> check)
+        {
+            var harmony = new Harmony("wildshift.tests.automaticcombat.earlier-prefix");
+            var getter = AccessTools.PropertyGetter(typeof(Pawn), "CurrentEffectiveVerb");
+            var attack = AccessTools.Method(typeof(Pawn), "TryStartAttack", new[] { typeof(LocalTargetInfo) });
+            var eligibility = AccessTools.DeclaredMethod(typeof(TransformedAutomaticCombat), "IsControlledForm", new[] { typeof(Pawn) });
+            Require(getter != null && attack != null && eligibility != null,
+                "autocombat/earlier-prefix probe resolves the real getter, attack and eligibility methods", check);
+            probeOuter = body; probeNpc = npc; probeNpcManual = npcManual;
+            try
+            {
+                // int.MaxValue guarantees these external hooks precede the
+                // production Priority.First prefix. The outer hook runs later.
+                harmony.Patch(getter,
+                    prefix:new HarmonyMethod(typeof(SharedAutomaticCombatEngineChecks), nameof(EarlyGetter)) { priority = int.MaxValue });
+                harmony.Patch(getter,
+                    prefix:new HarmonyMethod(typeof(SharedAutomaticCombatEngineChecks), nameof(ProbeEarlyOuter)) { priority = Priority.Last });
+                harmony.Patch(attack,
+                    prefix:new HarmonyMethod(typeof(SharedAutomaticCombatEngineChecks), nameof(EarlyAttack)) { priority = int.MaxValue });
+                // Patch the actual eligibility entry, not a tiny native getter
+                // which Mono may already have inlined before this test runs.
+                harmony.Patch(eligibility,
+                    prefix:new HarmonyMethod(typeof(SharedAutomaticCombatEngineChecks), nameof(EarlyEligibility)) { priority = int.MaxValue });
+                for (int entry = 0; entry < 2; entry++)
+                    for (int mode = 0; mode < 3; mode++)
+                    {
+                        earlyAttack = entry == 1; earlyMode = mode;
+                        earlyCalls = eligibilityCalls = 0;
+                        earlyBefore = earlyAfter = earlyExpected = false;
+                        Verb result = body.CurrentEffectiveVerb;
+                        string label = (earlyAttack ? "attack/" : "getter/") + (mode == 0 ? "early-throw" : mode == 1 ? "early-skip" : "eligibility-throw");
+                        check(earlyCalls == 1 && earlyExpected && (mode != 2 || eligibilityCalls == 1),
+                            "autocombat/real external prefix takes the intended nested NPC branch: " + label);
+                        check(earlyBefore && earlyAfter && result?.IsMeleeAttack == true,
+                            "autocombat/nested skipped or throwing entry preserves the outer automatic policy: " + label);
+                        check(ReferenceEquals(body.TryGetAttackVerb(null, true), manual),
+                            "autocombat/outer completion restores explicit manual permission: " + label);
+                    }
+            }
+            finally
+            {
+                ClearProbe();
+                harmony.Unpatch(getter, HarmonyPatchType.Prefix, harmony.Id);
+                harmony.Unpatch(attack, HarmonyPatchType.Prefix, harmony.Id);
+                harmony.Unpatch(eligibility, HarmonyPatchType.Prefix, harmony.Id);
+            }
+            check(body.CurrentEffectiveVerb?.IsMeleeAttack == true && ReferenceEquals(body.TryGetAttackVerb(null, true), manual),
+                "autocombat/removing all earlier-prefix probes preserves automatic and manual selection");
+        }
+
+        public static bool EarlyGetter(Pawn __instance, ref Verb __result)
+        {
+            if (!ReferenceEquals(__instance, probeNpc) || probeNpc == null || earlyAttack) return true;
+            earlyCalls++;
+            if (earlyMode == 0) throw new InvalidOperationException(FaultMessage);
+            if (earlyMode == 1) { __result = probeNpcManual; return false; }
+            return true;
+        }
+
+        public static bool EarlyAttack(Pawn __instance, ref bool __result)
+        {
+            if (!ReferenceEquals(__instance, probeNpc) || probeNpc == null || !earlyAttack) return true;
+            earlyCalls++;
+            if (earlyMode == 0) throw new InvalidOperationException(FaultMessage);
+            if (earlyMode == 1) { __result = false; return false; }
+            return true;
+        }
+
+        public static void EarlyEligibility(Pawn __0)
+        {
+            if (earlyMode != 2 || !ReferenceEquals(__0, probeNpc) || probeNpc == null) return;
+            eligibilityCalls++;
+            throw new InvalidOperationException(FaultMessage);
+        }
+
+        public static void ProbeEarlyOuter(Pawn __instance)
+        {
+            if (!ReferenceEquals(__instance, probeOuter) || probeOuter == null) return;
+            earlyBefore = probeOuter.TryGetAttackVerb(null, true)?.IsMeleeAttack == true;
+            try
+            {
+                if (earlyAttack) earlyExpected = !probeNpc.TryStartAttack(probeOuter) && earlyMode == 1;
+                else earlyExpected = ReferenceEquals(probeNpc.CurrentEffectiveVerb, probeNpcManual) && earlyMode == 1;
+            }
+            catch (InvalidOperationException error) when (error.Message == FaultMessage)
+            {
+                earlyExpected = earlyMode != 1;
+            }
+            earlyAfter = probeOuter.TryGetAttackVerb(null, true)?.IsMeleeAttack == true;
+        }
+
         private static void ClearProbe()
-        { probeOuter = probeNpc = probePartial = null; probeNpcManual = null; }
+        {
+            probeOuter = probeNpc = probePartial = null; probeNpcManual = null;
+            earlyAttack = earlyBefore = earlyAfter = earlyExpected = false;
+            earlyMode = earlyCalls = eligibilityCalls = 0;
+        }
 
         private static Apparel Pack(Pawn pawn)
         {

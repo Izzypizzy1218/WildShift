@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using HarmonyLib;
 using RimWorld;
 using UnityEngine;
@@ -24,6 +25,7 @@ namespace WildShiftSharedStateValidation
                 FatalDrug(map, check);
                 PermanentWoundHealing(map, check);
                 ImmediateSourceCache(map, check);
+                ForwardedCallbackScopes(map, check);
                 NativeExpandedEffects(map, check);
                 ExpiredSourceAfterReturn(map, check);
                 NativeDeathRefusal(map, check);
@@ -183,6 +185,204 @@ namespace WildShiftSharedStateValidation
             animal.health.RemoveHediff(cut);
             Require(TransformUtility.RevertToHuman(animal,false)==human,
                 "health/immediate-cache probe returns its exact original",check);
+        }
+
+        private static Hediff callbackSource;
+        private static Pawn callbackOwner;
+        private static BodyPartRecord callbackPart;
+        private static object[] callbackArguments;
+        private static int callbackCalls, callbackCompletions;
+        private static Exception callbackFault;
+        private static HediffSet mappingFaultSet;
+        private static Hediff mappingFaultSource;
+        private static BodyPartRecord mappingFaultPart;
+        private static Exception mappingFault;
+        private static Pawn mappingObservedOwner;
+        private static int mappingFaultCalls;
+
+        // A no-op detour recompiles the actual value-type constructor after
+        // the query fault hook is installed, avoiding already-inlined native
+        // query copies. It supplies no gameplay result.
+        private static void ObserveScopeConstruction() { }
+        private static void FailNativePartMapping(HediffSet __instance, BodyPartRecord __0)
+        {
+            if (mappingFault == null || !ReferenceEquals(__instance,mappingFaultSet)
+                || !ReferenceEquals(__0,mappingFaultPart)) return;
+            mappingFaultCalls++;
+            mappingObservedOwner=mappingFaultSource?.pawn;
+            throw mappingFault;
+        }
+
+        // Observe the actual inherited native implementation. This does not
+        // replace the callback, return a gameplay result, or trigger a fake hit.
+        private static void ObserveForwardedCallback(Hediff __instance, object[] __args)
+        {
+            if (!ReferenceEquals(__instance, callbackSource)) return;
+            callbackCalls++;
+            callbackOwner = __instance.pawn;
+            callbackPart = __instance.Part;
+            callbackArguments = __args;
+            if (callbackFault != null) throw callbackFault;
+        }
+
+        private static void CompleteForwardedCallback(Hediff __instance)
+        {
+            if (ReferenceEquals(__instance, callbackSource)) callbackCompletions++;
+        }
+
+        private static void ForwardedCallbackScopes(Map map, Action<bool, string> check)
+        {
+            Pawn human = NewHuman(map, "SharedHealthCallbackScopes", -22);
+            Pawn animal = null;
+            var observer = new Harmony("wildshift.tests.shared-health-callback-scopes");
+            var methods = new List<MethodInfo>();
+            try
+            {
+                BodyPartRecord originalPart = human.health.hediffSet.GetBrain();
+                Hediff source = human.health.AddHediff(DefDatabase<HediffDef>.GetNamed("Painstopper"), originalPart);
+                animal = Transform(map, human);
+                Hediff_SharedFormDrugEffect view = animal.health.hediffSet.hediffs
+                    .OfType<Hediff_SharedFormDrugEffect>().Single(v => ReferenceEquals(v.source, source));
+                BodyPartRecord mappedPart = animal.health.hediffSet.GetBrain();
+                Require(originalPart != null && mappedPart != null && source.pawn == human && source.Part == originalPart,
+                    "health/callback scope uses a real canonical native implant and both native brains", check);
+                string[] names = { "Notify_PawnPostApplyDamage", "Notify_PawnUsedVerb", "Notify_EntropyGained", "Notify_KilledPawn" };
+                foreach (string name in names)
+                {
+                    MethodInfo method = AccessTools.Method(source.GetType(), name);
+                    // Harmony requires the implementing declaration rather
+                    // than a MethodInfo reflected through its derived type.
+                    if (method != null)
+                        method = method.DeclaringType.GetMethod(method.Name,
+                            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly,
+                            null, method.GetParameters().Select(p => p.ParameterType).ToArray(), null);
+                    Require(method != null && method.ReflectedType == method.DeclaringType
+                        && method.DeclaringType.Assembly == typeof(Hediff).Assembly,
+                        "health/callback scope resolves the actual native implementation: " + name, check);
+                    methods.Add(method);
+                    observer.Patch(method,
+                        prefix: new HarmonyMethod(typeof(SharedHealthEngineChecks), nameof(ObserveForwardedCallback)) { priority = Priority.Last },
+                        postfix: new HarmonyMethod(typeof(SharedHealthEngineChecks), nameof(CompleteForwardedCallback)) { priority = Priority.Last });
+                }
+                Verb verb = animal.TryGetAttackVerb(null, true);
+                Require(verb != null, "health/callback scope has an actual native attack verb", check);
+                var damage = new DamageInfo(DamageDefOf.Cut, 2f, instigator: human);
+                LocalTargetInfo target = animal.Position;
+                Action[] invoke = {
+                    () => view.Notify_PawnPostApplyDamage(damage, 1.25f),
+                    () => view.Notify_PawnUsedVerb(verb, target),
+                    () => view.Notify_EntropyGained(2.5f, 1.75f, human),
+                    () => view.Notify_KilledPawn(animal, damage),
+                    () => view.Notify_KilledPawn(animal, null)
+                };
+                object[][] expected = {
+                    new object[] { damage, 1.25f }, new object[] { verb, target },
+                    new object[] { 2.5f, 1.75f, human }, new object[] { animal, damage }, new object[] { animal, null }
+                };
+                int now = Find.TickManager.TicksGame;
+                callbackSource = source;
+                for (int i = 0; i < invoke.Length; i++)
+                {
+                    callbackCalls = callbackCompletions = 0;
+                    callbackOwner = null; callbackPart = null; callbackArguments = null;
+                    callbackFault = null;
+                    invoke[i]();
+                    bool sameArguments = callbackArguments != null && callbackArguments.Length == expected[i].Length;
+                    if (sameArguments) for (int j = 0; j < expected[i].Length; j++)
+                        sameArguments &= Equals(callbackArguments[j], expected[i][j]);
+                    check(callbackCalls == 1 && callbackCompletions == 1 && sameArguments,
+                        "health/forwarded native callback executes once with identical arguments: " + i);
+                    check(callbackOwner == animal && callbackPart == mappedPart && source.pawn == human && source.Part == originalPart,
+                        "health/forwarded native callback borrows the active body and restores canonical owner/part: " + i);
+                    callbackCalls = callbackCompletions = 0;
+                    callbackOwner = null; callbackPart = null;
+                    callbackFault = new InvalidOperationException("TEST ONLY forwarded health callback fault " + i);
+                    Exception caught = null;
+                    try { invoke[i](); }
+                    catch (Exception error) { caught = error; }
+                    check(ReferenceEquals(caught, callbackFault) && callbackCalls == 1 && callbackCompletions == 0,
+                        "health/forwarded native callback preserves an injected exception without completing: " + i);
+                    check(callbackOwner == animal && callbackPart == mappedPart && source.pawn == human && source.Part == originalPart,
+                        "health/forwarded callback exception restores canonical owner/part: " + i);
+                    callbackFault = null;
+                }
+                ConstructorFaultScopes(source,view,human,animal,originalPart,mappedPart,verb,target,check);
+                check(Find.TickManager.TicksGame == now && view.pawn == animal && source.pawn == human
+                    && human.health.hediffSet.hediffs.Contains(source) && !animal.health.hediffSet.hediffs.Contains(source),
+                    "health/callback scopes do not advance time, transfer or duplicate the canonical implant");
+            }
+            finally
+            {
+                callbackSource = null; callbackOwner = null; callbackPart = null; callbackArguments = null; callbackFault = null;
+                foreach (MethodInfo method in methods) observer.Unpatch(method, HarmonyPatchType.All, observer.Id);
+                Pawn active = SharedFormIdentity.ActiveFormFor(human);
+                if (active != null) TransformUtility.RevertToHuman(active, false);
+                if (!human.Destroyed) human.Destroy(DestroyMode.Vanish);
+            }
+        }
+
+        private static void ConstructorFaultScopes(Hediff source,Hediff_SharedFormDrugEffect view,
+            Pawn human,Pawn animal,BodyPartRecord originalPart,BodyPartRecord mappedPart,
+            Verb verb,LocalTargetInfo target,Action<bool,string> check)
+        {
+            var observer=new Harmony("wildshift.tests.shared-health-constructor-scope");
+            MethodInfo query=AccessTools.Method(typeof(HediffSet),"PartIsMissing",new[]{typeof(BodyPartRecord)});
+            Type scope=typeof(SharedFormHealth).GetNestedType("BodyScope",BindingFlags.NonPublic);
+            ConstructorInfo constructor=AccessTools.Constructor(scope,new[]{typeof(Hediff),typeof(Pawn)});
+            MethodInfo fail=AccessTools.Method(typeof(SharedHealthEngineChecks),nameof(FailNativePartMapping));
+            MethodInfo nop=AccessTools.Method(typeof(SharedHealthEngineChecks),nameof(ObserveScopeConstruction));
+            object table=AccessTools.Field(typeof(SharedFormHealth),"partMappings").GetValue(null);
+            MethodInfo remove=table.GetType().GetMethod("Remove",new[]{typeof(Hediff)});
+            MethodInfo contains=table.GetType().GetMethod("TryGetValue",new[]{typeof(Hediff),table.GetType().GetGenericArguments()[1].MakeByRefType()});
+            Require(query!=null && query.DeclaringType==typeof(HediffSet) && constructor!=null,
+                "health/constructor fault resolves the real native part query and production scope",check);
+            try
+            {
+                observer.Patch(query,prefix:new HarmonyMethod(fail){priority=Priority.First});
+                observer.Patch(constructor,prefix:new HarmonyMethod(nop){priority=Priority.First});
+                mappingFaultSet=animal.health.hediffSet;mappingFaultPart=mappedPart;mappingFaultSource=source;
+                mappingFault=new InvalidOperationException("TEST ONLY native body-part mapping fault");
+                mappingFaultCalls=0;
+                Exception direct=null;
+                var nativeQuery=AccessTools.MethodDelegate<Func<HediffSet,BodyPartRecord,bool>>(query);
+                try { nativeQuery(mappingFaultSet,mappedPart); }
+                catch(Exception error) { direct=error; }
+                check(ReferenceEquals(direct,mappingFault) && mappingFaultCalls==1,
+                    "health/constructor fault has a positive control on the actual native query");
+                for(int cold=0;cold<2;cold++)
+                {
+                    mappingFault=null;
+                    view.Notify_PawnUsedVerb(verb,target);
+                    if(cold==1)remove.Invoke(table,new object[]{source});
+                    mappingFault=new InvalidOperationException("TEST ONLY native body-part mapping fault "+cold);
+                    mappingFaultCalls=0;mappingObservedOwner=null;
+                    Exception caught=null;
+                    try { view.Notify_PawnUsedVerb(verb,target); }
+                    catch(Exception error) { caught=error; }
+                    check(ReferenceEquals(caught,mappingFault) && mappingFaultCalls==1 && mappingObservedOwner==animal,
+                        "health/constructor mapping query preserves the exact fault after borrowing the body: "+cold);
+                    check(source.pawn==human && source.Part==originalPart,
+                        "health/constructor failure restores canonical owner and part without Dispose: "+cold);
+                    bool cached=(bool)contains.Invoke(table,new object[]{source,null});
+                    check(!cached,"health/constructor failure discards a partial mapping cache: "+cold);
+                    // Test-only recovery permits the old DLL to retain its
+                    // negative evidence and continue, without corrupting the
+                    // fixture's original. Assertions above observe it first.
+                    mappingFault=null;source.pawn=human;source.Part=originalPart;
+                    callbackCalls=callbackCompletions=0;callbackOwner=null;callbackPart=null;
+                    view.Notify_PawnUsedVerb(verb,target);
+                    check(callbackCalls==1 && callbackCompletions==1 && callbackOwner==animal && callbackPart==mappedPart
+                        && source.pawn==human && source.Part==originalPart,
+                        "health/retry after constructor fault rebuilds the actual body-part mapping: "+cold);
+                }
+            }
+            finally
+            {
+                mappingFault=null;mappingFaultSet=null;mappingFaultSource=null;mappingFaultPart=null;mappingObservedOwner=null;
+                observer.Unpatch(query,fail);observer.Unpatch(constructor,nop);
+                source.pawn=human;source.Part=originalPart;
+                remove.Invoke(table,new object[]{source});
+            }
         }
 
         private static void NativeExpandedEffects(Map map, Action<bool, string> check)

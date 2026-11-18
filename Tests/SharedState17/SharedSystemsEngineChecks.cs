@@ -68,7 +68,14 @@ namespace WildShiftSharedStateValidation
             check(body.psychicEntropy.MaxEntropy>=70f,"systems/native source gene and trait psychic enhancements retain enough animal heat capacity");
             check(body.abilities.GetAbility(skip.def)==skip&&skip.pawn==body&&skip.verb.CasterPawn==body,"systems/native psychic ability and verb use original object with active caster");
             check(ReferenceEquals(body.mindState.inspirationHandler,human.mindState.inspirationHandler)&&body.Inspiration==inspiration,"systems/original inspiration handler and state retained once");
-            check(Near(body.GetStatValue(StatDefOf.MoveSpeed),ordinarySpeed*1.4f),"systems/native go-frenzy x1.4 applies to animal speed");
+            // Compare the same life stage and an explicitly controlled outfit.
+            // Random starting armor and juvenile control animals are separate
+            // native movement modifiers, not inspiration forwarding failures.
+            ordinary.ageTracker.AgeBiologicalTicks=body.ageTracker.AgeBiologicalTicks;
+            ordinarySpeed=ordinary.GetStatValue(StatDefOf.MoveSpeed,cacheStaleAfterTicks:0);
+            float inspiredSpeed=body.GetStatValue(StatDefOf.MoveSpeed,cacheStaleAfterTicks:0);
+            check(Near(inspiredSpeed,ordinarySpeed*1.4f),"systems/native go-frenzy x1.4 applies to animal speed"
+                +" [body="+inspiredSpeed+", ordinary="+ordinarySpeed+", age="+body.ageTracker.AgeBiologicalTicks+"]");
             int age=inspiration.Age;
             body.mindState.inspirationHandler.InspirationHandlerTickInterval(150);
             human.mindState.inspirationHandler.InspirationHandlerTickInterval(150);
@@ -309,6 +316,9 @@ namespace WildShiftSharedStateValidation
             pawn.Name=new NameSingle(name);pawn.health.RemoveAllHediffs();
             foreach(Trait trait in pawn.story.traits.allTraits.ToList())pawn.story.traits.RemoveTrait(trait);
             foreach(Gene gene in pawn.genes.GenesListForReading.ToList())pawn.genes.RemoveGene(gene);
+            foreach(Apparel apparel in pawn.apparel.WornApparel.ToList())
+            { pawn.apparel.Remove(apparel);apparel.Destroy(DestroyMode.Vanish); }
+            pawn.equipment.DestroyAllEquipment();
             GenSpawn.Spawn(pawn,Open(map,cell),map);return pawn;
         }
         private static IntVec3 Open(Map map,IntVec3 requested)

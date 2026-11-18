@@ -19,7 +19,8 @@ param(
     [string[]]$AdditionalMods=@(),
     [ValidateRange(30,1800)][int]$TimeoutSeconds=240,
     [switch]$BuildOnly,
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [switch]$MicroOnly
 )
 $ErrorActionPreference='Stop'
 $repoRoot=[IO.Path]::GetFullPath((Split-Path $PSScriptRoot -Parent)).TrimEnd('\','/')
@@ -95,7 +96,9 @@ function RunPhase([int]$number,[bool]$quickTest) {
     if ($quickTest) { $arguments+='-quicktest' }
     $process=$null
     try {
-        $process=Start-Process -FilePath (Join-Path $GameDir 'RimWorld.exe') -ArgumentList $arguments -WorkingDirectory $GameDir -Environment @{SteamAppId='294100';SteamGameId='294100'} -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+        $launchEnvironment=@{SteamAppId='294100';SteamGameId='294100';WildShift_TestMicroOnly=$MicroOnly.IsPresent.ToString()}
+        if ($MicroOnly) { $launchEnvironment.DOTNET_TieredCompilation='0'; $launchEnvironment.DOTNET_TieredPGO='0' }
+        $process=Start-Process -FilePath (Join-Path $GameDir 'RimWorld.exe') -ArgumentList $arguments -WorkingDirectory $GameDir -Environment $launchEnvironment -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
         $process.Id | Set-Content -LiteralPath (Join-Path $Output ('phase-'+$number+'-pid.txt'))
         $timer=[Diagnostics.Stopwatch]::StartNew()
         while (!$process.WaitForExit(1000)) {
@@ -125,6 +128,11 @@ function RunPhase([int]$number,[bool]$quickTest) {
 try {
     $phase0=RunPhase 0 $true
     $result.Phases+=@($phase0)
+    if ($MicroOnly) {
+        if (!$phase0.Passed -or $phase0.Phase -ne 'micro-only') { throw 'Isolated performance microbench failed.' }
+        $result.Scenario='Isolated shared performance microbench'
+        $result.Scope='Single initialized native 1.7 process with controlled subjects before other regression observers; not save/reload, GUI or colony TPS validation.'
+    } else {
     if (!$phase0.Passed -or $phase0.Phase -ne 'save-ready') { throw 'Initial shared-state/save phase failed.' }
     if (!(Test-Path -LiteralPath (Join-Path $profile 'Saves\autostart.rws'))) { throw 'Native autostart save missing.' }
     $phase1=RunPhase 1 $false
@@ -134,6 +142,7 @@ try {
     $phase2=RunPhase 2 $false
     $result.Phases+=@($phase2)
     if (!$phase2.Passed -or $phase2.Phase -ne 'complete') { throw 'Native active-form reload/off-map return phase failed.' }
+    }
 } catch { $result.Errors+= $_.Exception.Message }
 finally {
     $normalAfter=@(if (Test-Path -LiteralPath $userConfig) { foreach($file in Get-ChildItem -LiteralPath $userConfig -File -Recurse) { [pscustomobject]@{Path=$file.FullName;SHA256=(Hash $file.FullName)} } })

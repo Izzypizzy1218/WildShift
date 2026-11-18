@@ -23,10 +23,12 @@ namespace WildShift
             public bool initialized, building;
             public readonly Dictionary<PawnCapacityDef, float> rawFactors = new Dictionary<PawnCapacityDef, float>();
 
-            public void Refresh(Pawn body)
+            public void Refresh(Pawn body, Pawn source = null)
             {
                 if (building) return;
-                Pawn source = SharedFormIdentity.HumanFor(body);
+                // A raw-capacity query has just validated the source. Reuse
+                // that result only within this call, never across queries.
+                source = source ?? SharedFormIdentity.HumanFor(body);
                 int next = Signature(source, body);
                 if (initialized && source == human && next == signature) return;
                 human = source;
@@ -82,10 +84,11 @@ namespace WildShift
             // must keep native worker results. Only the active body's actual
             // anatomy receives the original person's installed-part ratio.
             if (value <= 0f || body?.health == null || neutralPawn == body
-                || !ReferenceEquals(diffSet, body.health.hediffSet)
-                || SharedFormIdentity.HumanFor(body) == null) return value;
+                || !ReferenceEquals(diffSet, body.health.hediffSet)) return value;
+            Pawn source = SharedFormIdentity.HumanFor(body);
+            if (source == null) return value;
             State state = states.GetOrCreateValue(body);
-            state.Refresh(body);
+            state.Refresh(body, source);
             float factor;
             return state.rawFactors.TryGetValue(capacity, out factor) ? value * factor : value;
         }

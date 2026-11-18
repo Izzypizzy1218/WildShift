@@ -75,9 +75,10 @@ namespace WildShift
             for (int i = 0; i < pawns.Count; i++)
             {
                 Pawn body = pawns[i];
+                if (body == null || body == source || body.health == null || body.Dead
+                    || body.Position.DistanceTo(source.Position) > props.range) continue;
                 Pawn human = SharedFormIdentity.HumanFor(body);
-                if (human == null || body == source || body.Dead || body.health == null
-                    || body.Position.DistanceTo(source.Position) > props.range
+                if (human == null
                     || (props.targetingParameters != null && !props.targetingParameters.CanTarget(human))) continue;
                 Hediff buff = body.health.hediffSet.GetFirstHediffOfDef(props.hediff);
                 if (buff == null)
