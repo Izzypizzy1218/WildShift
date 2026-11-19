@@ -147,9 +147,10 @@ namespace WildShift
 
         public static Hediff SourceFor(Pawn body, HediffDef def, bool mustBeVisible)
         {
-            if (!IsSupportedDef(def)) return null;
-            Pawn human = SharedFormIdentity.HumanFor(body);
-            if (human?.health == null) return null;
+            HediffComp_Transformed carrier = TransformUtility.TryGetTransformedComp(body);
+            if (carrier == null || !IsSupportedDef(def)) return null;
+            Pawn human = SharedFormIdentity.GetStoredHumanFromActiveBody(body, carrier);
+            if (human == null) return null;
             foreach (Hediff effect in human.health.hediffSet.hediffs)
                 if (effect.def == def && IsSupported(effect) && (!mustBeVisible || effect.Visible)) return effect;
             return null;
@@ -252,7 +253,10 @@ namespace WildShift
     {
         public static void Postfix(Pawn ___pawn, HediffDef def, bool mustBeVisible, ref Hediff __result)
         {
-            if (__result == null) __result = SharedFormBuffs.SourceFor(___pawn, def, mustBeVisible);
+            if (__result != null) return;
+            List<Hediff> effects = ___pawn?.health?.hediffSet?.hediffs;
+            if (effects != null && effects.Count > 0)
+                __result = SharedFormBuffs.SourceFor(___pawn, def, mustBeVisible);
         }
     }
 
@@ -261,7 +265,10 @@ namespace WildShift
     {
         public static void Postfix(Pawn ___pawn, HediffDef def, bool mustBeVisible, ref bool __result)
         {
-            if (!__result) __result = SharedFormBuffs.SourceFor(___pawn, def, mustBeVisible) != null;
+            if (__result) return;
+            List<Hediff> effects = ___pawn?.health?.hediffSet?.hediffs;
+            if (effects != null && effects.Count > 0)
+                __result = SharedFormBuffs.SourceFor(___pawn, def, mustBeVisible) != null;
         }
     }
 }

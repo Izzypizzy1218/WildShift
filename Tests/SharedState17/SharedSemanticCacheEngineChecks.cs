@@ -135,17 +135,25 @@ namespace WildShiftSharedStateValidation
                 body.GetStatValue(StatDefOf.MoveSpeed,cacheStaleAfterTicks:0);
 
                 var condition = new ToggleAffecter { statOffsets=new List<StatModifier> { new StatModifier { stat=StatDefOf.MoveSpeed,value=.5f } } };
-                Precept conditional = new Precept { def=new PreceptDef { defName="WildShift_TestSemanticConditional",
-                    conditionalStatAffecters=new List<ConditionalStatAffecter> { condition } } };
+                Precept conditional = new Precept { def=new PreceptDef { defName="WildShift_TestSemanticConditional" } };
                 empty.PreceptsListForReading.Add(conditional);
                 ToggleAffecter.Enabled = false;
                 float disabled = body.health.capacities.GetLevel(capacity);
+                // Leave the list length and PreceptDef identity intact while
+                // changing that definition from static to environmental.
+                conditional.def.conditionalStatAffecters = new List<ConditionalStatAffecter> { condition };
                 ToggleAffecter.Enabled = true;
                 check(body.health.capacities.GetLevel(capacity)>disabled+.4f,
                     "semantic-cache/conditional precept stat activation retains conservative immediate capacity invalidation");
                 ToggleAffecter.Enabled = false;
                 check(Near(body.health.capacities.GetLevel(capacity),disabled),
                     "semantic-cache/conditional precept stat deactivation retains the same-tick native cache contract");
+                ToggleAffecter.Enabled = true;
+                body.health.capacities.GetLevel(capacity);
+                conditional.def.conditionalStatAffecters.Clear();
+                check(Near(body.health.capacities.GetLevel(capacity),disabled),
+                    "semantic-cache/live removal of a matching precept's last conditional effect refreshes the same-tick capacity cache");
+                ToggleAffecter.Enabled = false;
                 empty.PreceptsListForReading.Remove(conditional);
                 body.health.capacities.GetLevel(capacity);
 

@@ -24,17 +24,25 @@ namespace WildShift
             // while migrating this same transformed comp and its real owner.
             // Native Scribe constructs story/trait views before loading the
             // Pawn's health tracker. Such a partial Pawn has no active binding.
-            if (animal == null || animal.Destroyed || animal.health == null || animal.Dead || animal.RaceProps == null) return null;
             HediffComp_Transformed comp = TransformUtility.TryGetTransformedComp(animal);
-            Pawn human = comp != null ? comp.StoredPawn : null;
-            return human != null && human != animal && !human.Destroyed && human.health != null && !human.Dead
+            return comp == null ? null : GetStoredHumanFromActiveBody(animal, comp);
+        }
+
+        internal static Pawn GetStoredHumanFromActiveBody(Pawn animal, HediffComp_Transformed comp)
+        {
+            Pawn human = comp?.StoredPawn;
+            if (human == null || animal == null || animal.Destroyed || animal.health == null
+                || animal.Dead || animal.RaceProps == null) return null;
+            return human != animal && !human.Destroyed && human.health != null && !human.Dead
                 && human.RaceProps != null && human.RaceProps.Humanlike
                 && human.holdingOwner == comp.GetDirectlyHeldThings() ? human : null;
         }
 
         public static Pawn ActiveFormFor(Pawn human)
         {
-            if (human == null) return null;
+            // A valid binding always uses the transformed comp's ThingOwner,
+            // including after Scribe recreates that owner.
+            if (!(human?.holdingOwner?.Owner is HediffComp_Transformed)) return null;
             System.WeakReference<Pawn> reference;
             Pawn form;
             if (activeForms.TryGetValue(human, out reference) && reference.TryGetTarget(out form)

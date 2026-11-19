@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.4.0-beta.12 — Active form performance (2026-11-19)
+
+See [bilingual release notes](Docs/Release-v1.4.0-beta.12.md).
+
+- Reduce repeated original-body and stat checks for active animal forms. Keep same-tick updates to shared genes, traits, gear and conditional modifiers.
+- Recheck transformation, return and save/load in RimWorld 1.6 and 1.7. In the same uncapped 1.6 save with 50 drafted Wargs, throughput rose from 423 TPS to 542–557 TPS.
+- Check 210 available animal forms in the 1.6 test setup and document the observed Alpha Animals interactions and Ratkin combat reproduction.
+
 ## v1.4.0-beta.11 — Psycast command performance (2026-11-19)
 
 See [bilingual release notes](Docs/Release-v1.4.0-beta.11.md).

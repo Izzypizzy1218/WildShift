@@ -71,9 +71,14 @@ namespace WildShift
 
         public static int ModifierVersion(Pawn body)
         {
+            return ModifierVersionForSource(body, null);
+        }
+
+        internal static int ModifierVersionForSource(Pawn body, Pawn source)
+        {
             if (body == null || neutralPawn == body) return 0;
             State state = states.GetOrCreateValue(body);
-            state.Refresh(body);
+            state.Refresh(body, source);
             return state.version;
         }
 

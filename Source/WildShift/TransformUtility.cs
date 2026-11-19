@@ -97,13 +97,22 @@ namespace WildShift
 
         public static HediffComp_Transformed TryGetTransformedComp(Pawn pawn)
         {
-            if (pawn == null || pawn.health == null || pawn.health.hediffSet == null)
+            List<Hediff> effects = pawn?.health?.hediffSet?.hediffs;
+            if (effects == null || effects.Count == 0)
             {
                 return null;
             }
 
-            Hediff hediff = pawn.health.hediffSet.GetFirstHediffOfDef(WildShiftDefOf.WildShift_Transformed);
-            return hediff != null ? hediff.TryGetComp<HediffComp_Transformed>() : null;
+            // A carrier is a physical hediff. Do not query projected buffs
+            // while deciding whether a pawn has a body to project them onto.
+            HediffDef carrier = WildShiftDefOf.WildShift_Transformed;
+            if (carrier == null) return null;
+            for (int i = 0; i < effects.Count; i++)
+            {
+                Hediff effect = effects[i];
+                if (effect?.def == carrier) return effect.TryGetComp<HediffComp_Transformed>();
+            }
+            return null;
         }
 
         public static HediffComp_Shapeshifter TryGetShapeshifterComp(Pawn pawn)

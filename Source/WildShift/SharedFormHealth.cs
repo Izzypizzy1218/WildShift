@@ -229,6 +229,7 @@ namespace WildShift
             if (clock == null || clock.advancing || clock.lastTick >= Now) return;
             clock.lastTick = Now;
             if (clock.dirty) Refresh(animal);
+            if (!clock.dirty && clock.sources.Count == 0) return;
             clock.advancing = true;
             clock.ticking.Clear();
             clock.ticking.AddRange(clock.sources);
@@ -263,6 +264,9 @@ namespace WildShift
             int elapsed = Math.Min(delta, Now - clock.lastInterval);
             clock.lastInterval = Now;
             if (clock.dirty) Refresh(animal);
+            if (!clock.dirty && clock.sources.Count == 0
+                && (clock.human.needs == null || !clock.human.IsHashIntervalTick(150, elapsed)
+                    || SharedFormBiology.SharesNeeds(animal))) return;
             clock.advancing = true;
             clock.ticking.Clear();
             clock.ticking.AddRange(clock.sources);

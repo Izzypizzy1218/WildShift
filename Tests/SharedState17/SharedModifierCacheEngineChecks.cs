@@ -80,6 +80,11 @@ namespace WildShiftSharedStateValidation
                 link.TraitsListForReading.Remove(extra);
                 check(Math.Abs(body.GetStatValue(StatDefOf.MoveSpeed,cacheStaleAfterTicks:10000)-speed)<.001f,
                     "modifier-cache/native-visible persona modifier removal repairs the same long-lived stat cache in the same tick");
+                link.TraitsListForReading.Add(extra);
+                float uncachedSpeed=body.GetStatValue(StatDefOf.MoveSpeed);
+                link.TraitsListForReading.Remove(extra);
+                check(uncachedSpeed>speed+.2f&&Math.Abs(body.GetStatValue(StatDefOf.MoveSpeed,cacheStaleAfterTicks:10000)-speed)<.001f,
+                    "modifier-cache/native ignore-cache writes cannot leave stale persona stats for the next same-tick cached read");
                 nativeVersion=SharedFormSystems.ModifierVersion(body,out nativeProjected);
 
                 // NativeOnly is also used by real physical-only consumers.

@@ -10,11 +10,11 @@ using WildShift;
 namespace WildShiftSharedStateValidation
 {
     // TEST ONLY. Real native command aura and recipients. The observer counts
-    // identity queries without supplying/replacing a gameplay result.
+    // physical marker lookups without supplying/replacing a gameplay result.
     public static class SharedAuraPerformanceEngineChecks
     {
-        private static Pawn watchedForm, watchedOrdinary;
-        private static int farFormQueries, farOrdinaryQueries;
+        private static Pawn watchedNearForm, watchedFarForm, watchedFarOrdinary;
+        private static int nearFormQueries, farFormQueries, farOrdinaryQueries;
         private static HediffComp_GiveHediffsInRange skippedAura;
         private static HediffComp_Link skippedLink;
 
@@ -28,20 +28,19 @@ namespace WildShiftSharedStateValidation
             return !ReferenceEquals(__instance, skippedLink);
         }
 
-        public static void ObserveIdentity(Pawn __0)
+        public static void ObserveMarkerLookup(Pawn __0)
         {
-            bool form = ReferenceEquals(__0, watchedForm), ordinary = ReferenceEquals(__0, watchedOrdinary);
-            if (!form && !ordinary) return;
-            if (form) farFormQueries++;
-            if (ordinary) farOrdinaryQueries++;
+            if (ReferenceEquals(__0, watchedNearForm)) nearFormQueries++;
+            if (ReferenceEquals(__0, watchedFarForm)) farFormQueries++;
+            if (ReferenceEquals(__0, watchedFarOrdinary)) farOrdinaryQueries++;
         }
         public static void Run(Map map, Action<bool, string> check)
         {
             var humans = new List<Pawn>();
             var forms = new List<Pawn>();
-            var observer = new Harmony("wildshift.tests.aura-identity-observer");
-            MethodInfo identity = AccessTools.Method(typeof(SharedFormIdentity), nameof(SharedFormIdentity.HumanFor));
-            MethodInfo observe = AccessTools.Method(typeof(SharedAuraPerformanceEngineChecks), nameof(ObserveIdentity));
+            var observer = new Harmony("wildshift.tests.aura-marker-observer");
+            MethodInfo markerLookup = AccessTools.Method(typeof(TransformUtility), nameof(TransformUtility.TryGetTransformedComp));
+            MethodInfo observe = AccessTools.Method(typeof(SharedAuraPerformanceEngineChecks), nameof(ObserveMarkerLookup));
             try
             {
                 IntVec3 origin = map.AllCells.First(c => Valid(map, c)
@@ -69,16 +68,18 @@ namespace WildShiftSharedStateValidation
                 Require(props.hediff == buffDef && source.Awake() && !source.health.InPainShock,
                     "aura-performance/native awake source and configured recipient buff are valid", check);
 
-                watchedForm = farBody; watchedOrdinary = farOrdinary;
-                observer.Patch(identity, prefix: new HarmonyMethod(observe));
+                watchedNearForm = nearBody; watchedFarForm = farBody; watchedFarOrdinary = farOrdinary;
+                MethodInfo patchedLookup = observer.Patch(markerLookup, prefix: new HarmonyMethod(observe));
+                var invokeLookup = (Func<Pawn, HediffComp_Transformed>)patchedLookup.CreateDelegate(typeof(Func<Pawn, HediffComp_Transformed>));
                 ResetCounts();
-                SharedFormIdentity.HumanFor(farBody); SharedFormIdentity.HumanFor(farOrdinary);
-                check(farFormQueries > 0 && farOrdinaryQueries > 0,
-                    "aura-performance/manual positive controls verify the total identity observer for both far pawns");
+                HediffComp_Transformed marker = invokeLookup(farBody);
+                HediffComp_Transformed ordinaryMarker = invokeLookup(farOrdinary);
+                check(marker?.StoredPawn == far && ordinaryMarker == null && farFormQueries > 0 && farOrdinaryQueries > 0,
+                    "aura-performance/manual controls verify real markers and the physical marker observer for both far pawns" + Counts());
                 ResetCounts();
                 Invoke(comp);
-                check(farFormQueries == 0 && farOrdinaryQueries == 0,
-                    "aura-performance/ordinary source rejects far pawns before observed identity lookup"
+                check(nearFormQueries > 0 && farFormQueries == 0 && farOrdinaryQueries == 0,
+                    "aura-performance/ordinary source scans a nearby marker and rejects far pawns before observed physical marker lookup"
                     + Counts());
                 Hediff nearBuff = Raw(near, buffDef), ordinaryBuff = Raw(nearOrdinary, buffDef);
                 CheckRecipients(source, near, nearBody, far, farBody, nearOrdinary, farOrdinary, buffDef, check, "ordinary-source");
@@ -102,10 +103,10 @@ namespace WildShiftSharedStateValidation
                 Action nativeTick = () => Invoke(comp);
                 onBody.Invoke(null, new object[] { aura, sourceBody, nativeTick });
                 // The transformed source's retained canonical-link second
-                // pass can reach HumanFor through patched buff lookup. Record
-                // totals; do not infer a caller from Mono/JIT stack frames.
+                // pass can reach physical markers through patched buff lookup.
+                // Record observed counts without inferring individual callers.
                 check(aura.pawn == source && comp.Pawn == sourceBody,
-                    "aura-performance/production scope restores canonical source owner while component follows active body; transformed-source indirect identity totals are informational"
+                    "aura-performance/production scope restores canonical source owner while component follows active body; observed transformed-source marker lookups are informational"
                     + Counts());
                 CheckRecipients(source, near, nearBody, far, farBody, nearOrdinary, farOrdinary, buffDef, check, "transformed-source");
                 check(ReferenceEquals(Raw(near, buffDef), nearBuff),
@@ -113,8 +114,8 @@ namespace WildShiftSharedStateValidation
             }
             finally
             {
-                watchedForm = watchedOrdinary = null;
-                observer.Unpatch(identity, observe);
+                watchedNearForm = watchedFarForm = watchedFarOrdinary = null;
+                observer.Unpatch(markerLookup, observe);
                 foreach (Pawn form in forms)
                     if (SharedFormIdentity.HumanFor(form) != null) TransformUtility.RevertToHuman(form, false);
                 foreach (Pawn form in forms) if (!form.Destroyed) form.Destroy(DestroyMode.Vanish);
@@ -158,10 +159,11 @@ namespace WildShiftSharedStateValidation
             }
         }
 
-        private static void ResetCounts() { farFormQueries = farOrdinaryQueries = 0; }
+        private static void ResetCounts() { nearFormQueries = farFormQueries = farOrdinaryQueries = 0; }
         private static string Counts()
         {
-            return " [total form=" + farFormQueries + ", total ordinary=" + farOrdinaryQueries + "]";
+            return " [observed marker lookups near form=" + nearFormQueries + ", far form=" + farFormQueries
+                + ", far ordinary=" + farOrdinaryQueries + "]";
         }
         private static void CheckRecipients(Pawn source, Pawn near, Pawn body, Pawn far, Pawn farBody,
             Pawn ordinary, Pawn farOrdinary, HediffDef def, Action<bool, string> check, string stage)

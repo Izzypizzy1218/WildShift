@@ -38,8 +38,10 @@ namespace WildShift
         }
 
         private static readonly ConditionalWeakTable<Pawn, State> states = new ConditionalWeakTable<Pawn, State>();
-        private static readonly FieldInfo geneXeno = AccessTools.Field(typeof(Pawn_GeneTracker), "xenogenes");
-        private static readonly FieldInfo geneEndo = AccessTools.Field(typeof(Pawn_GeneTracker), "endogenes");
+        private static readonly AccessTools.FieldRef<Pawn_GeneTracker, List<Gene>> geneXeno
+            = AccessTools.FieldRefAccess<Pawn_GeneTracker, List<Gene>>("xenogenes");
+        private static readonly AccessTools.FieldRef<Pawn_GeneTracker, List<Gene>> geneEndo
+            = AccessTools.FieldRefAccess<Pawn_GeneTracker, List<Gene>>("endogenes");
         private static readonly MethodInfo recacheGeneNeeds = AccessTools.Method(typeof(Pawn_GeneTracker), "RecacheNeeds");
         private static readonly FieldInfo needsPawn = AccessTools.Field(typeof(Pawn_NeedsTracker), "pawn");
         private static readonly FieldInfo needList = AccessTools.Field(typeof(Pawn_NeedsTracker), "needs");
@@ -194,8 +196,8 @@ namespace WildShift
         {
             var result = new List<Gene>();
             if (animal?.genes == null) return result;
-            List<Gene> x = geneXeno.GetValue(animal.genes) as List<Gene>;
-            List<Gene> e = geneEndo.GetValue(animal.genes) as List<Gene>;
+            List<Gene> x = geneXeno(animal.genes);
+            List<Gene> e = geneEndo(animal.genes);
             if (x != null) result.AddRange(x);
             if (e != null) result.AddRange(e);
             return result;
@@ -214,8 +216,8 @@ namespace WildShift
         private static void AddGenes(List<Gene> target, Pawn_GeneTracker tracker, int kind, HashSet<GeneDef> seen)
         {
             if (tracker == null) return;
-            if (kind != 2) AddGenes(target, geneXeno.GetValue(tracker) as List<Gene>, seen);
-            if (kind != 1) AddGenes(target, geneEndo.GetValue(tracker) as List<Gene>, seen);
+            if (kind != 2) AddGenes(target, geneXeno(tracker), seen);
+            if (kind != 1) AddGenes(target, geneEndo(tracker), seen);
         }
 
         private static void AddGenes(List<Gene> target, List<Gene> source, HashSet<GeneDef> seen)
@@ -251,10 +253,10 @@ namespace WildShift
                 }
                 if (animal.genes != null)
                 {
-                    List<Gene> native = geneXeno.GetValue(animal.genes) as List<Gene>;
+                    List<Gene> native = geneXeno(animal.genes);
                     if (native != null) for (int i = 0; i < native.Count; i++)
                         value = value * 31 + RuntimeHelpers.GetHashCode(native[i]);
-                    native = geneEndo.GetValue(animal.genes) as List<Gene>;
+                    native = geneEndo(animal.genes);
                     if (native != null) for (int i = 0; i < native.Count; i++)
                         value = value * 31 + RuntimeHelpers.GetHashCode(native[i]);
                 }
@@ -325,8 +327,9 @@ namespace WildShift
         public static void Tick(Pawn animal)
         {
             State state;
+            if (animal == null || !states.TryGetValue(animal, out state) || state.releasing) return;
             int now = Find.TickManager?.TicksGame ?? 0;
-            if (animal == null || !states.TryGetValue(animal, out state) || state.releasing || state.lastTick == now) return;
+            if (state.lastTick == now) return;
             state.lastTick = now;
             Pawn human = SharedFormIdentity.HumanFor(animal);
             List<Gene> genes = human?.genes?.GenesListForReading;

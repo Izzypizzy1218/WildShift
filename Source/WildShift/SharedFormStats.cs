@@ -191,6 +191,7 @@ namespace WildShift
             private int generation;
             private int healthGeneration, preparedHealthGeneration = -1;
             private int systemsVersion = int.MinValue, projectedSystemsVersion = int.MinValue, anatomyVersion = int.MinValue;
+            private readonly SharedFormSystems.PreceptSignature preceptSignature = new SharedFormSystems.PreceptSignature();
             private SystemsPayload systemsPayload = new SystemsPayload(), nextSystemsPayload = new SystemsPayload();
             private List<GeneState> humanGenes, animalGenes;
             private List<TraitState> humanTraits, animalTraits;
@@ -198,7 +199,7 @@ namespace WildShift
             private HediffStage nativeStage, sharedStage;
             private readonly Dictionary<StatWorker, int> workerGenerations = new Dictionary<StatWorker, int>();
 
-            public void Refresh(Hediff carrier)
+            public void Refresh(Hediff carrier, HediffComp_Transformed liveMarker = null, bool checkNativeStatCache = false)
             {
                 if (refreshing) return;
                 refreshing = true;
@@ -206,7 +207,8 @@ namespace WildShift
                 {
                     Pawn animal = carrier.pawn;
                     activeBody = animal;
-                    Pawn human = Original(animal);
+                    HediffComp_Transformed marker = liveMarker ?? TransformUtility.TryGetTransformedComp(animal);
+                    Pawn human = SharedFormIdentity.GetStoredHumanFromActiveBody(animal, marker);
                     bool activeBiotech = ModsConfig.BiotechActive;
                     List<Gene> hg = human != null && activeBiotech ? human.genes?.GenesListForReading : null;
                     List<Gene> ag = human != null && activeBiotech ? animal.genes?.GenesListForReading : null;
@@ -216,9 +218,12 @@ namespace WildShift
                         && GenesMatch(hg, humanGenes) && GenesMatch(ag, animalGenes)
                         && TraitsMatch(ht, humanTraits) && TraitsMatch(at, animalTraits));
                     int nextProjectedSystems=0;
-                    int nextSystems = human != null ? SharedFormSystems.ModifierVersion(animal,out nextProjectedSystems) : 0;
-                    int nextAnatomy = human != null ? SharedFormAnatomy.ModifierVersion(animal) : 0;
-                    bool externalStatsChanged = systemsVersion != nextSystems;
+                    int nextSystems = human != null
+                        ? SharedFormSystems.ModifierVersionForSource(animal, CurrentOwner(animal, marker),
+                            out nextProjectedSystems, checkNativeStatCache, preceptSignature) : 0;
+                    int nextAnatomy = human != null
+                        ? SharedFormAnatomy.ModifierVersionForSource(animal, CurrentOwner(animal, marker)) : 0;
+                    bool externalStatsChanged = checkNativeStatCache && systemsVersion != nextSystems;
                     bool systemsProjectionChanged = projectedSystemsVersion != nextProjectedSystems;
                     bool anatomyChanged = anatomyVersion != nextAnatomy;
                     bool systemsEffectsChanged = systemsProjectionChanged;
@@ -238,7 +243,7 @@ namespace WildShift
                     }
                     bool externalProjectionChanged = systemsProjectionChanged || anatomyChanged;
                     bool healthProjectionChanged = systemsEffectsChanged || anatomyChanged;
-                    systemsVersion = nextSystems;
+                    if (checkNativeStatCache) systemsVersion = nextSystems;
                     projectedSystemsVersion = nextProjectedSystems;
                     anatomyVersion = nextAnatomy;
                     if (sourceChanged)
@@ -324,9 +329,10 @@ namespace WildShift
                 return sharedStage;
             }
 
-            public void PrepareWorker(Hediff carrier, StatWorker worker)
+            public void PrepareWorker(HediffComp_Transformed marker, StatWorker worker)
             {
-                Refresh(carrier);
+                Hediff carrier = marker.parent;
+                Refresh(carrier, marker, checkNativeStatCache: true);
                 if (refreshing) return;
                 int previous;
                 if (!workerGenerations.TryGetValue(worker, out previous) || previous != generation)
@@ -338,9 +344,10 @@ namespace WildShift
                 }
             }
 
-            public void PrepareHealth(Hediff carrier)
+            public void PrepareHealth(HediffComp_Transformed marker)
             {
-                Refresh(carrier);
+                Hediff carrier = marker.parent;
+                Refresh(carrier, marker);
                 if (refreshing || preparedHealthGeneration == healthGeneration) return;
                 // Pain and damage-factor queries may return native caches
                 // before reading CurStage. Mark this generation first because
@@ -410,17 +417,18 @@ namespace WildShift
             }
         }
 
-        private static Pawn Original(Pawn animal)
+        private static Pawn CurrentOwner(Pawn animal, HediffComp_Transformed marker)
         {
-            if (animal == null || animal.Destroyed || animal.Dead) return null;
-            // Sapient Animals can replace an active form with a Humanlike
-            // pawn. The transformed carrier and its one-way ownership, rather
-            // than the current race's intelligence, identify the active body.
-            HediffComp_Transformed comp = TransformUtility.TryGetTransformedComp(animal);
-            Pawn human = comp?.StoredPawn;
-            return human != null && human != animal && !human.Destroyed && !human.Dead
-                && human.holdingOwner == comp.GetDirectlyHeldThings()
-                && human.RaceProps != null && human.RaceProps.Humanlike ? human : null;
+            // Native getters and conditional modifiers can call other mods.
+            // Reuse the marker only when it is still the first physical effect
+            // with its original component, then check the live holder again.
+            HediffWithComps carrier = marker?.parent;
+            List<Hediff> effects = animal?.health?.hediffSet?.hediffs;
+            if (carrier != null && effects != null && effects.Count > 0 && ReferenceEquals(effects[0], carrier)
+                && carrier.def == WildShiftDefOf.WildShift_Transformed && carrier.comps?.Count == 1
+                && ReferenceEquals(carrier.comps[0], marker))
+                return SharedFormIdentity.GetStoredHumanFromActiveBody(animal, marker);
+            return SharedFormIdentity.HumanFor(animal);
         }
 
         private static bool GenesMatch(List<Gene> genes, List<GeneState> saved)
@@ -572,14 +580,14 @@ namespace WildShift
         {
             Pawn animal = thing as Pawn;
             if (animal == null) return;
-            Hediff carrier = TransformUtility.TryGetTransformedComp(animal)?.parent;
-            if (carrier != null) states.GetOrCreateValue(carrier).PrepareWorker(carrier, worker);
+            HediffComp_Transformed marker = TransformUtility.TryGetTransformedComp(animal);
+            if (marker?.parent != null) states.GetOrCreateValue(marker.parent).PrepareWorker(marker, worker);
         }
 
         public static void PrepareHealth(Pawn animal)
         {
-            Hediff carrier = TransformUtility.TryGetTransformedComp(animal)?.parent;
-            if (carrier != null) states.GetOrCreateValue(carrier).PrepareHealth(carrier);
+            HediffComp_Transformed marker = TransformUtility.TryGetTransformedComp(animal);
+            if (marker?.parent != null) states.GetOrCreateValue(marker.parent).PrepareHealth(marker);
         }
     }
 
@@ -595,8 +603,13 @@ namespace WildShift
     [HarmonyPatch(typeof(StatWorker), "GetValue", new[] { typeof(Thing), typeof(bool), typeof(int) })]
     public static class Patch_SharedFormStatCache
     {
-        public static void Prefix(StatWorker __instance, Thing thing)
+        public static void Prefix(StatWorker __instance, Thing thing, StatDef ___stat,
+            Dictionary<Thing, StatCacheEntry> ___temporaryStatCache)
         {
+            // The native calculation reads the carrier stage itself. Preflight
+            // belongs here only for workers with a cache. Native IGNORE_CACHE
+            // skips reads but still writes to an existing temporary cache.
+            if (___stat != null && !___stat.immutable && ___temporaryStatCache == null) return;
             SharedFormStats.PrepareWorker(__instance, thing);
         }
     }

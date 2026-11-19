@@ -39,8 +39,8 @@ namespace WildShift
                 animal.abilities = proxy;
             }
             Gene_Hemogen resource = HemogenFor(human);
-            ResourceClock clock = resourceClocks.GetValue(human, delegate(Pawn ignored) { return new ResourceClock { lastTick = Now }; });
-            if (clock.source != resource) { clock.source = resource; clock.lastTick = Now; }
+            if (resource == null) ResetResourceClock(human);
+            else ClockFor(human, resource);
             proxy.Bind();
         }
 
@@ -118,10 +118,12 @@ namespace WildShift
 
         public static Gene_Hemogen HemogenFor(Pawn human)
         {
-            Gene_Hemogen gene = human != null && human.genes != null ? human.genes.GetFirstGeneOfType<Gene_Hemogen>() : null;
-            Gene_HemogenDrain drain = human != null && human.genes != null ? human.genes.GetFirstGeneOfType<Gene_HemogenDrain>() : null;
-            return gene != null && gene.GetType() == typeof(Gene_Hemogen) && gene.Active
-                && (drain == null || drain.GetType() == typeof(Gene_HemogenDrain)) ? gene : null;
+            Pawn_GeneTracker genes = human?.genes;
+            if (genes == null) return null;
+            Gene_Hemogen gene = genes.GetFirstGeneOfType<Gene_Hemogen>();
+            if (gene == null || gene.GetType() != typeof(Gene_Hemogen) || !gene.Active) return null;
+            Gene_HemogenDrain drain = genes.GetFirstGeneOfType<Gene_HemogenDrain>();
+            return (drain == null || drain.GetType() == typeof(Gene_HemogenDrain)) ? gene : null;
         }
 
         public static void MarkDirty(Pawn human)
@@ -159,11 +161,14 @@ namespace WildShift
             Pawn human = SharedFormIdentity.HumanFor(animal);
             if (human == null) return;
             Gene_Hemogen resource = HemogenFor(human);
-            // Keep this factory noncapturing: the tracker calls this path every
-            // tick, even when an existing clock has no hemogen source.
-            ResourceClock clock = resourceClocks.GetValue(human, delegate(Pawn ignored) { return new ResourceClock { lastTick = Now }; });
-            if (clock.source != resource) { clock.source = resource; clock.lastTick = Now; }
-            if (resource == null) { clock.lastTick = Now; return; }
+            if (resource == null)
+            {
+                // Discard a previous source's time while it is absent or
+                // suppressed so reacquiring it does not catch up old drain.
+                if (resourceClocks.TryGetValue(human, out _)) resourceClocks.Remove(human);
+                return;
+            }
+            ResourceClock clock = ClockFor(human, resource);
             int elapsed = Now - clock.lastTick;
             if (elapsed <= 0) return;
             clock.lastTick = Now;
@@ -171,6 +176,13 @@ namespace WildShift
             for (int i = 0; i < genes.Count; i++)
                 if (IsNativeDrain(genes[i]) && genes[i].Active)
                     GeneResourceDrainUtility.TickResourceDrainInterval((IGeneResourceDrain)genes[i], elapsed);
+        }
+
+        private static ResourceClock ClockFor(Pawn human, Gene_Hemogen resource)
+        {
+            ResourceClock clock = resourceClocks.GetValue(human, delegate(Pawn ignored) { return new ResourceClock(); });
+            if (clock.source != resource) { clock.source = resource; clock.lastTick = Now; }
+            return clock;
         }
 
         internal static bool IsNativeDrain(Gene gene)

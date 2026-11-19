@@ -361,14 +361,16 @@ namespace WildShift
                     }
             }
             List<Apparel> sourceApparel=human.apparel?.WornApparel;
-            List<Apparel> bodyApparel=body.apparel?.WornApparel;
-            if (sourceApparel != null)
+            if (sourceApparel != null && sourceApparel.Count > 0)
+            {
+                List<Apparel> bodyApparel=body.apparel?.WornApparel;
                 for (int i=0;i<sourceApparel.Count;i++)
                 {
                     Apparel gear=sourceApparel[i];
                     if (bodyApparel != null && bodyApparel.Contains(gear)) continue;
                     changed |= AddGear(offsets,gear);
                 }
+            }
             ThingWithComps weapon=human.equipment?.Primary;
             if (weapon != null && body.equipment?.Primary != weapon) changed |= AddGear(offsets,weapon);
             return changed;
@@ -425,8 +427,67 @@ namespace WildShift
         // signatures from one pass through the source and body's gear views.
         public static int ModifierVersion(Pawn body,out int projectedVersion)
         {
+            return ModifierVersionForSource(body, SharedFormIdentity.HumanFor(body), out projectedVersion);
+        }
+
+        internal sealed class PreceptSignature
+        {
+            private readonly List<PreceptDef> definitions = new List<PreceptDef>();
+            private int scale = 1, suffix, conditionalIndex = -1;
+
+            public bool TryAppend(List<Precept> precepts, ref int hash)
+            {
+                int count = precepts.Count;
+                if (conditionalIndex >= 0 && conditionalIndex < count
+                    && precepts[conditionalIndex].def.conditionalStatAffecters?.Count > 0) return false;
+                conditionalIndex = -1;
+
+                int matching = 0;
+                if (definitions.Count == count)
+                {
+                    for (; matching < count; matching++)
+                    {
+                        PreceptDef definition = precepts[matching].def;
+                        if (definition.conditionalStatAffecters?.Count > 0)
+                        {
+                            conditionalIndex = matching;
+                            return false;
+                        }
+                        if (definition != definitions[matching]) break;
+                    }
+                }
+                if (definitions.Count != count || matching != count)
+                {
+                    definitions.Clear();
+                    scale = 1;
+                    suffix = 0;
+                    for (int i = 0; i < count; i++)
+                    {
+                        PreceptDef definition = precepts[i].def;
+                        if (definition.conditionalStatAffecters?.Count > 0)
+                        {
+                            conditionalIndex = i;
+                            definitions.Clear();
+                            scale = 1;
+                            suffix = 0;
+                            return false;
+                        }
+                        definitions.Add(definition);
+                        scale = unchecked(scale * 31);
+                        suffix = Hash(suffix, definition);
+                    }
+                }
+                // Fold the verified static suffix into any incoming hash.
+                // Roles and the current ideologies still contribute live.
+                hash = unchecked(hash * scale + suffix);
+                return true;
+            }
+        }
+
+        internal static int ModifierVersionForSource(Pawn body, Pawn human, out int projectedVersion,
+            bool includeNativeGear = true, PreceptSignature preceptSignature = null)
+        {
             projectedVersion=0;
-            Pawn human=SharedFormIdentity.HumanFor(body);
             if(human==null)return 0;
             unchecked
             {
@@ -438,47 +499,54 @@ namespace WildShift
                     hash=Hash(hash,ideo.GetRole(human));hash=Hash(hash,body.Ideo?.GetRole(body));
                     List<Precept> precepts=ideo.PreceptsListForReading;
                     hash=hash*31+precepts.Count;
-                    StatRequest request=StatRequest.For(body);
-                    for(int i=0;i<precepts.Count;i++)
+                    if (preceptSignature == null || !preceptSignature.TryAppend(precepts, ref hash))
                     {
-                        PreceptDef def=precepts[i].def;hash=Hash(hash,def);
-                        if(def.conditionalStatAffecters==null)continue;
-                        for(int j=0;j<def.conditionalStatAffecters.Count;j++)
+                        StatRequest request=StatRequest.For(body);
+                        for(int i=0;i<precepts.Count;i++)
                         {
-                            ConditionalStatAffecter condition=def.conditionalStatAffecters[j];
-                            hash=hash*31+(condition!=null&&condition.Applies(request)?1:0);
+                            PreceptDef def=precepts[i].def;hash=Hash(hash,def);
+                            if(def.conditionalStatAffecters==null)continue;
+                            for(int j=0;j<def.conditionalStatAffecters.Count;j++)
+                            {
+                                ConditionalStatAffecter condition=def.conditionalStatAffecters[j];
+                                hash=hash*31+(condition!=null&&condition.Applies(request)?1:0);
+                            }
                         }
                     }
                 }
                 // Shared getters can refresh the full non-owning gear view.
                 // Read each list once, rather than once per loop test/item.
                 List<Apparel> sourceApparel=human.apparel?.WornApparel;
-                List<Apparel> bodyApparel=body.apparel?.WornApparel;
                 hash=hash*31+(sourceApparel?.Count??0);
                 projectedVersion=hash;
-                if(sourceApparel!=null)for(int i=0;i<sourceApparel.Count;i++)
+                if(sourceApparel!=null&&sourceApparel.Count>0)
                 {
-                    Apparel gear=sourceApparel[i];
-                    HashGearVersions(ref hash,ref projectedVersion,gear,bodyApparel!=null&&bodyApparel.Contains(gear));
+                    List<Apparel> bodyApparel=body.apparel?.WornApparel;
+                    for(int i=0;i<sourceApparel.Count;i++)
+                    {
+                        Apparel gear=sourceApparel[i];
+                        HashGearVersions(ref hash,ref projectedVersion,gear,bodyApparel!=null&&bodyApparel.Contains(gear),includeNativeGear);
+                    }
                 }
                 ThingWithComps weapon=human.equipment?.Primary;
-                HashGearVersions(ref hash,ref projectedVersion,weapon,weapon!=null&&body.equipment?.Primary==weapon);
+                HashGearVersions(ref hash,ref projectedVersion,weapon,weapon!=null&&body.equipment?.Primary==weapon,includeNativeGear);
                 return hash;
             }
         }
 
         private static int Hash(int seed,object value) { unchecked{return seed*31+(value==null?0:RuntimeHelpers.GetHashCode(value));} }
-        private static void HashGearVersions(ref int stats,ref int projected,Thing gear,bool nativeVisible)
+        private static void HashGearVersions(ref int stats,ref int projected,Thing gear,bool nativeVisible,bool includeNativeGear)
         {
             unchecked
             {
-                int value=HashGear(17,gear);
-                stats=stats*31+value;
                 projected=Hash(projected,gear);
                 projected=projected*31+(nativeVisible?1:0);
                 // Match AppendModifiers: native-visible gear needs no projected
                 // modifier. Preserve identity/presence so entering or leaving
                 // the fallback changes its stage in the same tick.
+                if(nativeVisible&&!includeNativeGear)return;
+                int value=HashGear(17,gear);
+                if(includeNativeGear)stats=stats*31+value;
                 if(!nativeVisible)projected=projected*31+value;
             }
         }
