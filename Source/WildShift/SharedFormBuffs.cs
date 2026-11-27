@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using HarmonyLib;
 using RimWorld;
 using Verse;
@@ -46,18 +47,154 @@ namespace WildShift
         private static readonly AccessTools.FieldRef<Hediff, float> savedSeverity
             = AccessTools.FieldRefAccess<Hediff, float>("severityInt");
 
-        public static bool IsNativeDefinition(HediffDef def)
+        private sealed class DefClassification
         {
-            return def?.modContentPack != null && def.hediffClass != null
+            public bool valid;
+            public string defName;
+            public Type hediffClass;
+            public ModContentPack pack;
+            public bool countsAsImplant;
+            public BodyPartDef defaultInstallPart;
+            public ThingDef spawnThingOnRemoved;
+            public NeedDef chemicalNeed;
+            public int compsCount;
+            public int compsHash;
+            public int extCount;
+            public int extHash;
+            public bool isNative;
+            public bool isSystemicImplant;
+            public bool isSupportedDef;
+            public bool isNativeStateOrImplant;
+        }
+
+        private static readonly ConditionalWeakTable<HediffDef, DefClassification> defCache
+            = new ConditionalWeakTable<HediffDef, DefClassification>();
+        private static readonly ConditionalWeakTable<HediffDef, DefClassification>.CreateValueCallback createDefClassification
+            = CreateDefClassification;
+        private static DefClassification CreateDefClassification(HediffDef ignored) { return new DefClassification(); }
+
+        private static DefClassification Classify(HediffDef def)
+        {
+            DefClassification entry = defCache.GetValue(def, createDefClassification);
+            int compsCount = def.comps != null ? def.comps.Count : 0;
+            int extCount = def.modExtensions != null ? def.modExtensions.Count : 0;
+            int compsHash = 0;
+            if (compsCount > 0)
+            {
+                unchecked
+                {
+                    compsHash = 17;
+                    for (int i = 0; i < compsCount; i++)
+                    {
+                        HediffCompProperties p = def.comps[i];
+                        compsHash = compsHash * 31 + (p?.compClass != null ? RuntimeHelpers.GetHashCode(p.compClass) : 0);
+                        var d = p as HediffCompProperties_Disappears;
+                        if (d != null)
+                        {
+                            compsHash = compsHash * 31 + (d.requiredMentalState != null ? RuntimeHelpers.GetHashCode(d.requiredMentalState) : 0);
+                            compsHash = compsHash * 31 + (d.leaveFreshWounds ? 1 : 0);
+                        }
+                    }
+                }
+            }
+            int extHash = 0;
+            if (extCount > 0)
+            {
+                unchecked
+                {
+                    extHash = 17;
+                    for (int i = 0; i < extCount; i++)
+                        extHash = extHash * 31 + (def.modExtensions[i] != null ? RuntimeHelpers.GetHashCode(def.modExtensions[i]) : 0);
+                }
+            }
+            if (entry.valid
+                && entry.defName == def.defName
+                && entry.hediffClass == def.hediffClass
+                && ReferenceEquals(entry.pack, def.modContentPack)
+                && entry.countsAsImplant == def.countsAsAddedPartOrImplant
+                && entry.defaultInstallPart == def.defaultInstallPart
+                && entry.spawnThingOnRemoved == def.spawnThingOnRemoved
+                && entry.chemicalNeed == def.chemicalNeed
+                && entry.compsCount == compsCount
+                && entry.compsHash == compsHash
+                && entry.extCount == extCount
+                && entry.extHash == extHash)
+            {
+                return entry;
+            }
+
+            bool native = def.modContentPack != null && def.hediffClass != null
                 && def.hediffClass.Assembly == typeof(Hediff).Assembly
                 && def.modContentPack.PackageIdPlayerFacing.StartsWith("ludeon.", StringComparison.OrdinalIgnoreCase);
+            bool implant = native && (def.countsAsAddedPartOrImplant
+                || typeof(Hediff_Implant).IsAssignableFrom(def.hediffClass)
+                || typeof(Hediff_AddedPart).IsAssignableFrom(def.hediffClass));
+            bool nativeStateOrImplant = native && (nativeStates.Contains(def.defName) || implant);
+            bool supported;
+            if (nativeStateOrImplant)
+            {
+                supported = true;
+                if (def.comps != null)
+                    for (int i = 0; i < def.comps.Count; i++)
+                        if (def.comps[i]?.compClass == null || def.comps[i].compClass.Assembly != typeof(Hediff).Assembly)
+                        { supported = false; break; }
+            }
+            else if ((def.hediffClass != typeof(Hediff) && def.hediffClass != typeof(HediffWithComps))
+                || def.defaultInstallPart != null || def.countsAsAddedPartOrImplant
+                || def.spawnThingOnRemoved != null || def.chemicalNeed != null)
+            {
+                supported = false;
+            }
+            else
+            {
+                string package;
+                bool approved = def.GetModExtension<SharedFormBuffExtension>() != null
+                    || (reviewed.TryGetValue(def.defName ?? string.Empty, out package)
+                        && def.modContentPack != null
+                        && string.Equals(def.modContentPack.PackageIdPlayerFacing, package, StringComparison.OrdinalIgnoreCase));
+                supported = approved;
+                if (supported && def.comps != null)
+                {
+                    for (int i = 0; i < def.comps.Count; i++)
+                    {
+                        HediffCompProperties properties = def.comps[i];
+                        Type type = properties != null ? properties.compClass : null;
+                        if (type != typeof(HediffComp_SeverityPerDay) && type != typeof(HediffComp_Disappears)
+                            && type != typeof(HediffComp_DisappearsOnDeath)) { supported = false; break; }
+                        var disappearance = properties as HediffCompProperties_Disappears;
+                        if (disappearance != null && (disappearance.requiredMentalState != null || !disappearance.leaveFreshWounds))
+                        { supported = false; break; }
+                    }
+                }
+            }
+
+            entry.defName = def.defName;
+            entry.hediffClass = def.hediffClass;
+            entry.pack = def.modContentPack;
+            entry.countsAsImplant = def.countsAsAddedPartOrImplant;
+            entry.defaultInstallPart = def.defaultInstallPart;
+            entry.spawnThingOnRemoved = def.spawnThingOnRemoved;
+            entry.chemicalNeed = def.chemicalNeed;
+            entry.compsCount = compsCount;
+            entry.compsHash = compsHash;
+            entry.extCount = extCount;
+            entry.extHash = extHash;
+            entry.isNative = native;
+            entry.isSystemicImplant = implant;
+            entry.isNativeStateOrImplant = nativeStateOrImplant;
+            entry.isSupportedDef = supported;
+            entry.valid = true;
+            return entry;
+        }
+
+        public static bool IsNativeDefinition(HediffDef def)
+        {
+            return def != null && Classify(def).isNative;
         }
 
         public static bool IsSystemicImplant(HediffDef def)
         {
-            return IsNativeDefinition(def) && (def.countsAsAddedPartOrImplant
-                || typeof(Hediff_Implant).IsAssignableFrom(def.hediffClass)
-                || typeof(Hediff_AddedPart).IsAssignableFrom(def.hediffClass));
+            return def != null && Classify(def).isSystemicImplant;
         }
 
         public static bool CanonicalizeAddition(Hediff effect)
@@ -69,40 +206,16 @@ namespace WildShift
 
         public static bool IsSupportedDef(HediffDef def)
         {
-            if (IsNativeDefinition(def) && (nativeStates.Contains(def.defName) || IsSystemicImplant(def)))
-            {
-                if (def.comps != null)
-                    for (int i = 0; i < def.comps.Count; i++)
-                        if (def.comps[i]?.compClass == null || def.comps[i].compClass.Assembly != typeof(Hediff).Assembly) return false;
-                return true;
-            }
-            if (def == null || (def.hediffClass != typeof(Hediff) && def.hediffClass != typeof(HediffWithComps))
-                || def.defaultInstallPart != null || def.countsAsAddedPartOrImplant
-                || def.spawnThingOnRemoved != null || def.chemicalNeed != null) return false;
-            string package;
-            bool approved = def.GetModExtension<SharedFormBuffExtension>() != null
-                || (reviewed.TryGetValue(def.defName ?? string.Empty, out package)
-                    && def.modContentPack != null
-                    && string.Equals(def.modContentPack.PackageIdPlayerFacing, package, StringComparison.OrdinalIgnoreCase));
-            if (!approved) return false;
-            if (def.comps == null) return true;
-            for (int i = 0; i < def.comps.Count; i++)
-            {
-                HediffCompProperties properties = def.comps[i];
-                Type type = properties != null ? properties.compClass : null;
-                if (type != typeof(HediffComp_SeverityPerDay) && type != typeof(HediffComp_Disappears)
-                    && type != typeof(HediffComp_DisappearsOnDeath)) return false;
-                var disappearance = properties as HediffCompProperties_Disappears;
-                if (disappearance != null && (disappearance.requiredMentalState != null || !disappearance.leaveFreshWounds)) return false;
-            }
-            return true;
+            return def != null && Classify(def).isSupportedDef;
         }
 
         public static bool IsSupported(Hediff effect)
         {
-            if (effect == null || !IsSupportedDef(effect.def) || !AllowsPart(effect.def, effect.pawn, effect.Part)) return false;
+            if (effect == null || effect.def == null) return false;
+            DefClassification info = Classify(effect.def);
+            if (!info.isSupportedDef || !AllowsPart(effect.def, effect.pawn, effect.Part)) return false;
             Type type = effect.GetType();
-            if (IsNativeDefinition(effect.def) && (nativeStates.Contains(effect.def.defName) || IsSystemicImplant(effect.def)))
+            if (info.isNativeStateOrImplant)
             {
                 if (type != effect.def.hediffClass) return false;
                 HediffWithComps native = effect as HediffWithComps;
@@ -115,8 +228,9 @@ namespace WildShift
             HediffWithComps withComps = effect as HediffWithComps;
             if ((withComps?.comps?.Count ?? 0) != (effect.def.comps?.Count ?? 0)) return false;
             if (withComps?.comps == null) return true;
-            foreach (HediffComp comp in withComps.comps)
+            for (int i = 0; i < withComps.comps.Count; i++)
             {
+                HediffComp comp = withComps.comps[i];
                 if (comp == null) return false;
                 Type compType = comp.GetType();
                 if (compType != typeof(HediffComp_SeverityPerDay) && compType != typeof(HediffComp_Disappears)
@@ -151,8 +265,12 @@ namespace WildShift
             if (carrier == null || !IsSupportedDef(def)) return null;
             Pawn human = SharedFormIdentity.GetStoredHumanFromActiveBody(body, carrier);
             if (human == null) return null;
-            foreach (Hediff effect in human.health.hediffSet.hediffs)
+            List<Hediff> hediffs = human.health.hediffSet.hediffs;
+            for (int i = 0; i < hediffs.Count; i++)
+            {
+                Hediff effect = hediffs[i];
                 if (effect.def == def && IsSupported(effect) && (!mustBeVisible || effect.Visible)) return effect;
+            }
             return null;
         }
 
@@ -253,8 +371,8 @@ namespace WildShift
     {
         public static void Postfix(Pawn ___pawn, HediffDef def, bool mustBeVisible, ref Hediff __result)
         {
-            if (__result != null) return;
-            List<Hediff> effects = ___pawn?.health?.hediffSet?.hediffs;
+            if (__result != null || !TransformUtility.MightBeTransformed(___pawn)) return;
+            List<Hediff> effects = ___pawn.health?.hediffSet?.hediffs;
             if (effects != null && effects.Count > 0)
                 __result = SharedFormBuffs.SourceFor(___pawn, def, mustBeVisible);
         }
@@ -265,8 +383,8 @@ namespace WildShift
     {
         public static void Postfix(Pawn ___pawn, HediffDef def, bool mustBeVisible, ref bool __result)
         {
-            if (__result) return;
-            List<Hediff> effects = ___pawn?.health?.hediffSet?.hediffs;
+            if (__result || !TransformUtility.MightBeTransformed(___pawn)) return;
+            List<Hediff> effects = ___pawn.health?.hediffSet?.hediffs;
             if (effects != null && effects.Count > 0)
                 __result = SharedFormBuffs.SourceFor(___pawn, def, mustBeVisible) != null;
         }

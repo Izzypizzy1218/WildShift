@@ -48,7 +48,8 @@ namespace WildShift
         private sealed class Owner { public Owner() { } public Pawn pawn; }
         private static readonly ConditionalWeakTable<HediffComp_GiveHediffsInRange, Owner> owners
             = new ConditionalWeakTable<HediffComp_GiveHediffsInRange, Owner>();
-        private static readonly FieldInfo mote = AccessTools.Field(typeof(HediffComp_GiveHediffsInRange), "mote");
+        private static readonly AccessTools.FieldRef<HediffComp_GiveHediffsInRange, Mote> mote
+            = AccessTools.FieldRefAccess<HediffComp_GiveHediffsInRange, Mote>("mote");
         public static void Prefix(HediffComp_GiveHediffsInRange __instance)
         {
             Pawn body = __instance.parent?.pawn;
@@ -60,9 +61,9 @@ namespace WildShift
                 previous = owners.GetOrCreateValue(__instance);
             }
             if (previous.pawn == body) return;
-            Mote old = mote?.GetValue(__instance) as Mote;
+            Mote old = mote(__instance);
             if (old != null && !old.Destroyed) old.Destroy();
-            mote?.SetValue(__instance, null);
+            mote(__instance) = null;
             previous.pawn = body;
         }
         public static void Postfix(HediffComp_GiveHediffsInRange __instance, bool __runOriginal)
@@ -73,44 +74,72 @@ namespace WildShift
             Map map = source.Map;
             if (map == null) return;
             Pawn identity = SharedFormIdentity.HumanFor(source) ?? source;
-            if (identity == source && !SharedFormSystems.HasSpawnedBodyOn(map)) return;
+            bool hasSpawnedForms = SharedFormSystems.HasSpawnedBodyOn(map);
+            if (identity == source && !hasSpawnedForms) return;
 
             HediffCompProperties_GiveHediffsInRange props = __instance.Props;
             Faction faction = props.onlyPawnsInSameFaction ? source.Faction : null;
-            IReadOnlyList<Pawn> pawns = faction != null
-                ? map.mapPawns.SpawnedPawnsInFaction(faction) : map.mapPawns.AllPawnsSpawned;
-            for (int i = 0; i < pawns.Count; i++)
+            if (hasSpawnedForms)
             {
-                Pawn body = pawns[i];
-                if (body == null || body == source || body.health == null || body.Dead
-                    || body.Position.DistanceTo(source.Position) > props.range) continue;
-                Pawn human = SharedFormIdentity.HumanFor(body);
-                if (human == null
-                    || (props.targetingParameters != null && !props.targetingParameters.CanTarget(human))
-                    || !body.Spawned || body.Map != map) continue;
-                if (!source.Spawned || source.Map != map) return;
-                Hediff buff = body.health.hediffSet.GetFirstHediffOfDef(props.hediff);
-                if (buff == null)
+                // Borrow a fresh pooled buffer per invocation so reentrant aura
+                // callbacks from third-party AddHediff hooks cannot clobber the
+                // outer recipient list while iterating.
+                List<Pawn> candidates = SimplePool<List<Pawn>>.Get();
+                try
                 {
-                    buff = body.health.AddHediff(props.hediff, body.health.hediffSet.GetBrain());
-                    if (!source.Spawned || source.Map != map) return;
-                    if (buff == null || !body.Spawned || body.Map != map) continue;
-                    buff.Severity = props.initialSeverity;
+                    TransformUtility.FillSpawnedTransformedOn(map, faction, candidates);
+                    for (int i = 0; i < candidates.Count; i++)
+                    {
+                        Pawn body = candidates[i];
+                        if (body == null || body == source || body.health == null || body.Dead
+                            || body.Position.DistanceTo(source.Position) > props.range) continue;
+                        Pawn human = SharedFormIdentity.HumanFor(body);
+                        if (human == null
+                            || (props.targetingParameters != null && !props.targetingParameters.CanTarget(human))
+                            || !body.Spawned || body.Map != map) continue;
+                        if (!source.Spawned || source.Map != map) return;
+                        Hediff buff = body.health.hediffSet.GetFirstHediffOfDef(props.hediff);
+                        if (buff == null)
+                        {
+                            buff = body.health.AddHediff(props.hediff, body.health.hediffSet.GetBrain());
+                            if (!source.Spawned || source.Map != map) return;
+                            if (buff == null || !body.Spawned || body.Map != map) continue;
+                            buff.Severity = props.initialSeverity;
+                        }
+                        HediffComp_Link link = buff.TryGetComp<HediffComp_Link>();
+                        if (link != null) { link.other = identity; link.drawConnection = true; }
+                        HediffComp_Disappears expiration = buff.TryGetComp<HediffComp_Disappears>();
+                        if (expiration != null) expiration.ticksToDisappear = 5;
+                    }
                 }
-                HediffComp_Link link = buff.TryGetComp<HediffComp_Link>();
-                if (link != null) { link.other = identity; link.drawConnection = true; }
-                HediffComp_Disappears expiration = buff.TryGetComp<HediffComp_Disappears>();
-                if (expiration != null) expiration.ticksToDisappear = 5;
+                finally
+                {
+                    candidates.Clear();
+                    SimplePool<List<Pawn>>.Return(candidates);
+                }
             }
             // Vanilla recipients also retain the source identity, so a link
             // follows a later return instead of pointing at a cached animal.
             if (identity != source)
+            {
+                IReadOnlyList<Pawn> pawns = faction != null
+                    ? map.mapPawns.SpawnedPawnsInFaction(faction) : map.mapPawns.AllPawnsSpawned;
                 for (int i = 0; i < pawns.Count; i++)
                 {
-                    Hediff buff = pawns[i]?.health?.hediffSet.GetFirstHediffOfDef(props.hediff);
-                    HediffComp_Link link = buff?.TryGetComp<HediffComp_Link>();
-                    if (link != null && link.other == source) link.other = identity;
+                    Pawn p = pawns[i];
+                    if (p == null || p == source || p.Dead || p.health == null
+                        || p.Position.DistanceTo(source.Position) > props.range) continue;
+                    List<Hediff> hediffs = p.health.hediffSet.hediffs;
+                    for (int j = 0; j < hediffs.Count; j++)
+                    {
+                        Hediff buff = hediffs[j];
+                        if (buff.def != props.hediff) continue;
+                        HediffComp_Link link = buff.TryGetComp<HediffComp_Link>();
+                        if (link != null && link.other == source) link.other = identity;
+                        break;
+                    }
                 }
+            }
         }
     }
 
@@ -161,7 +190,8 @@ namespace WildShift
             internal Thing Temporary;
         }
         private static readonly ConditionalWeakTable<HediffComp_Link, Targets> targets = new ConditionalWeakTable<HediffComp_Link, Targets>();
-        private static readonly FieldInfo mote = AccessTools.Field(typeof(HediffComp_Link), "mote");
+        private static readonly AccessTools.FieldRef<HediffComp_Link, MoteDualAttached> mote
+            = AccessTools.FieldRefAccess<HediffComp_Link, MoteDualAttached>("mote");
         public static void Prefix(HediffComp_Link __instance, out LinkRestore __state)
         {
             __state = default;
@@ -175,9 +205,9 @@ namespace WildShift
             if (!existing) previous = targets.GetOrCreateValue(__instance);
             if (previous.owner != owner || previous.other != visibleOther)
             {
-                Mote old = mote?.GetValue(__instance) as Mote;
+                MoteDualAttached old = mote(__instance);
                 if (old != null && !old.Destroyed) old.Destroy();
-                mote?.SetValue(__instance, null);
+                mote(__instance) = null;
                 previous.owner = owner; previous.other = visibleOther;
             }
             if (visibleOther == original) return;
@@ -199,7 +229,10 @@ namespace WildShift
             if (human?.health == null) return false;
             List<Hediff> sources = human.health.hediffSet.hediffs;
             for (int i = 0; i < sources.Count; i++)
-                if (SharedFormHealth.IsSupported(sources[i]) && predicate(sources[i].def)) return true;
+            {
+                Hediff h = sources[i];
+                if (h?.def != null && predicate(h.def) && SharedFormHealth.IsSupported(h)) return true;
+            }
             return false;
         }
     }

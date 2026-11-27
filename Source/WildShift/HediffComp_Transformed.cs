@@ -21,10 +21,26 @@ namespace WildShift
         public bool enemyCombatForm;
         public bool enemyReturnPending;
         public PawnKindDef sourceKind;
+        internal int cachedHediffIndex = -1;
+        internal Pawn identityBody;
+        internal Pawn runtimeBody;
+        internal object gearState;
+        internal object statsState;
+        internal object anatomyState;
+        internal object healthClock;
+        internal object biologyState;
+        internal object systemsBinding;
 
         public HediffComp_Transformed()
         {
             storedPawns = new ThingOwner<Pawn>(this, false, LookMode.Deep);
+            TransformUtility.RegisterPendingTransformedComp(this);
+        }
+
+        public override void CompPostPostAdd(DamageInfo? dinfo)
+        {
+            base.CompPostPostAdd(dinfo);
+            TransformUtility.RegisterTransformedComp(parent?.pawn, this);
         }
 
         public bool HasStoredPawn
@@ -70,6 +86,8 @@ namespace WildShift
             }
 
             generatedHealthSanitized = true;
+            SharedFormHealth.BumpWatch(human);
+            SharedFormHealth.BumpWatch(parent?.pawn);
             return true;
         }
 
@@ -91,6 +109,8 @@ namespace WildShift
                 Log.Warning("[WildShift] Stored pawn removal callback failed: " + ex);
             }
 
+            SharedFormHealth.BumpWatch(human);
+            SharedFormHealth.BumpWatch(parent?.pawn);
             return !storedPawns.Contains(human) && human.holdingOwner == null
                 && !human.Spawned && !human.Destroyed ? human : null;
         }
@@ -111,6 +131,7 @@ namespace WildShift
             if (Scribe.mode == LoadSaveMode.PostLoadInit)
             {
                 Pawn animal = parent != null ? parent.pawn : null;
+                TransformUtility.RegisterTransformedComp(animal, this);
                 if (!generatedHealthSanitized && HasStoredPawn)
                 {
                     TransformUtility.ClearGeneratedAnimalHealth(animal, WildShiftDefOf.WildShift_Transformed);

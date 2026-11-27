@@ -132,6 +132,80 @@ internal static class Program
         Check(fire.pawn == newAnimal, "Releasing old swapped body cannot detach the new body's canonical ability");
         SharedFormAbilities.Release(newAnimal);
         Check(fire.pawn == human, "Swapped body returns original ability to canonical human");
+
+        // Regression: an overridden/inactive Gene_Hemogen earlier in GenesListForReading
+        // must not shadow a later active Gene_Hemogen (matching Pawn_GeneTracker.GetFirstGeneOfType).
+        Pawn resourceOwner = MakePawn(9511, true);
+        resourceOwner.genes = new Pawn_GeneTracker(resourceOwner);
+        var inactiveHemogen = new Gene_Hemogen {
+            pawn = resourceOwner, def = new GeneDef { defName = "InactiveHemogenFirst" },
+            overriddenByGene = new Gene { pawn = resourceOwner, def = new GeneDef { defName = "HemogenSuppressor" } }
+        };
+        var activeHemogen = new Gene_Hemogen { pawn = resourceOwner, def = new GeneDef { defName = "ActiveHemogenSecond" } };
+        resourceOwner.genes.Endogenes.Add(inactiveHemogen);
+        resourceOwner.genes.Endogenes.Add(activeHemogen);
+        AccessTools.Field(typeof(Pawn_GeneTracker), "cachedGenes").SetValue(resourceOwner.genes, null);
+        Check(!inactiveHemogen.Active && activeHemogen.Active
+            && SharedFormAbilities.HemogenFor(resourceOwner) == activeHemogen,
+            "HemogenFor skips earlier inactive Gene_Hemogen and finds later active Gene_Hemogen");
+
+        // Regression: live injection of an unsupported AbilityComp into an already-borrowed
+        // ability must invalidate the tracker snapshot and revoke borrowing on the next tick.
+        Pawn liveOwner = MakePawn(9512, true), liveBody = MakePawn(9513, false);
+        Mark(liveBody, liveOwner);
+        AbilityDef liveDef = MakeDef("LiveEligibilityDef", typeof(Verb_CastAbility));
+        Ability liveAbility = AddAbility(liveOwner, liveDef);
+        SharedFormIdentity.Initialize(liveBody);
+        SharedFormAbilities.Initialize(liveBody);
+        Check(liveBody.abilities.AllAbilitiesForReading.Contains(liveAbility) && liveAbility.pawn == liveBody,
+            "Supported ability starts borrowed before live comp injection");
+        liveDef.comps.Add(new AbilityCompProperties { compClass = typeof(UnknownResourceComp) });
+        AccessTools.Field(typeof(Ability), "comps").SetValue(liveAbility, new List<AbilityComp> { new UnknownResourceComp() });
+        SetTick(2000);
+        Check(!SharedFormAbilities.IsSupported(liveAbility)
+            && !liveBody.abilities.AllAbilitiesForReading.Contains(liveAbility)
+            && liveAbility.pawn == liveOwner,
+            "Injecting an unsupported comp into a borrowed ability revokes borrowing and restores caster on the next tick");
+
+        // Regression: if a borrowed ability stays on the body while only its verb
+        // caster drifts back to the stored human, the next refresh must rebind the verb caster.
+        Pawn casterSource = MakePawn(9801, true), casterBody = MakePawn(9802, false);
+        Mark(casterBody, casterSource);
+        Ability casterAbility = AddAbility(casterSource, MakeDef("StaleVerbCasterDef", typeof(Verb_CastAbility)));
+        SharedFormIdentity.Initialize(casterBody);
+        SharedFormAbilities.Initialize(casterBody);
+        Check(casterBody.abilities.AllAbilitiesForReading.Contains(casterAbility)
+            && casterAbility.pawn == casterBody && casterAbility.verb.CasterPawn == casterBody,
+            "Borrowed ability and its verb start bound to the active body");
+        casterAbility.verb.caster = casterSource;
+        SetTick(2600);
+        _ = casterBody.abilities.AllAbilitiesForReading;
+        Check(casterAbility.pawn == casterBody && casterAbility.verb.CasterPawn == casterBody,
+            "Next refresh rebinds a drifted verb caster back to the active body even when the borrowed list is unchanged");
+
+        // Regression: SharedFormSystems.Tick must repair drifted mental-state/breaker/inspiration pawn bindings.
+        casterSource.mindState = Bare<Pawn_MindState>(); casterBody.mindState = Bare<Pawn_MindState>();
+        casterSource.mindState.inspirationHandler = new InspirationHandler(casterSource);
+        casterBody.mindState.inspirationHandler = new InspirationHandler(casterBody);
+        casterSource.mindState.mentalBreaker = new MentalBreaker(casterSource);
+        casterBody.mindState.mentalBreaker = new MentalBreaker(casterBody);
+        casterSource.mindState.mentalStateHandler = new MentalStateHandler(casterSource);
+        casterBody.mindState.mentalStateHandler = new MentalStateHandler(casterBody);
+        var driftedMental = new MentalState { pawn = casterSource, def = new MentalStateDef { defName = "DriftedMental" } };
+        AccessTools.Field(typeof(MentalStateHandler), "curStateInt").SetValue(casterSource.mindState.mentalStateHandler, driftedMental);
+        SharedFormSystems.Initialize(casterBody);
+        Check(driftedMental.pawn == casterBody, "Systems initialize binds mental state to active body");
+        driftedMental.pawn = casterSource;
+        casterSource.mindState.inspirationHandler.pawn = casterSource;
+        AccessTools.Field(typeof(MentalBreaker), "pawn").SetValue(casterSource.mindState.mentalBreaker, casterSource);
+        SetTick(2601);
+        SharedFormSystems.Tick(casterBody, 1);
+        Check(driftedMental.pawn == casterBody
+            && casterSource.mindState.inspirationHandler.pawn == casterBody
+            && ReferenceEquals(AccessTools.Field(typeof(MentalBreaker), "pawn").GetValue(casterSource.mindState.mentalBreaker), casterBody),
+            "Systems tick repairs drifted mental-state, breaker, and inspiration pawn references");
+        SharedFormSystems.Release(casterBody);
+        SharedFormAbilities.Release(casterBody);
         Console.WriteLine("Scope: actual 1.7 Ability/Verb/Job/Gene/ThingOwner/Scribe APIs; isolated pawn graphs, no game launch or graphical claim.");
     }
 

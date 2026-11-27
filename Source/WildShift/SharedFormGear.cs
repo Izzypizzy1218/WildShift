@@ -19,18 +19,52 @@ namespace WildShift
         private static readonly ConditionalWeakTable<Pawn, State> states = new ConditionalWeakTable<Pawn, State>();
         private static readonly Action<Thing> tick = AccessTools.MethodDelegate<Action<Thing>>(AccessTools.Method(typeof(Thing), "Tick"));
         private static readonly Action<Thing, int> interval = AccessTools.MethodDelegate<Action<Thing, int>>(AccessTools.Method(typeof(Thing), "TickInterval"));
+        private static readonly AccessTools.FieldRef<Pawn_ApparelTracker, ThingOwner<Apparel>> rawApparelOwner
+            = AccessTools.FieldRefAccess<Pawn_ApparelTracker, ThingOwner<Apparel>>("wornApparel");
+        private static readonly AccessTools.FieldRef<Pawn_EquipmentTracker, ThingOwner<ThingWithComps>> rawEquipmentOwner
+            = AccessTools.FieldRefAccess<Pawn_EquipmentTracker, ThingOwner<ThingWithComps>>("equipment");
+        private static readonly ConditionalWeakTable<BodyDef, ConditionalWeakTable<BodyDef, Dictionary<BodyPartRecord, BodyPartRecord>>> coverageCache
+            = new ConditionalWeakTable<BodyDef, ConditionalWeakTable<BodyDef, Dictionary<BodyPartRecord, BodyPartRecord>>>();
 
         private sealed class State
         {
+            public Pawn ownerBody;
             public Pawn human;
+            public ThingWithComps primary;
             public bool suspended, refreshing;
             public int lastTick = int.MinValue, lastInterval = int.MinValue;
+            public HediffSet watchedSourceHealth;
+            public SharedFormHealth.DirtyStamp sourceHealthStamp;
+            public int sourceHealthVersion = int.MinValue, sourceHealthCount = -1;
             public List<Apparel> sourceApparel = new List<Apparel>(), ownApparel = new List<Apparel>();
             public List<ThingWithComps> sourceEquipment = new List<ThingWithComps>(), ownEquipment = new List<ThingWithComps>();
             public List<Hediff> sourceHealth = new List<Hediff>();
             public readonly List<Apparel> apparel = new List<Apparel>();
             public readonly List<ThingWithComps> equipment = new List<ThingWithComps>();
             public readonly List<ThingWithComps> borrowed = new List<ThingWithComps>();
+
+            public void ResetHealthWatch()
+            {
+                watchedSourceHealth = null;
+                sourceHealthStamp = null;
+                sourceHealthVersion = int.MinValue;
+                sourceHealthCount = -1;
+            }
+
+            public void Reset()
+            {
+                human = null;
+                primary = null;
+                ResetHealthWatch();
+                sourceApparel.Clear();
+                ownApparel.Clear();
+                sourceEquipment.Clear();
+                ownEquipment.Clear();
+                sourceHealth.Clear();
+                apparel.Clear();
+                equipment.Clear();
+                borrowed.Clear();
+            }
 
             public bool Refresh(Pawn body, Pawn source = null)
             {
@@ -42,19 +76,43 @@ namespace WildShift
                 if (source == null) return false;
                 List<Apparel> sa = RawApparel(source), ba = RawApparel(body);
                 List<ThingWithComps> se = RawEquipment(source), be = RawEquipment(body);
-                List<Hediff> health = source.health?.hediffSet?.hediffs;
-                if (source == human && Same(sourceApparel,sa) && Same(ownApparel,ba)
-                    && Same(sourceEquipment,se) && Same(ownEquipment,be) && Same(sourceHealth,health)) return true;
+                HediffSet healthSet = source.health?.hediffSet;
+                List<Hediff> health = healthSet?.hediffs;
+                int healthCount = health != null ? health.Count : 0;
+                bool gearSame = source == human && Same(sourceApparel, sa) && Same(ownApparel, ba)
+                    && Same(sourceEquipment, se) && Same(ownEquipment, be);
+                if (gearSame)
+                {
+                    if (ReferenceEquals(watchedSourceHealth, healthSet)
+                        && (healthSet == null || (sourceHealthStamp != null && sourceHealthStamp.version == sourceHealthVersion))
+                        && sourceHealthCount == healthCount)
+                        return true;
+                    if (Same(sourceHealth, health))
+                    {
+                        watchedSourceHealth = healthSet;
+                        sourceHealthStamp = SharedFormHealth.WatchHealthSet(healthSet);
+                        sourceHealthVersion = sourceHealthStamp != null ? sourceHealthStamp.version : 0;
+                        sourceHealthCount = healthCount;
+                        return true;
+                    }
+                }
                 refreshing = true;
                 try
                 {
                     human = source;
                     Capture(sourceApparel,sa); Capture(ownApparel,ba);
                     Capture(sourceEquipment,se); Capture(ownEquipment,be); Capture(sourceHealth,health);
+                    watchedSourceHealth = healthSet;
+                    sourceHealthStamp = SharedFormHealth.WatchHealthSet(healthSet);
+                    sourceHealthVersion = sourceHealthStamp != null ? sourceHealthStamp.version : 0;
+                    sourceHealthCount = healthCount;
                     apparel.Clear(); apparel.AddRange(ownApparel);
                     for (int i=0;i<sourceApparel.Count;i++) if (!apparel.Contains(sourceApparel[i])) apparel.Add(sourceApparel[i]);
                     equipment.Clear(); equipment.AddRange(ownEquipment);
                     for (int i=0;i<sourceEquipment.Count;i++) if (!equipment.Contains(sourceEquipment[i])) equipment.Add(sourceEquipment[i]);
+                    primary = null;
+                    for (int i=0;i<sourceEquipment.Count;i++)
+                        if (sourceEquipment[i].def.equipmentType==EquipmentType.Primary) { primary=sourceEquipment[i]; break; }
                     borrowed.Clear();
                     for(int i=0;i<sourceApparel.Count;i++)if(!ownApparel.Contains(sourceApparel[i]))borrowed.Add(sourceApparel[i]);
                     for(int i=0;i<sourceEquipment.Count;i++)if(!ownEquipment.Contains(sourceEquipment[i]))borrowed.Add(sourceEquipment[i]);
@@ -87,16 +145,24 @@ namespace WildShift
         private static void Capture<T>(List<T> target,List<T> source)
         { target.Clear(); if(source!=null)target.AddRange(source); }
         public static List<Apparel> RawApparel(Pawn pawn)
-        { return (pawn?.apparel?.GetDirectlyHeldThings() as ThingOwner<Apparel>)?.InnerListForReading; }
+        {
+            Pawn_ApparelTracker tracker = pawn?.apparel;
+            return tracker != null ? rawApparelOwner(tracker)?.InnerListForReading : null;
+        }
         public static List<ThingWithComps> RawEquipment(Pawn pawn)
-        { return (pawn?.equipment?.GetDirectlyHeldThings() as ThingOwner<ThingWithComps>)?.InnerListForReading; }
+        {
+            Pawn_EquipmentTracker tracker = pawn?.equipment;
+            return tracker != null ? rawEquipmentOwner(tracker)?.InnerListForReading : null;
+        }
 
         public static void Initialize(Pawn body)
         {
-            if (SharedFormIdentity.HumanFor(body)==null)return;
+            HediffComp_Transformed marker = TransformUtility.TryGetTransformedComp(body);
+            Pawn human = marker == null ? null : SharedFormIdentity.GetStoredHumanFromActiveBody(body, marker);
+            if (human==null)return;
             if(body.apparel==null)body.apparel=new Pawn_ApparelTracker(body);
             if(body.equipment==null)body.equipment=new Pawn_EquipmentTracker(body);
-            State state=states.GetOrCreateValue(body); state.suspended=false;state.Refresh(body);
+            State state=GetState(body, marker); state.suspended=false; state.Reset(); state.Refresh(body, human);
             body.health?.hediffSet?.DirtyCache();
         }
         public static void Release(Pawn body)
@@ -107,14 +173,29 @@ namespace WildShift
             state.Refresh(body);
             state.suspended=true;
             if(state.human!=null)BindVerbs(state.human,state);
-            state.apparel.Clear();state.equipment.Clear();state.borrowed.Clear();
+            state.Reset();
         }
-        private static State For(Pawn body)
+        private static State GetState(Pawn body, HediffComp_Transformed marker)
+        {
+            State state = marker?.gearState as State;
+            if (state != null && ReferenceEquals(state.ownerBody, body)) return state;
+            if (!states.TryGetValue(body, out state)) state = states.GetOrCreateValue(body);
+            state.ownerBody = body;
+            if (marker != null) marker.gearState = state;
+            return state;
+        }
+        private static State For(Pawn body, Pawn validatedSource = null, HediffComp_Transformed marker = null)
         {
             if(body==null||IsNativeOnly)return null;
-            Pawn source=SharedFormIdentity.HumanFor(body);
-            if(source==null)return null;
-            State state=states.GetOrCreateValue(body);
+            Pawn source=validatedSource;
+            if(source==null)
+            {
+                marker = TransformUtility.TryGetTransformedComp(body);
+                if(marker==null)return null;
+                source=SharedFormIdentity.GetStoredHumanFromActiveBody(body, marker);
+                if(source==null)return null;
+            }
+            State state=GetState(body, marker);
             return state.Refresh(body,source)?state:null;
         }
         public static List<Apparel> ApparelFor(Pawn body,List<Apparel> native)
@@ -125,31 +206,70 @@ namespace WildShift
         {
             if(source==null||IsNativeOnly)return source;
             Pawn body=SharedFormIdentity.ActiveFormFor(source);
-            return For(body)!=null?body:source;
+            if(body==null)return source;
+            HediffComp_Transformed marker = source.holdingOwner?.Owner as HediffComp_Transformed;
+            State state = marker?.gearState as State;
+            if(state==null||!ReferenceEquals(state.ownerBody,body))
+                states.TryGetValue(body,out state);
+            if(state!=null)
+            {
+                if(state.suspended)return source;
+                if(state.human==source)return body;
+            }
+            return For(body,source,marker)!=null?body:source;
         }
         public static ThingWithComps PrimaryFor(Pawn body,ThingWithComps native)
         {
             if(native!=null)return native;
             State state=For(body);
-            if(state==null)return null;
-            for(int i=0;i<state.sourceEquipment.Count;i++)
-                if(state.sourceEquipment[i].def.equipmentType==EquipmentType.Primary)return state.sourceEquipment[i];
+            return state!=null?state.primary:null;
+        }
+        private static ThingWithComps RawPrimary(Pawn pawn)
+        {
+            List<ThingWithComps> eq = RawEquipment(pawn);
+            if (eq == null) return null;
+            for (int i = 0; i < eq.Count; i++)
+                if (eq[i].def.equipmentType == EquipmentType.Primary) return eq[i];
             return null;
+        }
+        internal static void GetVisibleGear(Pawn body, Pawn human, HediffComp_Transformed marker,
+            out List<Apparel> bodyApparel, out ThingWithComps bodyPrimary)
+        {
+            if (body == null) { bodyApparel = null; bodyPrimary = null; return; }
+            State state = For(body, human, marker);
+            if (state != null)
+            {
+                bodyApparel = body.apparel != null ? state.apparel : null;
+                bodyPrimary = body.equipment != null ? (RawPrimary(body) ?? state.primary) : null;
+                return;
+            }
+            bodyApparel = RawApparel(body);
+            bodyPrimary = RawPrimary(body);
         }
 
         private static void BindVerbs(Pawn caster,State state)
         {
+            ThingOwner sourceEquipOwner = state.human.equipment != null ? rawEquipmentOwner(state.human.equipment) : null;
             for(int i=0;i<state.sourceEquipment.Count;i++)
             {
-                if(state.sourceEquipment[i].holdingOwner!=state.human.equipment?.GetDirectlyHeldThings())continue;
+                if(state.sourceEquipment[i].holdingOwner!=sourceEquipOwner)continue;
                 CompEquippable comp=state.sourceEquipment[i].GetComp<CompEquippable>();
-                if(comp!=null)foreach(Verb verb in comp.AllVerbs)verb.caster=caster;
+                if(comp!=null)
+                {
+                    List<Verb> verbs=comp.AllVerbs;
+                    for(int v=0;v<verbs.Count;v++)verbs[v].caster=caster;
+                }
             }
+            ThingOwner sourceApparelOwner = state.human.apparel != null ? rawApparelOwner(state.human.apparel) : null;
             for(int i=0;i<state.sourceApparel.Count;i++)
             {
-                if(state.sourceApparel[i].holdingOwner!=state.human.apparel?.GetDirectlyHeldThings())continue;
+                if(state.sourceApparel[i].holdingOwner!=sourceApparelOwner)continue;
                 CompApparelVerbOwner comp=state.sourceApparel[i].GetComp<CompApparelVerbOwner>();
-                if(comp!=null)foreach(Verb verb in comp.AllVerbs)verb.caster=caster;
+                if(comp!=null)
+                {
+                    List<Verb> verbs=comp.AllVerbs;
+                    for(int v=0;v<verbs.Count;v++)verbs[v].caster=caster;
+                }
             }
             for(int i=0;i<state.sourceHealth.Count;i++)
             {
@@ -157,18 +277,26 @@ namespace WildShift
                 if(h?.comps==null)continue;
                 for(int j=0;j<h.comps.Count;j++)
                 {
-                    object comp=h.comps[j];
-                    if(comp.GetType().Name!="HediffComp_VerbGiver")continue;
-                    PropertyInfo property=AccessTools.Property(comp.GetType(),"VerbTracker");
-                    VerbTracker tracker=property?.GetValue(comp,null) as VerbTracker;
-                    if(tracker!=null)foreach(Verb verb in tracker.AllVerbs)verb.caster=caster;
+                    HediffComp_VerbGiver giver=h.comps[j] as HediffComp_VerbGiver;
+                    if(giver==null)continue;
+                    VerbTracker tracker=giver.VerbTracker;
+                    if(tracker!=null)
+                    {
+                        List<Verb> verbs=tracker.AllVerbs;
+                        for(int v=0;v<verbs.Count;v++)verbs[v].caster=caster;
+                    }
                 }
             }
         }
 
         public static void Tick(Pawn body)
         {
-            State state=For(body);if(state==null||Find.TickManager==null)return;
+            TickForSource(body, null, null);
+        }
+
+        internal static void TickForSource(Pawn body, Pawn source, HediffComp_Transformed marker = null)
+        {
+            State state=For(body, source, marker);if(state==null||Find.TickManager==null)return;
             int now=Find.TickManager.TicksGame;if(state.lastTick==now)return;state.lastTick=now;
             for(int i=0;i<state.borrowed.Count;i++)
             {
@@ -178,7 +306,12 @@ namespace WildShift
         }
         public static void TickInterval(Pawn body,int delta)
         {
-            State state=For(body);if(state==null||Find.TickManager==null||delta<=0)return;
+            TickIntervalForSource(body, null, delta, null);
+        }
+
+        internal static void TickIntervalForSource(Pawn body, Pawn source, int delta, HediffComp_Transformed marker = null)
+        {
+            State state=For(body, source, marker);if(state==null||Find.TickManager==null||delta<=0)return;
             int now=Find.TickManager.TicksGame;if(state.lastInterval==now)return;state.lastInterval=now;
             for(int i=0;i<state.borrowed.Count;i++)
             {
@@ -200,13 +333,33 @@ namespace WildShift
         public static BodyPartRecord MapCoverage(ApparelProperties properties,BodyPartRecord part)
         {
             State state=For(coverageBody);
-            if(state==null||part==null||!coverageBody.RaceProps.body.AllParts.Contains(part))return null;
+            if(state==null||part==null)return null;
             bool borrowed=false;
             for(int i=0;i<state.sourceApparel.Count;i++)
                 if(state.sourceApparel[i].def.apparel==properties){borrowed=true;break;}
             if(!borrowed)return null;
+            BodyDef animalBody=coverageBody.RaceProps.body;
             BodyDef sourceBody=state.human.RaceProps.body;
-            if(part==coverageBody.RaceProps.body.corePart)return sourceBody.corePart;
+            Dictionary<BodyPartRecord,BodyPartRecord> map=GetCoverageMap(animalBody,sourceBody);
+            BodyPartRecord mapped;
+            return map.TryGetValue(part,out mapped)?mapped:null;
+        }
+        private static Dictionary<BodyPartRecord,BodyPartRecord> GetCoverageMap(BodyDef animalBody,BodyDef sourceBody)
+        {
+            ConditionalWeakTable<BodyDef,Dictionary<BodyPartRecord,BodyPartRecord>> inner=coverageCache.GetOrCreateValue(animalBody);
+            Dictionary<BodyPartRecord,BodyPartRecord> map;
+            if(inner.TryGetValue(sourceBody,out map))return map;
+            map=new Dictionary<BodyPartRecord,BodyPartRecord>(animalBody.AllParts.Count);
+            List<BodyPartRecord> animalParts=animalBody.AllParts;
+            for(int i=0;i<animalParts.Count;i++)
+                map[animalParts[i]]=ComputeMappedPart(animalBody,sourceBody,animalParts[i]);
+            inner.Remove(sourceBody);
+            inner.Add(sourceBody,map);
+            return map;
+        }
+        private static BodyPartRecord ComputeMappedPart(BodyDef animalBody,BodyDef sourceBody,BodyPartRecord part)
+        {
+            if(part==animalBody.corePart)return sourceBody.corePart;
             for(int i=0;i<sourceBody.AllParts.Count;i++)
                 if(sourceBody.AllParts[i].def==part.def)return sourceBody.AllParts[i];
             for(BodyPartRecord ancestor=part;ancestor!=null;ancestor=ancestor.parent)
@@ -237,7 +390,8 @@ namespace WildShift
             if(mutation>0||IsNativeOnly)return true;
             Pawn body=tracker is Pawn_ApparelTracker?(tracker as Pawn_ApparelTracker).pawn:(tracker as Pawn_EquipmentTracker)?.pawn;
             State state=For(body);if(state==null||item==null)return true;
-            object source=item is Apparel?(object)state.human.apparel:state.human.equipment;
+            Pawn human=state.human;
+            object source=item is Apparel?(object)human.apparel:human.equipment;
             ThingOwner owner=source is Pawn_ApparelTracker?(source as Pawn_ApparelTracker).GetDirectlyHeldThings():(source as Pawn_EquipmentTracker)?.GetDirectlyHeldThings();
             if(owner==null||item.holdingOwner!=owner)return true;
             mutation++;
@@ -250,9 +404,16 @@ namespace WildShift
             }
             finally
             {
-                if(source is Pawn_ApparelTracker)((Pawn_ApparelTracker)source).pawn=state.human;
-                else ((Pawn_EquipmentTracker)source).pawn=state.human;
+                if(source is Pawn_ApparelTracker)((Pawn_ApparelTracker)source).pawn=human;
+                else ((Pawn_EquipmentTracker)source).pawn=human;
                 mutation--;
+                if(item.holdingOwner!=owner)
+                {
+                    // Native unequip callbacks see the physical body. Refresh
+                    // the human's real ability list and its projected view too.
+                    human.abilities?.Notify_TemporaryAbilitiesChanged();
+                    SharedFormAbilities.MarkDirty(human);
+                }
             }
             return false;
         }

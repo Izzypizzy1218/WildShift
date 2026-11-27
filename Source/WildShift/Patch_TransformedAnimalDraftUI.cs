@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using HarmonyLib;
 using RimWorld;
 using UnityEngine;
@@ -127,30 +128,64 @@ namespace WildShift
             = new ConcurrentDictionary<Type, bool>();
         private static readonly Func<Type, bool> classifyExternalDraftOwner = IsExternalDraftOwner;
 
+        private sealed class AbilityCommandSet : HashSet<Command_Ability>
+        {
+            public AbilityCommandSet() : base(AbilityCommandReferenceComparer.Instance) { }
+        }
+
+        private sealed class AbilityCommandReferenceComparer : IEqualityComparer<Command_Ability>
+        {
+            internal static readonly AbilityCommandReferenceComparer Instance = new AbilityCommandReferenceComparer();
+            public bool Equals(Command_Ability first, Command_Ability second) { return ReferenceEquals(first, second); }
+            public int GetHashCode(Command_Ability command) { return RuntimeHelpers.GetHashCode(command); }
+        }
+
         // A passthrough postfix must run after the other mod's passthrough
         // postfix. A ref-result (void) postfix runs before that iterator.
-        [HarmonyAfter("DraftableAnimals.Mod", "Poupun.IsekaiCreaturesAddon")]
+        [HarmonyAfter("DraftableAnimals.Mod", "Poupun.IsekaiCreaturesAddon", "OskarPotocki.VEF")]
         [HarmonyPriority(Priority.Last)]
         public static IEnumerable<Gizmo> Postfix(IEnumerable<Gizmo> __result, Pawn __instance)
         {
-            if (__instance == null || __instance.Faction?.IsPlayer != true
-                || TransformUtility.TryGetTransformedComp(__instance)?.HasStoredPawn != true)
-                return __result;
-            return WithoutDuplicateDraft(__result);
+            if (__instance == null || __instance.Faction?.IsPlayer != true) return __result;
+            HediffComp_Transformed marker = TransformUtility.TryGetTransformedComp(__instance);
+            if (marker?.HasStoredPawn != true) return __result;
+            Pawn source = __instance.abilities is SharedPawnAbilityTracker
+                && ModsConfig.IsActive("OskarPotocki.VanillaFactionsExpanded.Core")
+                    ? SharedFormIdentity.GetStoredHumanFromActiveBody(__instance, marker) : null;
+            return WithoutDuplicateCommands(__result, __instance, source);
         }
 
-        private static IEnumerable<Gizmo> WithoutDuplicateDraft(IEnumerable<Gizmo> original)
+        private static IEnumerable<Gizmo> WithoutDuplicateCommands(IEnumerable<Gizmo> original, Pawn body, Pawn source)
         {
             if (original == null) yield break;
-            foreach (Gizmo gizmo in original)
+            AbilityCommandSet seen = null;
+            try
             {
-                // Both mods add a draft toggle for the same animal. Native
-                // grouping can execute both callbacks, undoing the first toggle.
-                // Keep WildShift's command and unrelated abilities; ordinary
-                // companions never enter this transformed-only filter.
-                if (gizmo is Command_Toggle command && IsExternalDraftToggle(command))
-                    continue;
-                yield return gizmo;
+                foreach (Gizmo gizmo in original)
+                {
+                    // Both draft mods add a toggle for the same animal. Native
+                    // grouping can execute both callbacks and undo the first.
+                    if (gizmo is Command_Toggle command && IsExternalDraftToggle(command))
+                        continue;
+                    // VEF can enumerate the merged tracker again. Equipment
+                    // abilities can also arrive through the native tracker.
+                    if (source != null && gizmo is Command_Ability cast && cast.Ability != null)
+                    {
+                        if (seen == null) seen = SimplePool<AbilityCommandSet>.Get();
+                        if (!seen.Add(cast) && (SharedFormAbilities.IsBorrowedBy(cast.Ability, body, source)
+                            || source.abilities?.AllAbilitiesForReading.Contains(cast.Ability) == true))
+                            continue;
+                    }
+                    yield return gizmo;
+                }
+            }
+            finally
+            {
+                if (seen != null)
+                {
+                    seen.Clear();
+                    SimplePool<AbilityCommandSet>.Return(seen);
+                }
             }
         }
 

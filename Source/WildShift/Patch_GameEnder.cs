@@ -44,6 +44,7 @@ namespace WildShift
 
         private static bool ScanForLivingTransformedColonist()
         {
+            if (!TransformUtility.HasAnyIndexedTransformed()) return false;
             List<Pawn> pawns = PawnsFinder.AllMapsCaravansAndTravellingTransporters_Alive_OfPlayerFaction;
             for (int pawnIndex = 0; pawnIndex < pawns.Count; pawnIndex++)
             {

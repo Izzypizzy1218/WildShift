@@ -7,8 +7,12 @@ namespace WildShift
     {
         public static bool HasPossessions(Pawn animal)
         {
+            if (animal == null) return false;
+            // Read the body's own equipment container rather than the patched
+            // AllEquipmentListForReading view so borrowed human gear never blocks
+            // unloading or misreports physical animal possessions.
             return (animal.inventory != null && animal.inventory.innerContainer.Count > 0)
-                || (animal.equipment != null && animal.equipment.AllEquipmentListForReading.Count > 0)
+                || (animal.equipment != null && (animal.equipment.GetDirectlyHeldThings()?.Count ?? 0) > 0)
                 || (animal.apparel != null && animal.apparel.WornApparelCount > 0)
                 || (animal.carryTracker != null && animal.carryTracker.CarriedThing != null);
         }

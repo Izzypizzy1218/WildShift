@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using RimWorld;
 using RimWorld.Planet;
 using Verse;
@@ -95,9 +96,218 @@ namespace WildShift
             return animal.jobs.TryTakeOrderedJob(job);
         }
 
+        // Fast weak index + 4096-bit thingID bloom filter so ordinary pawns exit
+        // TryGetTransformedComp in O(1) without locking CWT or scanning hediffs.
+        // Live hediff membership is still verified on every hit.
+        private static readonly object transformedIndexLock = new object();
+        private static readonly List<System.WeakReference<HediffComp_Transformed>> pendingTransformedComps
+            = new List<System.WeakReference<HediffComp_Transformed>>();
+        private static readonly ConditionalWeakTable<Pawn, HediffComp_Transformed> transformedCompByPawn
+            = new ConditionalWeakTable<Pawn, HediffComp_Transformed>();
+        private static readonly List<System.WeakReference<Pawn>> indexedTransformedPawns
+            = new List<System.WeakReference<Pawn>>();
+        private static readonly ulong[] transformedIdBloom = new ulong[64];
+        private static volatile int pendingTransformedCount;
+        private static volatile int indexedTransformedCount;
+        private static volatile int unkeyedTransformedCount;
+
+        internal static void RegisterPendingTransformedComp(HediffComp_Transformed comp)
+        {
+            if (comp == null) return;
+            lock (transformedIndexLock)
+            {
+                pendingTransformedComps.Add(new System.WeakReference<HediffComp_Transformed>(comp));
+                pendingTransformedCount = pendingTransformedComps.Count;
+            }
+        }
+
+        internal static void RegisterTransformedComp(Pawn pawn, HediffComp_Transformed comp)
+        {
+            if (pawn == null || comp == null) return;
+            lock (transformedIndexLock)
+            {
+                RegisterTransformedCompLocked(pawn, comp);
+                if (pendingTransformedComps.Count > 0)
+                {
+                    for (int i = pendingTransformedComps.Count - 1; i >= 0; i--)
+                    {
+                        HediffComp_Transformed pending;
+                        if (!pendingTransformedComps[i].TryGetTarget(out pending) || pending == null
+                            || ReferenceEquals(pending, comp))
+                        {
+                            pendingTransformedComps.RemoveAt(i);
+                        }
+                    }
+                    pendingTransformedCount = pendingTransformedComps.Count;
+                }
+            }
+        }
+
+        private static void RegisterTransformedCompLocked(Pawn pawn, HediffComp_Transformed comp)
+        {
+            HediffComp_Transformed existing;
+            bool alreadyIndexed = transformedCompByPawn.TryGetValue(pawn, out existing);
+            if (alreadyIndexed)
+            {
+                if (!ReferenceEquals(existing, comp))
+                {
+                    transformedCompByPawn.Remove(pawn);
+                    transformedCompByPawn.Add(pawn, comp);
+                }
+            }
+            else
+            {
+                transformedCompByPawn.Add(pawn, comp);
+                // Prune dead weak refs occasionally so long sessions stay compact.
+                if (indexedTransformedPawns.Count >= 64)
+                {
+                    for (int i = indexedTransformedPawns.Count - 1; i >= 0; i--)
+                    {
+                        Pawn alive;
+                        if (!indexedTransformedPawns[i].TryGetTarget(out alive) || alive == null)
+                            indexedTransformedPawns.RemoveAt(i);
+                    }
+                }
+                indexedTransformedPawns.Add(new System.WeakReference<Pawn>(pawn));
+                indexedTransformedCount++;
+            }
+
+            int id = pawn.thingIDNumber;
+            if (id >= 0)
+            {
+                transformedIdBloom[(id >> 6) & 63] |= 1UL << (id & 63);
+            }
+            else if (!alreadyIndexed)
+            {
+                unkeyedTransformedCount++;
+            }
+        }
+
+        private static void DrainPendingTransformedComps()
+        {
+            lock (transformedIndexLock)
+            {
+                for (int i = pendingTransformedComps.Count - 1; i >= 0; i--)
+                {
+                    HediffComp_Transformed comp;
+                    if (!pendingTransformedComps[i].TryGetTarget(out comp) || comp == null)
+                    {
+                        pendingTransformedComps.RemoveAt(i);
+                        continue;
+                    }
+
+                    Pawn pawn = comp.parent?.pawn;
+                    if (pawn == null) continue;
+                    RegisterTransformedCompLocked(pawn, comp);
+                    pendingTransformedComps.RemoveAt(i);
+                }
+                pendingTransformedCount = pendingTransformedComps.Count;
+            }
+        }
+
+        internal static bool MightBeTransformed(Pawn pawn)
+        {
+            if (pawn == null) return false;
+            if (pendingTransformedCount != 0) DrainPendingTransformedComps();
+            if (indexedTransformedCount == 0) return false;
+            int id = pawn.thingIDNumber;
+            if (id >= 0 && unkeyedTransformedCount == 0)
+                return (transformedIdBloom[(id >> 6) & 63] & (1UL << (id & 63))) != 0UL;
+            return true;
+        }
+
+        internal static bool HasAnyIndexedTransformed()
+        {
+            if (pendingTransformedCount != 0) DrainPendingTransformedComps();
+            return indexedTransformedCount != 0;
+        }
+
+        internal static bool IsLiveCarrier(Pawn pawn, HediffComp_Transformed comp)
+        {
+            if (pawn == null || comp == null) return false;
+            List<Hediff> effects = pawn.health?.hediffSet?.hediffs;
+            HediffWithComps parent = comp.parent;
+            HediffDef carrier = WildShiftDefOf.WildShift_Transformed;
+            if (effects == null || effects.Count == 0 || parent == null || carrier == null || parent.def != carrier)
+                return false;
+            int idx = comp.cachedHediffIndex;
+            if ((uint)idx < (uint)effects.Count && ReferenceEquals(effects[idx], parent))
+                return true;
+            for (int i = 0; i < effects.Count; i++)
+            {
+                if (ReferenceEquals(effects[i], parent))
+                {
+                    comp.cachedHediffIndex = i;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        internal static void FillSpawnedTransformedOn(Map map, Faction faction, List<Pawn> target)
+        {
+            target.Clear();
+            if (map == null) return;
+            if (pendingTransformedCount != 0) DrainPendingTransformedComps();
+            if (indexedTransformedCount == 0) return;
+            lock (transformedIndexLock)
+            {
+                for (int i = indexedTransformedPawns.Count - 1; i >= 0; i--)
+                {
+                    Pawn pawn;
+                    if (!indexedTransformedPawns[i].TryGetTarget(out pawn) || pawn == null)
+                    {
+                        indexedTransformedPawns.RemoveAt(i);
+                        continue;
+                    }
+                    if (!pawn.Spawned || pawn.Map != map) continue;
+                    if (faction != null && pawn.Faction != faction) continue;
+                    target.Add(pawn);
+                }
+            }
+        }
+
+        internal static bool AnySpawnedTransformedOn(Map map, Predicate<Pawn> predicate)
+        {
+            if (map == null || predicate == null) return false;
+            if (pendingTransformedCount != 0) DrainPendingTransformedComps();
+            if (indexedTransformedCount == 0) return false;
+            List<Pawn> candidates = null;
+            lock (transformedIndexLock)
+            {
+                for (int i = indexedTransformedPawns.Count - 1; i >= 0; i--)
+                {
+                    Pawn pawn;
+                    if (!indexedTransformedPawns[i].TryGetTarget(out pawn) || pawn == null)
+                    {
+                        indexedTransformedPawns.RemoveAt(i);
+                        continue;
+                    }
+                    if (!pawn.Spawned || pawn.Map != map) continue;
+                    if (candidates == null) candidates = new List<Pawn>();
+                    candidates.Add(pawn);
+                }
+            }
+            if (candidates == null) return false;
+            for (int i = 0; i < candidates.Count; i++)
+                if (predicate(candidates[i])) return true;
+            return false;
+        }
+
         public static HediffComp_Transformed TryGetTransformedComp(Pawn pawn)
         {
-            List<Hediff> effects = pawn?.health?.hediffSet?.hediffs;
+            if (!MightBeTransformed(pawn))
+            {
+                return null;
+            }
+
+            HediffComp_Transformed comp;
+            if (!transformedCompByPawn.TryGetValue(pawn, out comp) || comp == null)
+            {
+                return null;
+            }
+
+            List<Hediff> effects = pawn.health?.hediffSet?.hediffs;
             if (effects == null || effects.Count == 0)
             {
                 return null;
@@ -107,10 +317,35 @@ namespace WildShift
             // while deciding whether a pawn has a body to project them onto.
             HediffDef carrier = WildShiftDefOf.WildShift_Transformed;
             if (carrier == null) return null;
+            HediffWithComps parent = comp.parent;
+            if (parent != null && parent.def == carrier)
+            {
+                int idx = comp.cachedHediffIndex;
+                if ((uint)idx < (uint)effects.Count && ReferenceEquals(effects[idx], parent))
+                    return comp;
+                for (int i = 0; i < effects.Count; i++)
+                {
+                    if (ReferenceEquals(effects[i], parent))
+                    {
+                        comp.cachedHediffIndex = i;
+                        return comp;
+                    }
+                }
+            }
+
             for (int i = 0; i < effects.Count; i++)
             {
                 Hediff effect = effects[i];
-                if (effect?.def == carrier) return effect.TryGetComp<HediffComp_Transformed>();
+                if (effect?.def == carrier)
+                {
+                    HediffComp_Transformed found = effect.TryGetComp<HediffComp_Transformed>();
+                    if (found != null)
+                    {
+                        found.cachedHediffIndex = i;
+                        RegisterTransformedComp(pawn, found);
+                        return found;
+                    }
+                }
             }
             return null;
         }

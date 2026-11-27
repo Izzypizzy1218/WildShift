@@ -17,6 +17,13 @@ namespace WildShift
         private sealed class MemoryClock { public int lastTick = int.MinValue; }
         private static readonly ConditionalWeakTable<Pawn, MemoryClock> memoryClocks
             = new ConditionalWeakTable<Pawn, MemoryClock>();
+        private static readonly ConditionalWeakTable<Pawn, System.WeakReference<Pawn>>.CreateValueCallback createActiveFormRef
+            = CreateActiveFormRef;
+        private static readonly ConditionalWeakTable<Pawn, MemoryClock>.CreateValueCallback createMemoryClock
+            = CreateMemoryClock;
+
+        private static System.WeakReference<Pawn> CreateActiveFormRef(Pawn ignored) { return new System.WeakReference<Pawn>(null); }
+        private static MemoryClock CreateMemoryClock(Pawn ignored) { return new MemoryClock(); }
 
         public static Pawn HumanFor(Pawn animal)
         {
@@ -42,9 +49,14 @@ namespace WildShift
         {
             // A valid binding always uses the transformed comp's ThingOwner,
             // including after Scribe recreates that owner.
-            if (!(human?.holdingOwner?.Owner is HediffComp_Transformed)) return null;
+            HediffComp_Transformed comp = human?.holdingOwner?.Owner as HediffComp_Transformed;
+            if (comp == null) return null;
+            Pawn form = comp.parent?.pawn;
+            if (form != null && ReferenceEquals(comp.identityBody, form)
+                && GetStoredHumanFromActiveBody(form, comp) == human
+                && TransformUtility.IsLiveCarrier(form, comp))
+                return form;
             System.WeakReference<Pawn> reference;
-            Pawn form;
             if (activeForms.TryGetValue(human, out reference) && reference.TryGetTarget(out form)
                 && HumanFor(form) == human) return form;
             return null;
@@ -52,10 +64,11 @@ namespace WildShift
 
         public static void Initialize(Pawn animal)
         {
-            Pawn human = HumanFor(animal);
+            HediffComp_Transformed comp = TransformUtility.TryGetTransformedComp(animal);
+            Pawn human = comp == null ? null : GetStoredHumanFromActiveBody(animal, comp);
             if (human == null) return;
-            System.WeakReference<Pawn> reference = activeForms.GetValue(human,
-                delegate(Pawn ignored) { return new System.WeakReference<Pawn>(animal); });
+            comp.identityBody = animal;
+            System.WeakReference<Pawn> reference = activeForms.GetValue(human, createActiveFormRef);
             reference.SetTarget(animal);
             if (human.skills == null) return;
             SharedPawnSkillTracker tracker = animal.skills as SharedPawnSkillTracker;
@@ -73,7 +86,7 @@ namespace WildShift
             Pawn human = HumanFor(animal);
             if (human == null || Find.TickManager == null || human.needs == null
                 || human.needs.mood == null || !human.IsHashIntervalTick(150, delta)) return;
-            MemoryClock clock = memoryClocks.GetValue(human, delegate(Pawn ignored) { return new MemoryClock(); });
+            MemoryClock clock = memoryClocks.GetValue(human, createMemoryClock);
             int now = Find.TickManager.TicksGame;
             if (clock.lastTick == now) return;
             clock.lastTick = now;
@@ -133,14 +146,15 @@ namespace WildShift
     [HarmonyPatch(typeof(Pawn_SkillTracker), "CanGainXP")]
     public static class Patch_SharedSkillPermission
     {
-        private static readonly MethodInfo nativePermission = AccessTools.Method(typeof(Pawn_SkillTracker), "CanGainXP");
+        private static readonly Func<Pawn_SkillTracker, bool> nativePermission
+            = AccessTools.MethodDelegate<Func<Pawn_SkillTracker, bool>>(AccessTools.Method(typeof(Pawn_SkillTracker), "CanGainXP"));
 
         public static bool Prefix(Pawn_SkillTracker __instance, ref bool __result)
         {
             SharedPawnSkillTracker proxy = __instance as SharedPawnSkillTracker;
             Pawn_SkillTracker source = proxy != null ? proxy.OriginalSkills : null;
             if (source == null) return true;
-            __result = (bool)nativePermission.Invoke(source, null);
+            __result = nativePermission(source);
             return false;
         }
     }
@@ -148,7 +162,8 @@ namespace WildShift
     [HarmonyPatch(typeof(Pawn_SkillTracker), "SkillsTickInterval")]
     public static class Patch_SharedPersonalMemoryClock
     {
-        private static readonly FieldInfo midnightStamp = AccessTools.Field(typeof(Pawn_SkillTracker), "lastXpSinceMidnightResetTimestamp");
+        private static readonly AccessTools.FieldRef<Pawn_SkillTracker, int> midnightStamp
+            = AccessTools.FieldRefAccess<Pawn_SkillTracker, int>("lastXpSinceMidnightResetTimestamp");
 
         public static void Prefix(Pawn_SkillTracker __instance, ref int ___lastXpSinceMidnightResetTimestamp)
         {
@@ -157,7 +172,7 @@ namespace WildShift
             proxy.Bind();
             Pawn_SkillTracker source = proxy.OriginalSkills;
             if (source != null)
-                ___lastXpSinceMidnightResetTimestamp = (int)midnightStamp.GetValue(source);
+                ___lastXpSinceMidnightResetTimestamp = midnightStamp(source);
         }
 
         public static void Postfix(Pawn_SkillTracker __instance, Pawn ___pawn, int delta,
@@ -166,7 +181,7 @@ namespace WildShift
             SharedPawnSkillTracker proxy = __instance as SharedPawnSkillTracker;
             if (proxy == null) return;
             Pawn_SkillTracker source = proxy.OriginalSkills;
-            if (source != null) midnightStamp.SetValue(source, ___lastXpSinceMidnightResetTimestamp);
+            if (source != null) midnightStamp(source) = ___lastXpSinceMidnightResetTimestamp;
             SharedFormIdentity.TickMemories(___pawn, delta);
         }
     }

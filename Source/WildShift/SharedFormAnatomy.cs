@@ -16,11 +16,98 @@ namespace WildShift
         [ThreadStatic] private static Pawn neutralPawn;
         private static readonly ConditionalWeakTable<Pawn, State> states = new ConditionalWeakTable<Pawn, State>();
 
+        private sealed class PartSignatureCache
+        {
+            public HediffSet set;
+            public SharedFormHealth.DirtyStamp stamp;
+            public int dirtyVersion = int.MinValue;
+            public int count = -1;
+            public int hash;
+            public bool hasDynamicStage;
+            public readonly List<Hediff> installed = new List<Hediff>();
+
+            public void Reset()
+            {
+                set = null;
+                stamp = null;
+                dirtyVersion = int.MinValue;
+                count = -1;
+                installed.Clear();
+                hasDynamicStage = false;
+                hash = 0;
+            }
+
+            public int Compute(Pawn pawn)
+            {
+                HediffSet currentSet = pawn?.health?.hediffSet;
+                if (currentSet == null)
+                {
+                    Reset();
+                    return 0;
+                }
+
+                List<Hediff> actual = currentSet.hediffs;
+                int actualCount = actual.Count;
+                if (ReferenceEquals(set, currentSet) && stamp != null
+                    && stamp.version == dirtyVersion && actualCount == count)
+                {
+                    if (!hasDynamicStage) return hash;
+                    int dynamicHash = 17;
+                    unchecked
+                    {
+                        for (int i = 0; i < installed.Count; i++)
+                        {
+                            Hediff h = installed[i];
+                            dynamicHash = dynamicHash * 31 + RuntimeHelpers.GetHashCode(h);
+                            dynamicHash = dynamicHash * 31 + RuntimeHelpers.GetHashCode(h.Part);
+                            dynamicHash = dynamicHash * 31 + (h.def?.addedPartProps?.partEfficiency ?? 1f).GetHashCode();
+                            dynamicHash = dynamicHash * 31 + (h.CurStage?.partEfficiencyOffset ?? 0f).GetHashCode();
+                        }
+                    }
+                    hash = dynamicHash;
+                    return dynamicHash;
+                }
+
+                set = currentSet;
+                stamp = SharedFormHealth.WatchHealthSet(currentSet);
+                dirtyVersion = stamp != null ? stamp.version : 0;
+                count = actualCount;
+                installed.Clear();
+                hasDynamicStage = false;
+                int result = 17;
+                unchecked
+                {
+                    for (int i = 0; i < actualCount; i++)
+                    {
+                        Hediff h = actual[i];
+                        if (h?.Part == null || (!(h is Hediff_AddedPart) && !(h is Hediff_Implant)
+                            && h.def?.countsAsAddedPartOrImplant != true)) continue;
+                        installed.Add(h);
+                        Type ht = h.GetType();
+                        if ((h.def?.stages != null && (h.def.stages.Count > 1
+                                || (h.def.stages.Count == 1 && h.def.stages[0].minSeverity > 0f)))
+                            || (ht != typeof(Hediff) && ht != typeof(HediffWithComps)
+                                && ht != typeof(Hediff_AddedPart) && ht != typeof(Hediff_Implant)))
+                            hasDynamicStage = true;
+                        result = result * 31 + RuntimeHelpers.GetHashCode(h);
+                        result = result * 31 + RuntimeHelpers.GetHashCode(h.Part);
+                        result = result * 31 + (h.def?.addedPartProps?.partEfficiency ?? 1f).GetHashCode();
+                        result = result * 31 + (h.CurStage?.partEfficiencyOffset ?? 0f).GetHashCode();
+                    }
+                }
+                hash = result;
+                return result;
+            }
+        }
+
         private sealed class State
         {
+            public Pawn ownerBody;
             public Pawn human;
             public int signature, version;
             public bool initialized, building;
+            public readonly PartSignatureCache humanParts = new PartSignatureCache();
+            public readonly PartSignatureCache bodyParts = new PartSignatureCache();
             public readonly Dictionary<PawnCapacityDef, float> rawFactors = new Dictionary<PawnCapacityDef, float>();
 
             public void Refresh(Pawn body, Pawn source = null)
@@ -29,7 +116,7 @@ namespace WildShift
                 // A raw-capacity query has just validated the source. Reuse
                 // that result only within this call, never across queries.
                 source = source ?? SharedFormIdentity.HumanFor(body);
-                int next = Signature(source, body);
+                int next = unchecked(humanParts.Compute(source) * 397 ^ bodyParts.Compute(body));
                 if (initialized && source == human && next == signature) return;
                 human = source;
                 signature = next;
@@ -69,15 +156,42 @@ namespace WildShift
             }
         }
 
+        private static State GetState(Pawn body, HediffComp_Transformed marker = null)
+        {
+            State state = marker?.anatomyState as State;
+            if (state != null && ReferenceEquals(state.ownerBody, body)) return state;
+            if (!states.TryGetValue(body, out state)) state = states.GetOrCreateValue(body);
+            state.ownerBody = body;
+            if (marker != null) marker.anatomyState = state;
+            return state;
+        }
+
+        internal static void Invalidate(Pawn body)
+        {
+            if (body == null) return;
+            State state;
+            if (states.TryGetValue(body, out state))
+            {
+                state.humanParts.Reset();
+                state.bodyParts.Reset();
+                state.initialized = false;
+            }
+        }
+
         public static int ModifierVersion(Pawn body)
         {
-            return ModifierVersionForSource(body, null);
+            return ModifierVersionForSource(body, null, null);
         }
 
         internal static int ModifierVersionForSource(Pawn body, Pawn source)
         {
+            return ModifierVersionForSource(body, source, null);
+        }
+
+        internal static int ModifierVersionForSource(Pawn body, Pawn source, HediffComp_Transformed marker)
+        {
             if (body == null || neutralPawn == body) return 0;
-            State state = states.GetOrCreateValue(body);
+            State state = GetState(body, marker);
             state.Refresh(body, source);
             return state.version;
         }
@@ -90,9 +204,10 @@ namespace WildShift
             // anatomy receives the original person's installed-part ratio.
             if (value <= 0f || body?.health == null || neutralPawn == body
                 || !ReferenceEquals(diffSet, body.health.hediffSet)) return value;
-            Pawn source = SharedFormIdentity.HumanFor(body);
+            HediffComp_Transformed marker = TransformUtility.TryGetTransformedComp(body);
+            Pawn source = marker == null ? null : SharedFormIdentity.GetStoredHumanFromActiveBody(body, marker);
             if (source == null) return value;
-            State state = states.GetOrCreateValue(body);
+            State state = GetState(body, marker);
             state.Refresh(body, source);
             float factor;
             return state.rawFactors.TryGetValue(capacity, out factor) ? value * factor : value;
@@ -128,32 +243,6 @@ namespace WildShift
                     && h.CurStage != null && h.CurStage.partEfficiencyOffset != 0f) result.Add(h);
             }
             return result;
-        }
-
-        private static int Signature(Pawn human, Pawn body)
-        {
-            unchecked { return PartSignature(human) * 397 ^ PartSignature(body); }
-        }
-
-        private static int PartSignature(Pawn pawn)
-        {
-            if (pawn?.health?.hediffSet == null) return 0;
-            int hash = 17;
-            List<Hediff> actual = pawn.health.hediffSet.hediffs;
-            unchecked
-            {
-                for (int i = 0; i < actual.Count; i++)
-                {
-                    Hediff h = actual[i];
-                    if (h?.Part == null || (!(h is Hediff_AddedPart) && !(h is Hediff_Implant)
-                        && h.def?.countsAsAddedPartOrImplant != true)) continue;
-                    hash = hash * 31 + RuntimeHelpers.GetHashCode(h);
-                    hash = hash * 31 + RuntimeHelpers.GetHashCode(h.Part);
-                    hash = hash * 31 + (h.def?.addedPartProps?.partEfficiency ?? 1f).GetHashCode();
-                    hash = hash * 31 + (h.CurStage?.partEfficiencyOffset ?? 0f).GetHashCode();
-                }
-            }
-            return hash;
         }
 
         public static PawnCapacityModifier Clone(PawnCapacityModifier source)

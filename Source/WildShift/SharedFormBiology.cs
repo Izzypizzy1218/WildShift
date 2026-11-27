@@ -24,6 +24,7 @@ namespace WildShift
     {
         private sealed class State
         {
+            public Pawn ownerBody;
             public Pawn human;
             public Pawn_StoryTracker bodyStory;
             public Pawn_NeedsTracker bodyNeeds;
@@ -31,10 +32,27 @@ namespace WildShift
             public readonly List<Gene> genes = new List<Gene>();
             public readonly List<Gene> xenogenes = new List<Gene>();
             public readonly List<Gene> endogenes = new List<Gene>();
+            public readonly List<Gene> overrideTickGenes = new List<Gene>();
+            public readonly List<Gene> intervalTickGenes = new List<Gene>();
+            public Pawn tickGenesHuman;
+            public int tickGenesCount = -1;
+            public Pawn intervalGenesHuman;
+            public int intervalGenesCount = -1;
+            public int geneBuildVersion;
+            public int tickGenesBuildVersion = -1;
+            public int intervalGenesBuildVersion = -1;
             public int signature = int.MinValue;
             public int lastTick = int.MinValue, lastInterval = int.MinValue;
             public int lastBindTick = int.MinValue;
             public bool binding, releasing, initialized;
+        }
+
+        private struct CallbackInfo
+        {
+            public bool allowTick;
+            public bool allowInterval;
+            public bool overridesTick;
+            public bool overridesInterval;
         }
 
         private static readonly ConditionalWeakTable<Pawn, State> states = new ConditionalWeakTable<Pawn, State>();
@@ -42,15 +60,66 @@ namespace WildShift
             = AccessTools.FieldRefAccess<Pawn_GeneTracker, List<Gene>>("xenogenes");
         private static readonly AccessTools.FieldRef<Pawn_GeneTracker, List<Gene>> geneEndo
             = AccessTools.FieldRefAccess<Pawn_GeneTracker, List<Gene>>("endogenes");
-        private static readonly MethodInfo recacheGeneNeeds = AccessTools.Method(typeof(Pawn_GeneTracker), "RecacheNeeds");
-        private static readonly FieldInfo needsPawn = AccessTools.Field(typeof(Pawn_NeedsTracker), "pawn");
-        private static readonly FieldInfo needList = AccessTools.Field(typeof(Pawn_NeedsTracker), "needs");
-        private static readonly FieldInfo interactionsPawn = AccessTools.Field(typeof(Pawn_InteractionsTracker), "pawn");
+        private static readonly Action<Pawn_GeneTracker> recacheGeneNeeds
+            = AccessTools.MethodDelegate<Action<Pawn_GeneTracker>>(AccessTools.Method(typeof(Pawn_GeneTracker), "RecacheNeeds"));
+        private static readonly FieldInfo geneCachedDamageFactors = AccessTools.Field(typeof(Pawn_GeneTracker), "cachedDamageFactors");
+        private static readonly FieldInfo geneCachedAddictionFactors = AccessTools.Field(typeof(Pawn_GeneTracker), "cachedAddictionChanceFactors");
+        private static readonly FieldInfo geneCachedEnabledNeeds = AccessTools.Field(typeof(Pawn_GeneTracker), "cachedEnabledNeeds");
+        private static readonly FieldInfo geneCachedDisabledNeeds = AccessTools.Field(typeof(Pawn_GeneTracker), "cachedDisabledNeeds");
+        private static readonly FieldInfo geneCachedGenesAffectAge = AccessTools.Field(typeof(Pawn_GeneTracker), "cachedGenesAffectAge");
+        private static readonly FieldInfo geneCachedWaterCellCost = AccessTools.Field(typeof(Pawn_GeneTracker), "cachedWaterCellCost");
+        private static readonly FieldInfo geneHasCachedWaterCost = AccessTools.Field(typeof(Pawn_GeneTracker), "hasCachedWaterCost");
+        private static readonly AccessTools.FieldRef<Pawn_NeedsTracker, Pawn> needsPawn
+            = AccessTools.FieldRefAccess<Pawn_NeedsTracker, Pawn>("pawn");
+        private static readonly AccessTools.FieldRef<Pawn_NeedsTracker, List<Need>> needList
+            = AccessTools.FieldRefAccess<Pawn_NeedsTracker, List<Need>>("needs");
+        private static readonly AccessTools.FieldRef<Need, Pawn> needPawnField
+            = AccessTools.FieldRefAccess<Need, Pawn>("pawn");
+        private static readonly AccessTools.FieldRef<Pawn_InteractionsTracker, Pawn> interactionsPawn
+            = AccessTools.FieldRefAccess<Pawn_InteractionsTracker, Pawn>("pawn");
+        private static readonly MethodInfo baseGeneTick = AccessTools.DeclaredMethod(typeof(Gene), "Tick");
+        private static readonly MethodInfo baseGeneTickInterval = AccessTools.DeclaredMethod(typeof(Gene), "TickInterval", new[] { typeof(int) });
+        private static int baseGeneTickCheckedAt = int.MinValue;
+        private static bool baseGeneTickPatched;
+        private static int baseGeneIntervalCheckedAt = int.MinValue;
+        private static bool baseGeneIntervalPatched;
         private static readonly Dictionary<Type, FieldInfo> pawnFields = new Dictionary<Type, FieldInfo>();
-        private static readonly Dictionary<Type, bool[]> nativeCallbacks = new Dictionary<Type, bool[]>();
+        private static readonly Dictionary<Type, CallbackInfo> nativeCallbacks = new Dictionary<Type, CallbackInfo>();
         private sealed class NeedLevel { public float percentage; }
         private static readonly ConditionalWeakTable<Need, NeedLevel> savedNeedLevels = new ConditionalWeakTable<Need, NeedLevel>();
         [ThreadStatic] private static int nativeGenesOnly;
+
+        private static bool IsBaseGeneTickPatched(int now)
+        {
+            if (baseGeneTick == null) return false;
+            if (baseGeneTickCheckedAt != int.MinValue && unchecked((uint)(now - baseGeneTickCheckedAt)) < 250u)
+                return baseGeneTickPatched;
+            baseGeneTickCheckedAt = now;
+            baseGeneTickPatched = Harmony.GetPatchInfo(baseGeneTick) != null;
+            return baseGeneTickPatched;
+        }
+
+        private static bool IsBaseGeneIntervalPatched(int now)
+        {
+            if (baseGeneTickInterval == null) return false;
+            if (baseGeneIntervalCheckedAt != int.MinValue && unchecked((uint)(now - baseGeneIntervalCheckedAt)) < 250u)
+                return baseGeneIntervalPatched;
+            baseGeneIntervalCheckedAt = now;
+            baseGeneIntervalPatched = Harmony.GetPatchInfo(baseGeneTickInterval) != null;
+            return baseGeneIntervalPatched;
+        }
+
+        private static State TryGetStateFast(Pawn animal, HediffComp_Transformed marker = null)
+        {
+            State state = marker?.biologyState as State;
+            if (state != null && ReferenceEquals(state.ownerBody, animal)) return state;
+            if (states.TryGetValue(animal, out state))
+            {
+                if (marker != null) { state.ownerBody = animal; marker.biologyState = state; }
+                return state;
+            }
+            return null;
+        }
 
         public static bool SharesNeeds(Pawn animal)
         {
@@ -59,12 +128,19 @@ namespace WildShift
 
         public static void Initialize(Pawn animal)
         {
-            Pawn human = SharedFormIdentity.HumanFor(animal);
+            HediffComp_Transformed marker = TransformUtility.TryGetTransformedComp(animal);
+            Pawn human = marker == null ? null : SharedFormIdentity.GetStoredHumanFromActiveBody(animal, marker);
             if (human == null) return;
+            baseGeneTickCheckedAt = int.MinValue;
+            baseGeneIntervalCheckedAt = int.MinValue;
             State state = states.GetOrCreateValue(animal);
+            state.ownerBody = animal;
+            marker.biologyState = state;
             state.releasing = false;
             state.signature = int.MinValue;
             state.lastBindTick = int.MinValue;
+            state.tickGenesBuildVersion = -1;
+            state.intervalGenesBuildVersion = -1;
             if (!state.initialized)
             {
                 state.initialized = true;
@@ -93,7 +169,7 @@ namespace WildShift
             if (human.interactions != null)
             {
                 animal.interactions = human.interactions;
-                interactionsPawn.SetValue(human.interactions, animal);
+                interactionsPawn(human.interactions) = animal;
             }
             Bind(animal);
         }
@@ -116,6 +192,7 @@ namespace WildShift
                 if (signature != state.signature)
                 {
                     state.signature = signature;
+                    state.geneBuildVersion++;
                     (animal.story?.traits as SharedPawnTraitSet)?.Bind();
                     if (animal.genes != null)
                     {
@@ -145,7 +222,12 @@ namespace WildShift
             Pawn animal = ActiveBodyFor(pawn);
             State state;
             if (animal != null && states.TryGetValue(animal, out state))
-            { state.signature = int.MinValue; state.lastBindTick = int.MinValue; }
+            {
+                state.signature = int.MinValue;
+                state.lastBindTick = int.MinValue;
+                state.tickGenesBuildVersion = -1;
+                state.intervalGenesBuildVersion = -1;
+            }
         }
 
         public static void SourceMutationCompleted(Pawn pawn)
@@ -171,7 +253,7 @@ namespace WildShift
             state.releasing = true;
             Pawn human = state.human;
             (animal.needs as SharedPawnNeedsTracker)?.RestoreOwners();
-            if (human?.interactions != null) interactionsPawn.SetValue(human.interactions, human);
+            if (human?.interactions != null) interactionsPawn(human.interactions) = human;
             if (animal.interactions == human?.interactions) animal.interactions = state.bodyInteractions;
             SharedPawnNeedsTracker needs = animal.needs as SharedPawnNeedsTracker;
             if (needs != null) animal.needs = needs.BodyNeeds;
@@ -179,16 +261,21 @@ namespace WildShift
             else if (animal.story?.traits is SharedPawnTraitSet)
                 animal.story.traits = ((SharedPawnTraitSet)animal.story.traits).BodyTraits;
             state.genes.Clear(); state.xenogenes.Clear(); state.endogenes.Clear();
+            state.overrideTickGenes.Clear(); state.tickGenesHuman = null; state.tickGenesCount = -1; state.tickGenesBuildVersion = -1;
+            state.intervalTickGenes.Clear(); state.intervalGenesHuman = null; state.intervalGenesCount = -1; state.intervalGenesBuildVersion = -1;
             ClearGeneCaches(animal.genes);
         }
 
         public static List<Gene> ReadGenes(Pawn_GeneTracker tracker, List<Gene> native, int kind)
         {
-            if (nativeGenesOnly != 0 || tracker?.pawn == null) return native;
-            State state;
-            if (!states.TryGetValue(tracker.pawn, out state) || state.releasing
-                || SharedFormIdentity.HumanFor(tracker.pawn) == null) return native;
-            if (!state.binding) Bind(tracker.pawn);
+            Pawn pawn = tracker?.pawn;
+            if (nativeGenesOnly != 0 || pawn == null || !TransformUtility.MightBeTransformed(pawn)) return native;
+            HediffComp_Transformed marker = TransformUtility.TryGetTransformedComp(pawn);
+            if (marker == null) return native;
+            State state = TryGetStateFast(pawn, marker);
+            if (state == null || state.releasing
+                || SharedFormIdentity.GetStoredHumanFromActiveBody(pawn, marker) == null) return native;
+            if (!state.binding) Bind(pawn);
             return kind == 1 ? state.xenogenes : kind == 2 ? state.endogenes : state.genes;
         }
 
@@ -267,12 +354,14 @@ namespace WildShift
         private static void ClearGeneCaches(Pawn_GeneTracker tracker)
         {
             if (tracker == null) return;
-            foreach (string name in new[] { "cachedDamageFactors", "cachedAddictionChanceFactors" })
-                (AccessTools.Field(typeof(Pawn_GeneTracker), name)?.GetValue(tracker) as IDictionary)?.Clear();
-            foreach (string name in new[] { "cachedEnabledNeeds", "cachedDisabledNeeds", "cachedGenesAffectAge", "cachedWaterCellCost" })
-                AccessTools.Field(typeof(Pawn_GeneTracker), name)?.SetValue(tracker, null);
-            AccessTools.Field(typeof(Pawn_GeneTracker), "hasCachedWaterCost")?.SetValue(tracker, false);
-            recacheGeneNeeds.Invoke(tracker, null);
+            (geneCachedDamageFactors?.GetValue(tracker) as IDictionary)?.Clear();
+            (geneCachedAddictionFactors?.GetValue(tracker) as IDictionary)?.Clear();
+            geneCachedEnabledNeeds?.SetValue(tracker, null);
+            geneCachedDisabledNeeds?.SetValue(tracker, null);
+            geneCachedGenesAffectAge?.SetValue(tracker, null);
+            geneCachedWaterCellCost?.SetValue(tracker, null);
+            geneHasCachedWaterCost?.SetValue(tracker, false);
+            recacheGeneNeeds(tracker);
         }
 
         public static bool SharesPersonalClock(Pawn animal)
@@ -280,43 +369,106 @@ namespace WildShift
             return SharesNeeds(animal) && animal.needs.mood != null;
         }
 
+        private static CallbackInfo GetCallbackInfo(Type type)
+        {
+            CallbackInfo info;
+            if (!nativeCallbacks.TryGetValue(type, out info))
+            {
+                MethodInfo tick = AccessTools.Method(type, "Tick");
+                MethodInfo tickInterval = AccessTools.Method(type, "TickInterval", new[] { typeof(int) });
+                info = new CallbackInfo
+                {
+                    allowTick = tick?.DeclaringType?.Assembly == typeof(Gene).Assembly,
+                    allowInterval = tickInterval?.DeclaringType?.Assembly == typeof(Gene).Assembly,
+                    overridesTick = tick != null && tick.DeclaringType != typeof(Gene),
+                    overridesInterval = tickInterval != null && tickInterval.DeclaringType != typeof(Gene)
+                };
+                nativeCallbacks[type] = info;
+            }
+            return info;
+        }
+
         public static bool CanRunCallback(Gene gene, bool interval)
         {
             if (gene?.def == null) return false;
             if (gene.def.GetModExtension<SharedFormGeneCallbacksExtension>() != null) return true;
-            Type type = gene.GetType();
-            bool[] allowed;
-            if (!nativeCallbacks.TryGetValue(type, out allowed))
-            {
-                MethodInfo tick = AccessTools.Method(type, "Tick");
-                MethodInfo tickInterval = AccessTools.Method(type, "TickInterval", new[] { typeof(int) });
-                allowed = new[] { tick?.DeclaringType?.Assembly == typeof(Gene).Assembly,
-                    tickInterval?.DeclaringType?.Assembly == typeof(Gene).Assembly };
-                nativeCallbacks[type] = allowed;
-            }
-            return allowed[interval ? 1 : 0];
+            CallbackInfo info = GetCallbackInfo(gene.GetType());
+            return interval ? info.allowInterval : info.allowTick;
         }
 
         public static void TickInterval(Pawn animal, int delta)
         {
-            State state;
-            if (animal == null || delta <= 0 || !states.TryGetValue(animal, out state)
-                || state.releasing || state.lastInterval == Find.TickManager?.TicksGame) return;
-            Bind(animal);
-            Pawn human = SharedFormIdentity.HumanFor(animal);
-            if (human == null) return;
-            state.lastInterval = Find.TickManager?.TicksGame ?? 0;
-            List<Gene> genes = human.genes?.GenesListForReading;
-            if (genes != null) for (int i = 0; i < genes.Count; i++)
+            TickIntervalForSource(animal, null, delta, null);
+        }
+
+        internal static void TickIntervalForSource(Pawn animal, Pawn validatedHuman, int delta, HediffComp_Transformed marker = null)
+        {
+            if (animal == null || delta <= 0) return;
+            if (marker == null)
             {
-                Gene gene = genes[i];
-                if (!gene.Active || !CanRunCallback(gene, true) || gene is Gene_Hemogen || gene is Gene_HemogenDrain || gene is Gene_ChemicalDependency) continue;
-                Pawn owner = gene.pawn;
-                try { gene.pawn = animal; gene.TickInterval(delta); }
-                finally { gene.pawn = owner; }
-                if (SharedFormIdentity.HumanFor(animal) != human) break;
+                if (!TransformUtility.MightBeTransformed(animal)) return;
+                marker = TransformUtility.TryGetTransformedComp(animal);
             }
-            if (SharedFormIdentity.HumanFor(animal) == human)
+            State state = TryGetStateFast(animal, marker);
+            if (state == null || state.releasing) return;
+            int now = Find.TickManager?.TicksGame ?? 0;
+            if (state.lastInterval == now) return;
+            Bind(animal);
+            Pawn human = validatedHuman ?? (marker != null ? SharedFormIdentity.GetStoredHumanFromActiveBody(animal, marker) : SharedFormIdentity.HumanFor(animal));
+            if (human == null) return;
+            state.lastInterval = now;
+            List<Gene> genes = human.genes?.GenesListForReading;
+            if (genes != null && genes.Count > 0)
+            {
+                // Plain Verse.Gene.TickInterval only runs mental-break MTB when
+                // mentalBreakMtbDays > 0 and mentalBreakDef != null. When
+                // unpatched, iterate only genes that override TickInterval or
+                // declare a mental-break MTB instead of every passive gene.
+                if (!IsBaseGeneIntervalPatched(now))
+                {
+                    if (state.intervalGenesHuman != human || state.intervalGenesCount != genes.Count
+                        || state.intervalGenesBuildVersion != state.geneBuildVersion)
+                    {
+                        state.intervalTickGenes.Clear();
+                        for (int i = 0; i < genes.Count; i++)
+                        {
+                            Gene gene = genes[i];
+                            if (gene?.def == null || gene is Gene_Hemogen || gene is Gene_HemogenDrain || gene is Gene_ChemicalDependency) continue;
+                            CallbackInfo info = GetCallbackInfo(gene.GetType());
+                            bool hasNativeBreak = gene.def.mentalBreakMtbDays > 0f && gene.def.mentalBreakDef != null;
+                            if (!info.overridesInterval && !hasNativeBreak) continue;
+                            if (info.allowInterval || gene.def.GetModExtension<SharedFormGeneCallbacksExtension>() != null)
+                                state.intervalTickGenes.Add(gene);
+                        }
+                        state.intervalGenesHuman = human;
+                        state.intervalGenesCount = genes.Count;
+                        state.intervalGenesBuildVersion = state.geneBuildVersion;
+                    }
+                    List<Gene> ticking = state.intervalTickGenes;
+                    for (int i = 0; i < ticking.Count; i++)
+                    {
+                        Gene gene = ticking[i];
+                        if (!gene.Active) continue;
+                        Pawn owner = gene.pawn;
+                        try { gene.pawn = animal; gene.TickInterval(delta); }
+                        finally { gene.pawn = owner; }
+                        if (SharedFormIdentity.HumanFor(animal) != human) break;
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < genes.Count; i++)
+                    {
+                        Gene gene = genes[i];
+                        if (!gene.Active || !CanRunCallback(gene, true) || gene is Gene_Hemogen || gene is Gene_HemogenDrain || gene is Gene_ChemicalDependency) continue;
+                        Pawn owner = gene.pawn;
+                        try { gene.pawn = animal; gene.TickInterval(delta); }
+                        finally { gene.pawn = owner; }
+                        if (SharedFormIdentity.HumanFor(animal) != human) break;
+                    }
+                }
+            }
+            if ((marker != null ? SharedFormIdentity.GetStoredHumanFromActiveBody(animal, marker) : SharedFormIdentity.HumanFor(animal)) == human)
                 human.ageTracker?.AgeTickInterval(delta);
             // Pawn.TickInterval already advances the borrowed interaction
             // tracker exactly once while spawned. Replaying it here doubled
@@ -326,14 +478,61 @@ namespace WildShift
 
         public static void Tick(Pawn animal)
         {
-            State state;
-            if (animal == null || !states.TryGetValue(animal, out state) || state.releasing) return;
+            TickForSource(animal, null, null);
+        }
+
+        internal static void TickForSource(Pawn animal, Pawn validatedHuman, HediffComp_Transformed marker = null)
+        {
+            if (animal == null) return;
+            if (marker == null)
+            {
+                if (!TransformUtility.MightBeTransformed(animal)) return;
+                marker = TransformUtility.TryGetTransformedComp(animal);
+            }
+            State state = TryGetStateFast(animal, marker);
+            if (state == null || state.releasing) return;
             int now = Find.TickManager?.TicksGame ?? 0;
             if (state.lastTick == now) return;
             state.lastTick = now;
-            Pawn human = SharedFormIdentity.HumanFor(animal);
+            Pawn human = validatedHuman ?? (marker != null ? SharedFormIdentity.GetStoredHumanFromActiveBody(animal, marker) : SharedFormIdentity.HumanFor(animal));
             List<Gene> genes = human?.genes?.GenesListForReading;
-            if (genes == null) return;
+            if (genes == null || genes.Count == 0) return;
+
+            // Plain Verse.Gene.Tick() is an empty ret. When unpatched, iterate
+            // only genes whose concrete type overrides Tick() instead of running
+            // 20-30 no-op try/finally + HumanFor pairs every single game tick.
+            if (!IsBaseGeneTickPatched(now))
+            {
+                if (state.tickGenesHuman != human || state.tickGenesCount != genes.Count
+                    || state.tickGenesBuildVersion != state.geneBuildVersion)
+                {
+                    state.overrideTickGenes.Clear();
+                    for (int i = 0; i < genes.Count; i++)
+                    {
+                        Gene gene = genes[i];
+                        if (gene?.def == null || gene is Gene_Hemogen || gene is Gene_HemogenDrain || gene is Gene_ChemicalDependency) continue;
+                        CallbackInfo info = GetCallbackInfo(gene.GetType());
+                        if (!info.overridesTick) continue;
+                        if (info.allowTick || gene.def.GetModExtension<SharedFormGeneCallbacksExtension>() != null)
+                            state.overrideTickGenes.Add(gene);
+                    }
+                    state.tickGenesHuman = human;
+                    state.tickGenesCount = genes.Count;
+                    state.tickGenesBuildVersion = state.geneBuildVersion;
+                }
+                List<Gene> ticking = state.overrideTickGenes;
+                for (int i = 0; i < ticking.Count; i++)
+                {
+                    Gene gene = ticking[i];
+                    if (!gene.Active) continue;
+                    Pawn owner = gene.pawn;
+                    try { gene.pawn = animal; gene.Tick(); }
+                    finally { gene.pawn = owner; }
+                    if (SharedFormIdentity.HumanFor(animal) != human) break;
+                }
+                return;
+            }
+
             for (int i = 0; i < genes.Count; i++)
             {
                 Gene gene = genes[i];
@@ -361,11 +560,10 @@ namespace WildShift
 
         internal static void RebindNeed(Need need, Pawn owner)
         {
-            FieldInfo ownerField = AccessTools.Field(need.GetType(), "pawn");
-            Pawn previous = ownerField?.GetValue(need) as Pawn;
+            Pawn previous = needPawnField(need);
             bool preserveLevel = previous != owner && (need is Need_Food || need is Need_Rest);
             float percentage = preserveLevel ? need.CurLevelPercentage : 0f;
-            RebindOwner(need, owner);
+            needPawnField(need) = owner;
             if (preserveLevel) need.CurLevelPercentage = percentage;
             Need_Mood mood = need as Need_Mood;
             if (mood == null) return;
@@ -385,7 +583,7 @@ namespace WildShift
             float percentage = -1f;
             if (Scribe.mode == LoadSaveMode.Saving)
             {
-                Pawn owner = AccessTools.Field(need.GetType(), "pawn")?.GetValue(need) as Pawn;
+                Pawn owner = needPawnField(need);
                 if (SharedFormIdentity.HumanFor(owner) != null) percentage = need.CurLevelPercentage;
             }
             Scribe_Values.Look(ref percentage, "wildShiftSharedLevelPercentage", -1f);
@@ -401,8 +599,58 @@ namespace WildShift
 
         internal static void SetNeeds(Pawn_NeedsTracker tracker, List<Need> needs)
         {
-            needList.SetValue(tracker, needs);
+            needList(tracker) = needs;
             tracker.BindDirectNeedFields();
+        }
+
+        internal static void SetNeedsPawn(Pawn_NeedsTracker tracker, Pawn pawn)
+        {
+            needsPawn(tracker) = pawn;
+        }
+
+        internal static float EvalBiologicalAgeFactor(Pawn animal, Pawn human)
+        {
+            float result = 1f;
+            HashSet<GeneDef> seen = null;
+            float humanAge = human.ageTracker.AgeBiologicalYearsFloat;
+            List<Gene> humanGenes = human.genes.GenesListForReading;
+            for (int i = 0; i < humanGenes.Count; i++)
+            {
+                Gene gene = humanGenes[i];
+                if (gene.def.biologicalAgeTickFactorFromAgeCurve == null || !gene.Active) continue;
+                if (seen == null) seen = new HashSet<GeneDef>();
+                if (seen.Add(gene.def))
+                    result *= gene.def.biologicalAgeTickFactorFromAgeCurve.Evaluate(humanAge);
+            }
+            if (animal.genes != null)
+            {
+                float animalAge = animal.ageTracker.AgeBiologicalYearsFloat;
+                List<Gene> xeno = geneXeno(animal.genes);
+                if (xeno != null)
+                {
+                    for (int i = 0; i < xeno.Count; i++)
+                    {
+                        Gene gene = xeno[i];
+                        if (gene.def.biologicalAgeTickFactorFromAgeCurve == null || !gene.Active) continue;
+                        if (seen == null) seen = new HashSet<GeneDef>();
+                        if (seen.Add(gene.def))
+                            result *= gene.def.biologicalAgeTickFactorFromAgeCurve.Evaluate(animalAge);
+                    }
+                }
+                List<Gene> endo = geneEndo(animal.genes);
+                if (endo != null)
+                {
+                    for (int i = 0; i < endo.Count; i++)
+                    {
+                        Gene gene = endo[i];
+                        if (gene.def.biologicalAgeTickFactorFromAgeCurve == null || !gene.Active) continue;
+                        if (seen == null) seen = new HashSet<GeneDef>();
+                        if (seen.Add(gene.def))
+                            result *= gene.def.biologicalAgeTickFactorFromAgeCurve.Evaluate(animalAge);
+                    }
+                }
+            }
+            return result;
         }
 
         public static void BeginNativeAppearance() { nativeGenesOnly++; }
@@ -439,7 +687,8 @@ namespace WildShift
         private readonly Pawn activeBody;
         private TraitSet bodyTraits;
         private readonly List<Trait> merged = new List<Trait>();
-        private static readonly MethodInfo recache = AccessTools.Method(typeof(TraitSet), "RecacheTraits");
+        private static readonly Action<TraitSet> recache
+            = AccessTools.MethodDelegate<Action<TraitSet>>(AccessTools.Method(typeof(TraitSet), "RecacheTraits"));
         public SharedPawnTraitSet(Pawn pawn) : this(pawn, null) { }
         public SharedPawnTraitSet(Pawn pawn, TraitSet previous) : base(pawn)
         {
@@ -463,7 +712,7 @@ namespace WildShift
                 if (!merged.Any(t => t.def == bodyTraits.allTraits[i].def)) merged.Add(bodyTraits.allTraits[i]);
             allTraits = merged;
         }
-        public void Recache() { recache.Invoke(this, null); }
+        public void Recache() { recache(this); }
         public new void ExposeData()
         {
             Scribe_Deep.Look(ref bodyTraits, "bodyTraits", activeBody);
@@ -483,7 +732,7 @@ namespace WildShift
         public SharedPawnNeedsTracker(Pawn pawn, Pawn_NeedsTracker previous) : base()
         {
             activeBody = pawn;
-            AccessTools.Field(typeof(Pawn_NeedsTracker), "pawn").SetValue(this, pawn);
+            SharedFormBiology.SetNeedsPawn(this, pawn);
             bodyNeeds = (previous as SharedPawnNeedsTracker)?.BodyNeeds ?? previous ?? new Pawn_NeedsTracker(pawn);
             Bind();
         }
@@ -671,14 +920,7 @@ namespace WildShift
         {
             Pawn human = SharedFormIdentity.HumanFor(__instance.pawn);
             if (human?.genes == null) return true;
-            __result = 1f;
-            HashSet<GeneDef> seen = new HashSet<GeneDef>();
-            foreach (Gene gene in human.genes.GenesListForReading)
-                if (gene.Active && seen.Add(gene.def) && gene.def.biologicalAgeTickFactorFromAgeCurve != null)
-                    __result *= gene.def.biologicalAgeTickFactorFromAgeCurve.Evaluate(human.ageTracker.AgeBiologicalYearsFloat);
-            foreach (Gene gene in SharedFormBiology.RawBodyGenesFor(__instance.pawn))
-                if (gene.Active && seen.Add(gene.def) && gene.def.biologicalAgeTickFactorFromAgeCurve != null)
-                    __result *= gene.def.biologicalAgeTickFactorFromAgeCurve.Evaluate(__instance.pawn.ageTracker.AgeBiologicalYearsFloat);
+            __result = SharedFormBiology.EvalBiologicalAgeFactor(__instance.pawn, human);
             return false;
         }
     }
@@ -689,6 +931,7 @@ namespace WildShift
         public static void Prefix(Gene __instance, out Pawn __state)
         {
             __state = null;
+            if (!TransformUtility.MightBeTransformed(__instance.pawn)) return;
             Pawn human = SharedFormIdentity.HumanFor(__instance.pawn);
             if (human?.genes == null) return;
             if (human.genes.GenesListForReading.Contains(__instance))
@@ -697,7 +940,6 @@ namespace WildShift
                 __instance.pawn = human;
             }
         }
-        public static void Postfix(Gene __instance, Pawn __state) { if (__state != null) __instance.pawn = __state; }
         public static Exception Finalizer(Gene __instance, Pawn __state, Exception __exception)
         { if (__state != null) __instance.pawn = __state; return __exception; }
     }
@@ -729,6 +971,7 @@ namespace WildShift
         public static IEnumerable<MethodBase> TargetMethods()
         {
             Type setup = AccessTools.TypeByName("Verse.DynamicPawnRenderNodeSetup_Genes");
+            if (setup == null) yield break;
             foreach (Type nested in setup.GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic))
             {
                 MethodInfo moveNext = AccessTools.Method(nested, "MoveNext");
@@ -747,13 +990,11 @@ namespace WildShift
         public static void Postfix(Pawn p, ref ThoughtState __result)
         {
             if (__result.Active || p?.MapHeld == null || (!p.IsPlayerControlled && !p.IsPrisonerOfColony)) return;
-            var pawns = p.MapHeld.mapPawns.AllPawnsSpawned;
-            for (int i = 0; i < pawns.Count; i++)
+            if (TransformUtility.AnySpawnedTransformedOn(p.MapHeld, other =>
+                other != p && SharedFormIdentity.HumanFor(other)?.IsFreeColonist == true
+                && other.story?.traits?.HasTrait(TraitDefOf.Joyous) == true && !other.HostileTo(p)))
             {
-                Pawn other = pawns[i];
-                if (other != p && SharedFormIdentity.HumanFor(other)?.IsFreeColonist == true
-                    && other.story?.traits?.HasTrait(TraitDefOf.Joyous) == true && !other.HostileTo(p))
-                { __result = ThoughtState.ActiveDefault; return; }
+                __result = ThoughtState.ActiveDefault;
             }
         }
     }

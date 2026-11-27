@@ -29,6 +29,7 @@ namespace WildShift
             public int lastPsychicInterval = int.MinValue, lastInspirationInterval = int.MinValue;
             public int lastMentalBreakInterval = int.MinValue, lastMentalStateInterval = int.MinValue;
             public int bodySaveDepth;
+            public bool released;
         }
 
         public sealed class SaveState
@@ -39,6 +40,27 @@ namespace WildShift
 
         private static readonly ConditionalWeakTable<Pawn, Binding> bindings = new ConditionalWeakTable<Pawn, Binding>();
         private static readonly ConditionalWeakTable<Pawn, System.WeakReference<Binding>> sources = new ConditionalWeakTable<Pawn, System.WeakReference<Binding>>();
+        private static readonly ConditionalWeakTable<Pawn, System.WeakReference<Binding>>.CreateValueCallback createSourceRef
+            = CreateSourceRef;
+        private static System.WeakReference<Binding> CreateSourceRef(Pawn ignored) { return new System.WeakReference<Binding>(null); }
+        private sealed class GearComps
+        {
+            public int compsCount;
+            public CompQuality quality;
+            public CompBladelinkWeapon bladelink;
+        }
+        private static readonly ConditionalWeakTable<Thing, GearComps> gearComps = new ConditionalWeakTable<Thing, GearComps>();
+        private static readonly ConditionalWeakTable<Thing, GearComps>.CreateValueCallback createGearComps = CreateGearComps;
+        private static GearComps CreateGearComps(Thing gear)
+        {
+            ThingWithComps withComps = gear as ThingWithComps;
+            return new GearComps
+            {
+                compsCount = withComps != null ? withComps.AllComps.Count : 0,
+                quality = gear.TryGetComp<CompQuality>(),
+                bladelink = gear.TryGetComp<CompBladelinkWeapon>()
+            };
+        }
         private static readonly List<System.WeakReference<Pawn>> activeBodies=new List<System.WeakReference<Pawn>>();
         private static readonly AccessTools.FieldRef<Pawn_PsychicEntropyTracker, Pawn> psychicPawn
             = AccessTools.FieldRefAccess<Pawn_PsychicEntropyTracker, Pawn>("pawn");
@@ -64,6 +86,12 @@ namespace WildShift
                 if(binding.bodyBreaker==human.mindState?.mentalBreaker)binding.bodyBreaker=previous?.bodyBreaker;
                 if(binding.bodyMentalState==human.mindState?.mentalStateHandler)binding.bodyMentalState=previous?.bodyMentalState;
                 bindings.Add(body, binding);
+                for (int i = activeBodies.Count - 1; i >= 0; i--)
+                {
+                    Pawn alive;
+                    if (!activeBodies[i].TryGetTarget(out alive) || alive == null || alive == body)
+                        activeBodies.RemoveAt(i);
+                }
                 activeBodies.Add(new System.WeakReference<Pawn>(body));
             }
             else if (binding.human != human)
@@ -90,8 +118,10 @@ namespace WildShift
             binding.sourceInspiration = human.mindState?.inspirationHandler;
             binding.sourceBreaker=human.mindState?.mentalBreaker;
             binding.sourceMentalState=human.mindState?.mentalStateHandler;
-            System.WeakReference<Binding> source=sources.GetValue(human,delegate(Pawn ignored){return new System.WeakReference<Binding>(null);});
+            System.WeakReference<Binding> source=sources.GetValue(human,createSourceRef);
             source.SetTarget(binding);
+            HediffComp_Transformed marker = TransformUtility.TryGetTransformedComp(body);
+            if (marker != null) marker.systemsBinding = binding;
             Bind(binding);
         }
 
@@ -141,7 +171,10 @@ namespace WildShift
             if (body.mindState != null) body.mindState.inspirationHandler = binding.bodyInspiration;
             if(body.mindState!=null)
             {body.mindState.mentalBreaker=binding.bodyBreaker;body.mindState.mentalStateHandler=binding.bodyMentalState;}
+            binding.released = true;
             bindings.Remove(body);
+            HediffComp_Transformed marker = TransformUtility.TryGetTransformedComp(body);
+            if (marker != null && ReferenceEquals(marker.systemsBinding, binding)) marker.systemsBinding = null;
             for(int i=activeBodies.Count-1;i>=0;i--)
             {Pawn item;if(!activeBodies[i].TryGetTarget(out item)||item==body)activeBodies.RemoveAt(i);}
         }
@@ -168,10 +201,38 @@ namespace WildShift
 
         public static void Tick(Pawn body, int delta)
         {
-            if (body == null || SharedFormIdentity.HumanFor(body) == null) return;
-            Initialize(body);
-            Binding binding;
-            if (!bindings.TryGetValue(body,out binding)) return;
+            TickForSource(body, SharedFormIdentity.HumanFor(body), delta);
+        }
+
+        internal static void TickForSource(Pawn body, Pawn human, int delta, HediffComp_Transformed marker = null)
+        {
+            if (body == null || human == null) return;
+            Binding binding = marker?.systemsBinding as Binding;
+            if (binding == null || binding.released || !ReferenceEquals(binding.body, body))
+                bindings.TryGetValue(body, out binding);
+            if (binding == null
+                || binding.human != human
+                || binding.sourcePsychic != human.psychicEntropy
+                || binding.sourceMechanitor != human.mechanitor
+                || binding.sourceInspiration != human.mindState?.inspirationHandler
+                || binding.sourceBreaker != human.mindState?.mentalBreaker
+                || binding.sourceMentalState != human.mindState?.mentalStateHandler
+                || (binding.sourcePsychic != null
+                    ? (body.psychicEntropy != binding.sourcePsychic || psychicPawn(binding.sourcePsychic) != body)
+                    : body.psychicEntropy != binding.bodyPsychic)
+                || body.mechanitor != (binding.sourceMechanitor ?? binding.bodyMechanitor)
+                || (body.mindState != null && (body.mindState.inspirationHandler != (binding.sourceInspiration ?? binding.bodyInspiration)
+                    || body.mindState.mentalBreaker != (binding.sourceBreaker ?? binding.bodyBreaker)
+                    || body.mindState.mentalStateHandler != (binding.sourceMentalState ?? binding.bodyMentalState)
+                    || (binding.sourceInspiration != null && (binding.sourceInspiration.pawn != body
+                        || (binding.sourceInspiration.CurState != null && binding.sourceInspiration.CurState.pawn != body)))
+                    || (binding.sourceBreaker != null && breakerPawn(binding.sourceBreaker) != body)
+                    || (binding.sourceMentalState != null && (mentalStatePawn(binding.sourceMentalState) != body
+                        || (binding.sourceMentalState.CurState != null && binding.sourceMentalState.CurState.pawn != body))))))
+            {
+                Initialize(body);
+                if (!bindings.TryGetValue(body, out binding)) return;
+            }
             int now = Find.TickManager != null ? Find.TickManager.TicksGame : 0;
             if (binding.lastInterval == now || delta <= 0) return;
             binding.lastInterval = now;
@@ -234,8 +295,8 @@ namespace WildShift
 
         public static bool CanTickPsychic(Pawn_PsychicEntropyTracker tracker)
         {
-            Binding binding;
-            if(tracker?.Pawn==null||!bindings.TryGetValue(tracker.Pawn,out binding)||binding.sourcePsychic!=tracker)return true;
+            Pawn body=tracker?.Pawn;Binding binding;
+            if(activeBodies.Count==0||!TransformUtility.MightBeTransformed(body)||!bindings.TryGetValue(body,out binding)||binding.sourcePsychic!=tracker)return true;
             int tick=Find.TickManager!=null?Find.TickManager.TicksGame:0;
             if(binding.lastPsychicInterval==tick)return false;
             binding.lastPsychicInterval=tick;return true;
@@ -243,8 +304,8 @@ namespace WildShift
 
         public static bool CanTickInspiration(InspirationHandler handler)
         {
-            Binding binding;
-            if(handler?.pawn==null||!bindings.TryGetValue(handler.pawn,out binding)||binding.sourceInspiration!=handler)return true;
+            Pawn body=handler?.pawn;Binding binding;
+            if(activeBodies.Count==0||!TransformUtility.MightBeTransformed(body)||!bindings.TryGetValue(body,out binding)||binding.sourceInspiration!=handler)return true;
             int tick=Find.TickManager!=null?Find.TickManager.TicksGame:0;
             if(binding.lastInspirationInterval==tick)return false;
             binding.lastInspirationInterval=tick;return true;
@@ -252,8 +313,9 @@ namespace WildShift
 
         public static bool CanTickMentalBreaker(MentalBreaker controller)
         {
-            Pawn body=controller!=null?breakerPawn(controller):null;Binding binding;
-            if(body==null||!bindings.TryGetValue(body,out binding)||binding.sourceBreaker!=controller)return true;
+            if(activeBodies.Count==0||controller==null)return true;
+            Pawn body=breakerPawn(controller);Binding binding;
+            if(!TransformUtility.MightBeTransformed(body)||!bindings.TryGetValue(body,out binding)||binding.sourceBreaker!=controller)return true;
             int tick=Find.TickManager!=null?Find.TickManager.TicksGame:0;
             if(binding.lastMentalBreakInterval==tick)return false;
             binding.lastMentalBreakInterval=tick;return true;
@@ -261,8 +323,9 @@ namespace WildShift
 
         public static bool CanTickMentalState(MentalStateHandler handler)
         {
-            Pawn body=handler!=null?mentalStatePawn(handler):null;Binding binding;
-            if(body==null||!bindings.TryGetValue(body,out binding)||binding.sourceMentalState!=handler)return true;
+            if(activeBodies.Count==0||handler==null)return true;
+            Pawn body=mentalStatePawn(handler);Binding binding;
+            if(!TransformUtility.MightBeTransformed(body)||!bindings.TryGetValue(body,out binding)||binding.sourceMentalState!=handler)return true;
             int tick=Find.TickManager!=null?Find.TickManager.TicksGame:0;
             if(binding.lastMentalStateInterval==tick)return false;
             binding.lastMentalStateInterval=tick;return true;
@@ -485,7 +548,7 @@ namespace WildShift
         }
 
         internal static int ModifierVersionForSource(Pawn body, Pawn human, out int projectedVersion,
-            bool includeNativeGear = true, PreceptSignature preceptSignature = null)
+            bool includeNativeGear = true, PreceptSignature preceptSignature = null, HediffComp_Transformed marker = null)
         {
             projectedVersion=0;
             if(human==null)return 0;
@@ -515,21 +578,31 @@ namespace WildShift
                     }
                 }
                 // Shared getters can refresh the full non-owning gear view.
-                // Read each list once, rather than once per loop test/item.
-                List<Apparel> sourceApparel=human.apparel?.WornApparel;
+                // Resolve apparel and primary weapon together in one refresh.
+                List<Apparel> sourceApparel=SharedFormGear.RawApparel(human);
+                ThingWithComps weapon=human.equipment?.Primary;
                 hash=hash*31+(sourceApparel?.Count??0);
                 projectedVersion=hash;
-                if(sourceApparel!=null&&sourceApparel.Count>0)
+                bool hasSourceApparel = sourceApparel != null && sourceApparel.Count > 0;
+                if (hasSourceApparel || weapon != null)
                 {
-                    List<Apparel> bodyApparel=body.apparel?.WornApparel;
-                    for(int i=0;i<sourceApparel.Count;i++)
+                    List<Apparel> bodyApparel;
+                    ThingWithComps bodyPrimary;
+                    SharedFormGear.GetVisibleGear(body, human, marker, out bodyApparel, out bodyPrimary);
+                    if (hasSourceApparel)
                     {
-                        Apparel gear=sourceApparel[i];
-                        HashGearVersions(ref hash,ref projectedVersion,gear,bodyApparel!=null&&bodyApparel.Contains(gear),includeNativeGear);
+                        for(int i=0;i<sourceApparel.Count;i++)
+                        {
+                            Apparel gear=sourceApparel[i];
+                            HashGearVersions(ref hash,ref projectedVersion,gear,bodyApparel!=null&&bodyApparel.Contains(gear),includeNativeGear);
+                        }
                     }
+                    HashGearVersions(ref hash,ref projectedVersion,weapon,weapon!=null&&bodyPrimary==weapon,includeNativeGear);
                 }
-                ThingWithComps weapon=human.equipment?.Primary;
-                HashGearVersions(ref hash,ref projectedVersion,weapon,weapon!=null&&body.equipment?.Primary==weapon,includeNativeGear);
+                else
+                {
+                    HashGearVersions(ref hash,ref projectedVersion,null,false,includeNativeGear);
+                }
                 return hash;
             }
         }
@@ -557,9 +630,23 @@ namespace WildShift
                 seed=Hash(seed,gear);
                 if(gear==null)return seed;
                 seed=Hash(seed,gear.Stuff);seed=seed*31+gear.HitPoints;
-                QualityCategory quality;if(gear.TryGetQuality(out quality))seed=seed*31+(int)quality;
-                CompBladelinkWeapon link=gear.TryGetComp<CompBladelinkWeapon>();
-                if(link!=null)for(int i=0;i<link.TraitsListForReading.Count;i++)seed=Hash(seed,link.TraitsListForReading[i]);
+                ThingWithComps withComps=gear as ThingWithComps;
+                int compsCount=withComps!=null?withComps.AllComps.Count:0;
+                if(compsCount==0)return seed;
+                GearComps comps;
+                if(!gearComps.TryGetValue(gear,out comps))comps=gearComps.GetValue(gear,createGearComps);
+                else if(comps.compsCount!=compsCount)
+                {
+                    comps.compsCount=compsCount;
+                    comps.quality=gear.TryGetComp<CompQuality>();
+                    comps.bladelink=gear.TryGetComp<CompBladelinkWeapon>();
+                }
+                if(comps.quality!=null)seed=seed*31+(int)comps.quality.Quality;
+                if(comps.bladelink!=null)
+                {
+                    List<WeaponTraitDef> traits=comps.bladelink.TraitsListForReading;
+                    for(int i=0;i<traits.Count;i++)seed=Hash(seed,traits[i]);
+                }
                 return seed;
             }
         }
@@ -653,7 +740,7 @@ namespace WildShift
     {
         public static IEnumerable<MethodBase> TargetMethods()
         {
-            Type type=AccessTools.TypeByName("MechanitorUtility");
+            Type type=typeof(global::MechanitorUtility);
             yield return AccessTools.Method(type,"IsMechanitor");
             yield return AccessTools.Method(type,"ShouldBeMechanitor");
         }

@@ -14,6 +14,7 @@ namespace WildShiftSharedStateValidation
         {
             Anatomy(map,check);
             Gear(map,check);
+            EquipmentAbilityDrop(map,check);
             Armor(map,check);
             PersonalThoughts(map,check);
         }
@@ -118,6 +119,10 @@ namespace WildShiftSharedStateValidation
                 &&shield.holdingOwner==apparelOwner&&rifle.holdingOwner==weaponOwner,"gear/return preserves original clothes and weapon instead of unloading borrowed views");
             check(shield.Wearer==human&&rifle.GetComp<CompEquippable>().PrimaryVerb.CasterPawn==human,"gear/return restores wearer and weapon caster to human");
             body=Shift(map,human);
+            check(body.apparel.WornApparel.Contains(shield)&&body.equipment.AllEquipmentListForReading.Contains(rifle)
+                &&body.equipment.Primary==rifle&&shield.Wearer==body
+                &&rifle.GetComp<CompEquippable>().PrimaryVerb.CasterPawn==body,
+                "gear/unchanged second transform on cached body restores apparel, equipment list, primary weapon, wearer and verb caster");
             Apparel dropped;
             Require(body.apparel.TryDrop(shield,out dropped,body.Position,false),"gear/active-body drop routes original item through canonical tracker",check);
             check(dropped==shield&&shield.Spawned&&!human.apparel.WornApparel.Contains(shield),
@@ -132,6 +137,44 @@ namespace WildShiftSharedStateValidation
             Pawn body=SharedFormIdentity.ActiveFormFor(human);
             if(body!=null)TransformUtility.RevertToHuman(body,false);
             if(!human.Destroyed)human.Destroy(DestroyMode.Vanish);
+        }
+        private static void EquipmentAbilityDrop(Map map, Action<bool, string> check)
+        {
+            Pawn human = Human(map, "SharedEquipmentAbilityDrop");
+            ThingWithComps rifle = (ThingWithComps)ThingMaker.MakeThing(DefDatabase<ThingDef>.GetNamed("Gun_HellcatRifle"));
+            try
+            {
+                human.equipment.AddEquipment(rifle);
+                Ability granted = rifle.GetComp<CompEquippableAbility>().AbilityForReading;
+                AbilityDef painblock = DefDatabase<AbilityDef>.GetNamed("Painblock");
+                human.abilities.GainAbility(painblock);
+                Ability retained = human.abilities.GetAbility(painblock);
+                Pawn body = Shift(map, human);
+                Require(human.abilities.AllAbilitiesForReading.Contains(granted)
+                    && body.abilities.AllAbilitiesForReading.Contains(granted)
+                    && body.abilities.AllAbilitiesForReading.Contains(retained),
+                    "gear/original and active ability caches contain the same native weapon ability before drop", check);
+
+                ThingWithComps dropped;
+                Require(body.equipment.TryDropEquipment(rifle, out dropped, body.Position),
+                    "gear/active-body equipment drop succeeds with a native ability-granting weapon", check);
+                check(dropped == rifle && rifle.Spawned && rifle.Map == map && human.equipment.Primary == null,
+                    "gear/native equipment drop places the exact original weapon on the map");
+                check(!human.abilities.AllAbilitiesForReading.Contains(granted)
+                    && !body.abilities.AllAbilitiesForReading.Contains(granted)
+                    && body.abilities.AllAbilitiesForReading.Contains(retained),
+                    "gear/weapon ability clears from both warmed lists in the same tick and an unrelated ability remains");
+                Require(TransformUtility.RevertToHuman(body, false) == human, "gear/return after ability weapon drop succeeds", check);
+                check(rifle.Spawned && human.equipment.Primary == null
+                    && human.abilities.AllAbilitiesForReading.Contains(retained)
+                    && !human.abilities.AllAbilitiesForReading.Contains(granted),
+                    "gear/return retains the original pawn and abilities with the exact weapon left on the map");
+            }
+            finally
+            {
+                Cleanup(human);
+                if (!rifle.Destroyed) rifle.Destroy(DestroyMode.Vanish);
+            }
         }
         private static void PersonalThoughts(Map map,Action<bool,string> check)
         {

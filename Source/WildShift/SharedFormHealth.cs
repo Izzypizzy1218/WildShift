@@ -17,11 +17,12 @@ namespace WildShift
 
         private sealed class Clock
         {
+            public Pawn ownerBody;
             public Pawn human;
             public int lastTick;
             public int lastInterval;
             public bool advancing;
-            public bool refreshing, invalidatingHealth;
+            public bool refreshing, invalidatingHealth, released;
             public bool dirty = true;
             public int generation;
             public readonly List<Hediff> sources = new List<Hediff>();
@@ -31,6 +32,51 @@ namespace WildShift
         }
 
         private static readonly ConditionalWeakTable<Pawn, Clock> clocks = new ConditionalWeakTable<Pawn, Clock>();
+        internal sealed class DirtyStamp { public int version; }
+        private static readonly ConditionalWeakTable<HediffSet, DirtyStamp> watchedHealthSets = new ConditionalWeakTable<HediffSet, DirtyStamp>();
+        private static readonly ConditionalWeakTable<HediffSet, DirtyStamp>.CreateValueCallback createDirtyStamp = CreateDirtyStamp;
+        private static DirtyStamp CreateDirtyStamp(HediffSet ignored) { return new DirtyStamp(); }
+
+        internal static DirtyStamp WatchHealthSet(HediffSet set)
+        {
+            return set == null ? null : watchedHealthSets.GetValue(set, createDirtyStamp);
+        }
+
+        internal static void BumpWatch(Pawn pawn)
+        {
+            HediffSet set = pawn?.health?.hediffSet;
+            DirtyStamp stamp;
+            if (set != null && watchedHealthSets.TryGetValue(set, out stamp)) stamp.version++;
+        }
+
+        private static Clock TryGetClockFast(Pawn animal)
+        {
+            HediffComp_Transformed comp = TransformUtility.TryGetTransformedComp(animal);
+            Clock clock = comp?.healthClock as Clock;
+            if (clock != null && !clock.released && ReferenceEquals(clock.ownerBody, animal)) return clock;
+            if (clocks.TryGetValue(animal, out clock))
+            {
+                if (comp != null) { clock.ownerBody = animal; comp.healthClock = clock; }
+                return clock;
+            }
+            return null;
+        }
+
+        internal static void NotifyHediffSetDirty(HediffSet set, Pawn pawn)
+        {
+            if (pawn == null) return;
+            if (pawn.holdingOwner?.Owner is HediffComp_Transformed)
+            {
+                MarkDirty(pawn);
+                DirtyStamp stamp;
+                if (set != null && watchedHealthSets.TryGetValue(set, out stamp)) stamp.version++;
+            }
+            else if (set != null && TransformUtility.MightBeTransformed(pawn))
+            {
+                DirtyStamp stamp;
+                if (watchedHealthSets.TryGetValue(set, out stamp)) stamp.version++;
+            }
+        }
         private sealed class PartMapping
         {
             public PartMapping() { }
@@ -46,12 +92,17 @@ namespace WildShift
 
         public static void Initialize(Pawn animal)
         {
-            Pawn human = SharedFormIdentity.HumanFor(animal);
+            HediffComp_Transformed comp = TransformUtility.TryGetTransformedComp(animal);
+            Pawn human = comp == null ? null : SharedFormIdentity.GetStoredHumanFromActiveBody(animal, comp);
             if (human == null) return;
             SharedFormLegacyDrugs.AdoptExisting(animal, human);
             SharedFormBuffs.AdoptExisting(animal, human);
+            Clock previous;
+            if (clocks.TryGetValue(animal, out previous)) previous.released = true;
             clocks.Remove(animal);
-            clocks.Add(animal, new Clock { human = human, lastTick = Now, lastInterval = Now });
+            Clock clock = new Clock { ownerBody = animal, human = human, lastTick = Now, lastInterval = Now };
+            clocks.Add(animal, clock);
+            comp.healthClock = clock;
             Refresh(animal);
         }
 
@@ -62,22 +113,27 @@ namespace WildShift
             // views must not retain source references which can expire on the
             // restored human before the next save. Remove the clock first so
             // cache queries during removal cannot recreate those views.
+            Clock previous;
+            if (clocks.TryGetValue(animal, out previous)) previous.released = true;
             clocks.Remove(animal);
+            HediffComp_Transformed comp = TransformUtility.TryGetTransformedComp(animal);
+            if (comp != null && comp.healthClock is Clock cached && ReferenceEquals(cached.ownerBody, animal))
+                comp.healthClock = null;
             List<Hediff> effects = animal.health?.hediffSet?.hediffs;
             if (effects == null) return;
             for (int i = effects.Count - 1; i >= 0; i--)
                 if (effects[i] is Hediff_SharedFormDrugEffect) animal.health.RemoveHediff(effects[i]);
         }
 
-        private static Clock GetClock(Pawn animal)
+        private static Clock GetClock(Pawn animal, Pawn validatedHuman = null)
         {
-            Pawn human = SharedFormIdentity.HumanFor(animal);
+            Pawn human = validatedHuman ?? SharedFormIdentity.HumanFor(animal);
             if (human == null) return null;
-            Clock clock;
-            if (!clocks.TryGetValue(animal, out clock) || clock.human != human)
+            Clock clock = TryGetClockFast(animal);
+            if (clock == null || clock.human != human)
             {
                 Initialize(animal);
-                clocks.TryGetValue(animal, out clock);
+                clock = TryGetClockFast(animal);
             }
             return clock;
         }
@@ -153,21 +209,23 @@ namespace WildShift
 
         public static void PrepareHealthFor(Pawn animal)
         {
-            Clock clock;
-            if (animal == null || !clocks.TryGetValue(animal, out clock) || !clock.dirty
-                || clock.refreshing || clock.invalidatingHealth) return;
+            if (!TransformUtility.MightBeTransformed(animal)) return;
+            Clock clock = TryGetClockFast(animal);
+            if (clock == null || !clock.dirty || clock.refreshing || clock.invalidatingHealth) return;
             Refresh(animal);
         }
 
         public static void Refresh(Pawn animal)
         {
-            Pawn human = SharedFormIdentity.HumanFor(animal);
+            HediffComp_Transformed comp = TransformUtility.TryGetTransformedComp(animal);
+            Pawn human = comp == null ? null : SharedFormIdentity.GetStoredHumanFromActiveBody(animal, comp);
             if (human == null || animal.health == null || human.health == null) return;
-            Clock clock;
-            if (!clocks.TryGetValue(animal, out clock))
+            Clock clock = TryGetClockFast(animal);
+            if (clock == null)
             {
-                clock = new Clock { human = human, lastTick = Now, lastInterval = Now };
+                clock = new Clock { ownerBody = animal, human = human, lastTick = Now, lastInterval = Now };
                 clocks.Add(animal, clock);
+                comp.healthClock = clock;
             }
             if (clock.refreshing) return;
             clock.refreshing = true;
@@ -225,11 +283,18 @@ namespace WildShift
 
         public static void Tick(Pawn animal)
         {
-            Clock clock = GetClock(animal);
-            if (clock == null || clock.advancing || clock.lastTick >= Now) return;
-            clock.lastTick = Now;
+            TickForSource(animal, SharedFormIdentity.HumanFor(animal));
+        }
+
+        internal static bool TickForSource(Pawn animal, Pawn human)
+        {
+            Clock clock = GetClock(animal, human);
+            if (clock == null) return false;
+            int now = Now;
+            if (clock.advancing || clock.lastTick >= now) return true;
+            clock.lastTick = now;
             if (clock.dirty) Refresh(animal);
-            if (!clock.dirty && clock.sources.Count == 0) return;
+            if (!clock.dirty && clock.sources.Count == 0) return true;
             clock.advancing = true;
             clock.ticking.Clear();
             clock.ticking.AddRange(clock.sources);
@@ -254,19 +319,32 @@ namespace WildShift
                 ExitSource();
                 clock.advancing = false;
             }
-            if (clock.dirty && OriginalStillStored(animal, clock)) Refresh(animal);
+            bool stillStored = OriginalStillStored(animal, clock);
+            if (clock.dirty && stillStored)
+            {
+                Refresh(animal);
+                stillStored = OriginalStillStored(animal, clock);
+            }
+            return stillStored;
         }
 
         public static void TickInterval(Pawn animal, int delta)
         {
-            Clock clock = GetClock(animal);
-            if (clock == null || clock.advancing || clock.lastInterval >= Now || delta <= 0) return;
-            int elapsed = Math.Min(delta, Now - clock.lastInterval);
-            clock.lastInterval = Now;
+            TickIntervalForSource(animal, SharedFormIdentity.HumanFor(animal), delta);
+        }
+
+        internal static bool TickIntervalForSource(Pawn animal, Pawn human, int delta)
+        {
+            Clock clock = GetClock(animal, human);
+            if (clock == null) return false;
+            int now = Now;
+            if (clock.advancing || clock.lastInterval >= now || delta <= 0) return true;
+            int elapsed = Math.Min(delta, now - clock.lastInterval);
+            clock.lastInterval = now;
             if (clock.dirty) Refresh(animal);
             if (!clock.dirty && clock.sources.Count == 0
                 && (clock.human.needs == null || !clock.human.IsHashIntervalTick(150, elapsed)
-                    || SharedFormBiology.SharesNeeds(animal))) return;
+                    || SharedFormBiology.SharesNeeds(animal))) return true;
             clock.advancing = true;
             clock.ticking.Clear();
             clock.ticking.AddRange(clock.sources);
@@ -316,7 +394,13 @@ namespace WildShift
                 ExitSource();
                 clock.advancing = false;
             }
-            if (clock.dirty && OriginalStillStored(animal, clock)) Refresh(animal);
+            bool stillStored = OriginalStillStored(animal, clock);
+            if (clock.dirty && stillStored)
+            {
+                Refresh(animal);
+                stillStored = OriginalStillStored(animal, clock);
+            }
+            return stillStored;
         }
 
         internal static void EnterSource(Pawn animal)
@@ -420,10 +504,18 @@ namespace WildShift
 
         public static void PrepareStatWorker(StatWorker worker, Thing thing)
         {
+            PrepareStatWorker(worker, thing, null, null);
+        }
+
+        internal static void PrepareStatWorker(StatWorker worker, Thing thing, StatDef stat,
+            Dictionary<Thing, StatCacheEntry> temporaryStatCache)
+        {
             Pawn animal = thing as Pawn;
-            Clock clock;
-            if (animal == null || !clocks.TryGetValue(animal, out clock)) return;
+            if (!TransformUtility.MightBeTransformed(animal)) return;
+            Clock clock = TryGetClockFast(animal);
+            if (clock == null) return;
             if (clock.dirty) Refresh(animal);
+            if (stat != null && !stat.immutable && temporaryStatCache == null) return;
             int previous;
             if (!clock.statGenerations.TryGetValue(worker, out previous) || previous != clock.generation)
             {
@@ -452,7 +544,11 @@ namespace WildShift
             Clock clock;
             if (animal == null || !clocks.TryGetValue(animal, out clock)) return false;
             for (int i = 0; i < clock.sources.Count; i++)
-                if (ReadOnBody(clock.sources[i], animal, delegate { return clock.sources[i].CauseDeathNow(); })) return true;
+            {
+                Hediff source = clock.sources[i];
+                using (new BodyScope(source, animal))
+                    if (source.CauseDeathNow()) return true;
+            }
             return false;
         }
 
@@ -561,9 +657,9 @@ namespace WildShift
         public static bool Prefix(Pawn ___pawn)
         {
             if (SharedFormHealth.IsStoredOriginal(___pawn)) return false;
-            bool transformed = SharedFormIdentity.HumanFor(___pawn) != null;
-            if (transformed) SharedFormHealth.Tick(___pawn);
-            return !transformed || SharedFormIdentity.HumanFor(___pawn) != null;
+            Pawn human = SharedFormIdentity.HumanFor(___pawn);
+            if (human == null) return true;
+            return SharedFormHealth.TickForSource(___pawn, human);
         }
     }
 
@@ -573,16 +669,19 @@ namespace WildShift
         public static bool Prefix(Pawn ___pawn, int delta)
         {
             if (SharedFormHealth.IsStoredOriginal(___pawn)) return false;
-            bool transformed = SharedFormIdentity.HumanFor(___pawn) != null;
-            if (transformed) SharedFormHealth.TickInterval(___pawn, delta);
-            return !transformed || SharedFormIdentity.HumanFor(___pawn) != null;
+            Pawn human = SharedFormIdentity.HumanFor(___pawn);
+            if (human == null) return true;
+            return SharedFormHealth.TickIntervalForSource(___pawn, human, delta);
         }
     }
 
     [HarmonyPatch(typeof(HediffSet), "DirtyCache")]
     public static class Patch_SharedDrugChanged
     {
-        public static void Postfix(Pawn ___pawn) { SharedFormHealth.MarkDirty(___pawn); }
+        public static void Postfix(HediffSet __instance, Pawn ___pawn)
+        {
+            SharedFormHealth.NotifyHediffSetDirty(__instance, ___pawn);
+        }
     }
 
     [HarmonyPatch(typeof(Need), "get_IsPawnInteractableOrVisible")]
@@ -671,9 +770,10 @@ namespace WildShift
     [HarmonyPatch(typeof(StatWorker), "GetValue", new[] { typeof(Thing), typeof(bool), typeof(int) })]
     public static class Patch_SharedDrugStatCache
     {
-        public static void Prefix(StatWorker __instance, Thing thing)
+        public static void Prefix(StatWorker __instance, Thing thing, StatDef ___stat,
+            Dictionary<Thing, StatCacheEntry> ___temporaryStatCache)
         {
-            SharedFormHealth.PrepareStatWorker(__instance, thing);
+            SharedFormHealth.PrepareStatWorker(__instance, thing, ___stat, ___temporaryStatCache);
         }
     }
 

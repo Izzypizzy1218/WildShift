@@ -24,7 +24,14 @@ namespace WildShift
         private sealed class ResourceClock { public int lastTick; public Gene_Hemogen source; }
         private static readonly ConditionalWeakTable<Ability, Binding> bindings = new ConditionalWeakTable<Ability, Binding>();
         private static readonly ConditionalWeakTable<Pawn, ResourceClock> resourceClocks = new ConditionalWeakTable<Pawn, ResourceClock>();
-        private static readonly FieldInfo cachedGizmo = AccessTools.Field(typeof(Ability), "gizmo");
+        private static readonly ConditionalWeakTable<Ability, Binding>.CreateValueCallback createBinding = CreateBinding;
+        private static readonly ConditionalWeakTable<Pawn, ResourceClock>.CreateValueCallback createResourceClock = CreateResourceClock;
+        private static readonly AccessTools.FieldRef<Ability, Command> cachedGizmo
+            = AccessTools.FieldRefAccess<Ability, Command>("gizmo");
+        private static volatile int boundAbilityCount;
+
+        private static Binding CreateBinding(Ability ignored) { return new Binding(); }
+        private static ResourceClock CreateResourceClock(Pawn ignored) { return new ResourceClock(); }
 
         internal static int Now { get { return Find.TickManager != null ? Find.TickManager.TicksGame : 0; } }
 
@@ -54,16 +61,30 @@ namespace WildShift
 
         public static bool IsSupported(Ability ability)
         {
+            bool ignored;
+            return InspectAbility(ability, out ignored);
+        }
+
+        internal static bool InspectAbility(Ability ability, out bool needsHemogen)
+        {
+            needsHemogen = false;
             if (ability == null || ability.def == null || ability.GetType().Assembly != typeof(Ability).Assembly) return false;
             AbilityDef def = ability.def;
             if (def.gizmoClass != null && def.gizmoClass.Assembly != typeof(Command_Ability).Assembly) return false;
             Type verb = def.verbProperties != null ? def.verbProperties.verbClass : null;
             if (verb == null || !typeof(Verb).IsAssignableFrom(verb) || verb.Assembly != typeof(Ability).Assembly) return false;
             // A failed or newly injected custom comp must not bypass the gate.
-            int actual = ability.comps != null ? ability.comps.Count : 0;
+            List<AbilityComp> comps = ability.comps;
+            int actual = comps != null ? comps.Count : 0;
             if (actual != (def.comps != null ? def.comps.Count : 0)) return false;
+            Assembly vanilla = typeof(Ability).Assembly;
             for (int i = 0; i < actual; i++)
-                if (ability.comps[i] == null || ability.comps[i].GetType().Assembly != typeof(Ability).Assembly) return false;
+            {
+                AbilityComp comp = comps[i];
+                if (comp == null || comp.GetType().Assembly != vanilla) return false;
+                if (!needsHemogen && (comp is CompAbilityEffect_HemogenCost || comp is CompAbilityEffect_BloodfeederBite))
+                    needsHemogen = true;
+            }
             return true;
         }
 
@@ -75,9 +96,21 @@ namespace WildShift
                 ? binding.human : null;
         }
 
+        internal static bool IsBorrowedBy(Ability ability, Pawn body, Pawn human)
+        {
+            Binding binding;
+            return ability != null && ability.pawn == body && bindings.TryGetValue(ability, out binding)
+                && binding.body == body && binding.human == human;
+        }
+
         internal static void BindAbility(Ability ability, Pawn human, Pawn body)
         {
-            Binding binding = bindings.GetValue(ability, delegate(Ability ignored) { return new Binding(); });
+            Binding binding;
+            if (!bindings.TryGetValue(ability, out binding))
+            {
+                binding = bindings.GetValue(ability, createBinding);
+                boundAbilityCount++;
+            }
             binding.human = human;
             binding.body = body;
             SetCaster(ability, body);
@@ -90,7 +123,7 @@ namespace WildShift
             List<Verb> verbs = ability.VerbTracker.AllVerbs;
             for (int i = 0; i < verbs.Count; i++) verbs[i].caster = body;
             // Native Command_Ability captures its Pawn in the constructor.
-            if (changed && cachedGizmo != null) cachedGizmo.SetValue(ability, null);
+            if (changed) cachedGizmo(ability) = null;
         }
 
         internal static void UnbindAbility(Ability ability, Pawn body)
@@ -104,26 +137,40 @@ namespace WildShift
                     body.jobs.EndCurrentJob(JobCondition.InterruptForced);
             }
             SetCaster(ability, binding.human);
-            bindings.Remove(ability);
+            if (bindings.Remove(ability) && boundAbilityCount > 0) boundAbilityCount--;
         }
 
         internal static bool CanTick(Ability ability)
         {
+            if (boundAbilityCount == 0 || ability == null) return true;
             Binding binding;
-            if (!bindings.TryGetValue(ability, out binding) || HumanFor(ability) == null) return true;
-            if (binding.lastTick == Now) return false;
-            binding.lastTick = Now;
+            if (!bindings.TryGetValue(ability, out binding)) return true;
+            if (binding.body != ability.pawn || SharedFormIdentity.HumanFor(binding.body) != binding.human) return true;
+            int now = Now;
+            if (binding.lastTick == now) return false;
+            binding.lastTick = now;
             return true;
         }
 
         public static Gene_Hemogen HemogenFor(Pawn human)
         {
+            if (!ModLister.BiotechInstalled) return null;
             Pawn_GeneTracker genes = human?.genes;
             if (genes == null) return null;
-            Gene_Hemogen gene = genes.GetFirstGeneOfType<Gene_Hemogen>();
-            if (gene == null || gene.GetType() != typeof(Gene_Hemogen) || !gene.Active) return null;
-            Gene_HemogenDrain drain = genes.GetFirstGeneOfType<Gene_HemogenDrain>();
-            return (drain == null || drain.GetType() == typeof(Gene_HemogenDrain)) ? gene : null;
+            List<Gene> list = genes.GenesListForReading;
+            if (list == null || list.Count == 0) return null;
+            Gene_Hemogen hemogen = null;
+            Gene_HemogenDrain drain = null;
+            for (int i = 0; i < list.Count; i++)
+            {
+                Gene g = list[i];
+                if (g == null || !g.Active) continue;
+                if (hemogen == null && g is Gene_Hemogen h) hemogen = h;
+                if (drain == null && g is Gene_HemogenDrain d) drain = d;
+                if (hemogen != null && drain != null) break;
+            }
+            if (hemogen == null || hemogen.GetType() != typeof(Gene_Hemogen)) return null;
+            return (drain == null || drain.GetType() == typeof(Gene_HemogenDrain)) ? hemogen : null;
         }
 
         public static void MarkDirty(Pawn human)
@@ -140,11 +187,23 @@ namespace WildShift
             // their original native provider. Only gene-owned permanent entries
             // need the additional suppression check used by the old bridge.
             if (!human.abilities.abilities.Contains(ability) || human.genes == null) return true;
+            return IsActiveGeneOrNonGeneAbility(ability, human);
+        }
+
+        internal static bool HasActiveSourceForRefresh(Ability ability, Pawn human, HashSet<Ability> permanentAbilities)
+        {
+            if (human.genes == null || !permanentAbilities.Contains(ability)) return true;
+            return IsActiveGeneOrNonGeneAbility(ability, human);
+        }
+
+        private static bool IsActiveGeneOrNonGeneAbility(Ability ability, Pawn human)
+        {
             List<Gene> genes = human.genes.GenesListForReading;
             bool geneGranted = false;
             for (int i = 0; i < genes.Count; i++)
             {
-                if (genes[i].def.abilities == null || !genes[i].def.abilities.Contains(ability.def)) continue;
+                List<AbilityDef> granted = genes[i].def.abilities;
+                if (granted == null || !granted.Contains(ability.def)) continue;
                 geneGranted = true;
                 if (genes[i].Active) return true;
             }
@@ -180,7 +239,7 @@ namespace WildShift
 
         private static ResourceClock ClockFor(Pawn human, Gene_Hemogen resource)
         {
-            ResourceClock clock = resourceClocks.GetValue(human, delegate(Pawn ignored) { return new ResourceClock(); });
+            ResourceClock clock = resourceClocks.GetValue(human, createResourceClock);
             if (clock.source != resource) { clock.source = resource; clock.lastTick = Now; }
             return clock;
         }
@@ -217,11 +276,23 @@ namespace WildShift
         private Pawn sourceHuman;
         private readonly List<Ability> borrowed = new List<Ability>();
         private readonly List<Ability> next = new List<Ability>();
+        private readonly HashSet<Ability> nextSet = new HashSet<Ability>();
+        private readonly HashSet<Ability> permanentSet = new HashSet<Ability>();
         private readonly List<Ability> merged = new List<Ability>();
         private readonly List<Ability> nativeSnapshot = new List<Ability>();
+        private readonly List<Ability> lastSourceAbilities = new List<Ability>();
+        private readonly List<AbilityDef> lastSourceAbilityDefs = new List<AbilityDef>();
+        private readonly List<bool> lastSourceSupported = new List<bool>();
+        private readonly List<bool> lastSourceNeedsHemogen = new List<bool>();
+        private readonly List<Ability> lastPermanentAbilities = new List<Ability>();
+        private readonly List<Gene> lastSourceGenes = new List<Gene>();
+        private readonly List<GeneDef> lastSourceGeneDefs = new List<GeneDef>();
+        private readonly List<bool> lastSourceGeneActive = new List<bool>();
         private readonly HashSet<AbilityDef> sourceDefs = new HashSet<AbilityDef>();
         private int refreshedTick = int.MinValue;
         private bool refreshing;
+        private bool lastBiotechInstalled;
+        private bool sourceDirty = true;
         private bool mergeDirty = true;
 
         public SharedPawnAbilityTracker(Pawn pawn) : this(pawn, null) { }
@@ -245,41 +316,163 @@ namespace WildShift
 
         public bool IsForBody(Pawn pawn) { return activeBody == pawn; }
 
-        public void Bind() { refreshedTick = int.MinValue; Refresh(); }
-        internal void Invalidate() { refreshedTick = int.MinValue; }
+        public void Bind() { refreshedTick = int.MinValue; sourceDirty = true; Refresh(); }
+        internal void Invalidate() { refreshedTick = int.MinValue; sourceDirty = true; }
+
+        private static bool SameAbilities(List<Ability> saved, List<Ability> actual)
+        {
+            int count = actual != null ? actual.Count : 0;
+            if (saved.Count != count) return false;
+            for (int i = 0; i < count; i++)
+                if (!ReferenceEquals(saved[i], actual[i])) return false;
+            return true;
+        }
+
+        private bool SameSourceAbilities(List<Ability> actual)
+        {
+            int count = actual != null ? actual.Count : 0;
+            if (lastSourceAbilities.Count != count) return false;
+            for (int i = 0; i < count; i++)
+            {
+                Ability ab = actual[i];
+                if (!ReferenceEquals(lastSourceAbilities[i], ab)) return false;
+                if (!ReferenceEquals(lastSourceAbilityDefs[i], ab?.def)) return false;
+                bool needsHemogen;
+                bool supported = SharedFormAbilities.InspectAbility(ab, out needsHemogen);
+                if (supported != lastSourceSupported[i] || (supported && needsHemogen != lastSourceNeedsHemogen[i]))
+                    return false;
+            }
+            return true;
+        }
+
+        private bool SameGenes(List<Gene> actual)
+        {
+            int count = actual != null ? actual.Count : 0;
+            if (lastSourceGenes.Count != count) return false;
+            for (int i = 0; i < count; i++)
+            {
+                Gene g = actual[i];
+                if (!ReferenceEquals(lastSourceGenes[i], g)
+                    || !ReferenceEquals(lastSourceGeneDefs[i], g?.def)
+                    || (g != null && g.Active) != lastSourceGeneActive[i])
+                    return false;
+            }
+            return true;
+        }
+
+        private bool AllBorrowedBound(Pawn human)
+        {
+            for (int i = 0; i < borrowed.Count; i++)
+            {
+                Ability ab = borrowed[i];
+                if (!SharedFormAbilities.IsBorrowedBy(ab, activeBody, human)) return false;
+                List<Verb> verbs = ab.VerbTracker?.AllVerbs;
+                if (verbs != null)
+                {
+                    for (int j = 0; j < verbs.Count; j++)
+                        if (verbs[j].caster != activeBody) return false;
+                }
+            }
+            return true;
+        }
+
+        private void CaptureSourceSnapshot(List<Ability> allAbilities, List<Ability> permAbilities, List<Gene> genes)
+        {
+            lastBiotechInstalled = ModLister.BiotechInstalled;
+            lastSourceAbilities.Clear();
+            lastSourceAbilityDefs.Clear();
+            lastSourceSupported.Clear();
+            lastSourceNeedsHemogen.Clear();
+            if (allAbilities != null)
+            {
+                for (int i = 0; i < allAbilities.Count; i++)
+                {
+                    Ability ab = allAbilities[i];
+                    bool needsHemogen;
+                    bool supported = SharedFormAbilities.InspectAbility(ab, out needsHemogen);
+                    lastSourceAbilities.Add(ab);
+                    lastSourceAbilityDefs.Add(ab?.def);
+                    lastSourceSupported.Add(supported);
+                    lastSourceNeedsHemogen.Add(needsHemogen);
+                }
+            }
+            lastPermanentAbilities.Clear();
+            if (permAbilities != null) lastPermanentAbilities.AddRange(permAbilities);
+            lastSourceGenes.Clear();
+            lastSourceGeneDefs.Clear();
+            lastSourceGeneActive.Clear();
+            if (genes != null)
+            {
+                for (int i = 0; i < genes.Count; i++)
+                {
+                    Gene g = genes[i];
+                    lastSourceGenes.Add(g);
+                    lastSourceGeneDefs.Add(g?.def);
+                    lastSourceGeneActive.Add(g != null && g.Active);
+                }
+            }
+        }
 
         private void Refresh()
         {
-            if (refreshing || refreshedTick == SharedFormAbilities.Now) return;
+            int now = SharedFormAbilities.Now;
+            if (refreshing || (!sourceDirty && refreshedTick == now)) return;
             refreshing = true;
             try
             {
                 Pawn human = SharedFormIdentity.HumanFor(activeBody);
-                next.Clear();
-                sourceDefs.Clear();
-                if (human != null && human.abilities != null)
+                List<Ability> sources = human?.abilities?.AllAbilitiesForReading;
+                List<Ability> perms = human?.abilities?.abilities;
+                List<Gene> genes = human?.genes?.GenesListForReading;
+                if (!sourceDirty && sourceHuman == human
+                    && lastBiotechInstalled == ModLister.BiotechInstalled
+                    && SameSourceAbilities(sources)
+                    && SameAbilities(lastPermanentAbilities, perms)
+                    && SameGenes(genes)
+                    && AllBorrowedBound(human))
                 {
-                    List<Ability> sources = human.abilities.AllAbilitiesForReading;
+                    refreshedTick = now;
+                    return;
+                }
+
+                next.Clear();
+                nextSet.Clear();
+                sourceDefs.Clear();
+                if (human != null && sources != null)
+                {
+                    permanentSet.Clear();
+                    if (perms != null)
+                        for (int i = 0; i < perms.Count; i++) permanentSet.Add(perms[i]);
+                    bool hemogenResolved = false;
+                    Gene_Hemogen hemogen = null;
                     for (int i = 0; i < sources.Count; i++)
                     {
                         Ability ability = sources[i];
+                        bool needsHemogen;
                         if (ability?.def == null || sourceDefs.Contains(ability.def)
-                            || !SharedFormAbilities.IsSupported(ability) || !SharedFormAbilities.HasActiveSource(ability,human)) continue;
-                        bool needsHemogen = ability.CompOfType<CompAbilityEffect_HemogenCost>() != null
-                            || ability.CompOfType<CompAbilityEffect_BloodfeederBite>() != null;
-                        if (needsHemogen && SharedFormAbilities.HemogenFor(human) == null) continue;
+                            || !SharedFormAbilities.InspectAbility(ability, out needsHemogen)
+                            || !SharedFormAbilities.HasActiveSourceForRefresh(ability, human, permanentSet)) continue;
+                        if (needsHemogen)
+                        {
+                            if (!hemogenResolved) { hemogen = SharedFormAbilities.HemogenFor(human); hemogenResolved = true; }
+                            if (hemogen == null) continue;
+                        }
                         sourceDefs.Add(ability.def);
                         next.Add(ability);
+                        nextSet.Add(ability);
                     }
                 }
                 for (int i = 0; i < borrowed.Count; i++)
-                    if (!next.Contains(borrowed[i])) SharedFormAbilities.UnbindAbility(borrowed[i], activeBody);
+                    if (!nextSet.Contains(borrowed[i])) SharedFormAbilities.UnbindAbility(borrowed[i], activeBody);
                 bool changed = borrowed.Count != next.Count;
                 for (int i = 0; i < borrowed.Count && !changed; i++) changed = borrowed[i] != next[i];
                 if (changed) { borrowed.Clear(); borrowed.AddRange(next); mergeDirty = true; }
                 sourceHuman = human;
-                for (int i = 0; i < borrowed.Count; i++) SharedFormAbilities.BindAbility(borrowed[i], human, activeBody);
-                refreshedTick = SharedFormAbilities.Now;
+                for (int i = 0; i < borrowed.Count; i++)
+                    SharedFormAbilities.BindAbility(borrowed[i], human, activeBody);
+                CaptureSourceSnapshot(sources, perms, genes);
+                sourceDirty = false;
+                refreshedTick = now;
             }
             finally { refreshing = false; }
         }
@@ -321,9 +514,16 @@ namespace WildShift
         {
             for (int i = 0; i < borrowed.Count; i++) SharedFormAbilities.UnbindAbility(borrowed[i], activeBody);
             SharedFormAbilities.ResetResourceClock(sourceHuman);
-            borrowed.Clear(); next.Clear(); merged.Clear(); nativeSnapshot.Clear(); sourceDefs.Clear();
+            borrowed.Clear(); next.Clear(); nextSet.Clear(); permanentSet.Clear();
+            merged.Clear(); nativeSnapshot.Clear(); sourceDefs.Clear();
+            lastSourceAbilities.Clear(); lastSourceAbilityDefs.Clear();
+            lastSourceSupported.Clear(); lastSourceNeedsHemogen.Clear();
+            lastPermanentAbilities.Clear();
+            lastSourceGenes.Clear(); lastSourceGeneDefs.Clear(); lastSourceGeneActive.Clear();
+            lastBiotechInstalled = false;
             sourceHuman = null;
             refreshedTick = int.MinValue;
+            sourceDirty = true;
             mergeDirty = true;
             Notify_TemporaryAbilitiesChanged();
         }
@@ -336,7 +536,7 @@ namespace WildShift
             if (bodyAbilities == null || bodyAbilities is SharedPawnAbilityTracker)
                 bodyAbilities = new Pawn_AbilityTracker(activeBody);
             abilities = bodyAbilities.abilities;
-            if (Scribe.mode == LoadSaveMode.PostLoadInit) { refreshedTick = int.MinValue; mergeDirty = true; }
+            if (Scribe.mode == LoadSaveMode.PostLoadInit) { refreshedTick = int.MinValue; sourceDirty = true; mergeDirty = true; }
         }
     }
 

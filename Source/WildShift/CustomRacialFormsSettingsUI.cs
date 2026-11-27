@@ -140,10 +140,14 @@ namespace WildShift
             Widgets.BeginScrollView(listRect, ref scroll, view);
             if (settings.customRacialForms.Count == 0)
                 Widgets.Label(new Rect(8f, 12f, view.width - 16f, 70f), "WildShift_CustomFormsEmpty".Translate());
+            float minY = scroll.y - RuleHeight;
+            float maxY = scroll.y + listRect.height + RuleHeight;
             for (int i = 0; i < settings.customRacialForms.Count; i++)
             {
+                float y = i * RuleHeight;
+                if (y + RuleHeight < minY || y > maxY) continue;
                 CustomRacialFormRule rule = settings.customRacialForms[i];
-                Rect row = new Rect(0f, i * RuleHeight, view.width, RuleHeight - 8f);
+                Rect row = new Rect(0f, y, view.width, RuleHeight - 8f);
                 if ((i & 1) == 0) Widgets.DrawBoxSolid(row, new Color(1f, 1f, 1f, 0.035f));
                 string target = "WildShift_CustomFormsTarget".Translate(
                     (rule.xenotype ? "WildShift_CustomFormsXenotype" : "WildShift_CustomFormsRace").Translate(),
@@ -268,9 +272,13 @@ namespace WildShift
             Rect view = new Rect(0f, 0f, listRect.width - 18f, Mathf.Max(listRect.height, filtered.Count * 34f));
             Widgets.BeginScrollView(listRect, ref scroll, view);
             if (filtered.Count == 0) Widgets.Label(new Rect(4f, 4f, view.width - 8f, 70f), "WildShift_CustomFormsNoMatches".Translate());
+            float minY = scroll.y - 34f;
+            float maxY = scroll.y + listRect.height + 34f;
             for (int i = 0; i < filtered.Count; i++)
             {
-                Rect row = new Rect(0f, i * 34f, view.width, 32f);
+                float y = i * 34f;
+                if (y + 34f < minY || y > maxY) continue;
+                Rect row = new Rect(0f, y, view.width, 32f);
                 if (Mouse.IsOver(row)) Widgets.DrawHighlight(row);
                 DrawOptionLabel(new Rect(8f, row.y + 3f, row.width - 16f, 27f), filtered[i]);
                 if (Widgets.ButtonInvisible(row))
@@ -321,10 +329,14 @@ namespace WildShift
             Rect view = new Rect(0f, 0f, listRect.width - 18f, Mathf.Max(listRect.height, filtered.Count * 34f));
             Widgets.BeginScrollView(listRect, ref scroll, view);
             if (filtered.Count == 0) Widgets.Label(new Rect(4f, 4f, view.width - 8f, 70f), "WildShift_CustomFormsNoMatches".Translate());
+            float minY = scroll.y - 34f;
+            float maxY = scroll.y + listRect.height + 34f;
             for (int i = 0; i < filtered.Count; i++)
             {
+                float y = i * 34f;
+                if (y + 34f < minY || y > maxY) continue;
                 CustomFormOption option = filtered[i];
-                Rect row = new Rect(4f, i * 34f, view.width - 8f, 32f);
+                Rect row = new Rect(4f, y, view.width - 8f, 32f);
                 bool isSelected = selected.Contains(option.defName);
                 bool wasSelected = isSelected;
                 Widgets.CheckboxLabeled(row, option.label.Truncate(row.width - 40f), ref isSelected);

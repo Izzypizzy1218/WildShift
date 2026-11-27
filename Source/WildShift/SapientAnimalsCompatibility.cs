@@ -34,7 +34,7 @@ namespace WildShift
             public Pawn oldPawn;
             public PawnKindDef kind;
             public HediffComp_Transformed storage;
-            public bool latent, selected, drafted;
+            public bool latent, selected, drafted, releasedRuntime;
             public GeneticFormState genetics;
         }
 
@@ -57,17 +57,28 @@ namespace WildShift
             bool latent = __0.health.hediffSet.HasHediff(WildShiftDefOf.WildShift_FieldShapeshifterMarker);
             GeneticFormState genetics = GeneticsCompatibility.Capture(__0);
             if (storage == null && !latent && genetics == null) return true;
+            // Release shared runtime bindings before unloading or letting B&S
+            // inspect and destroy the old body; reinitialize if we abort.
+            bool releasedRuntime = false;
+            if (storage?.StoredPawn != null)
+            {
+                SharedFormRuntime.Release(__0);
+                releasedRuntime = true;
+            }
             // B&S replaces and destroys the source. Empty its apparel, equipment
             // and carried object too (the native routine only handles inventory).
             if (!__0.Spawned || !(storage?.StoredPawn != null
                 ? FormPossessions.TryUnload(__0, storage.StoredPawn) : AwakeningPossessions.TryDropAll(__0)))
             {
+                if (releasedRuntime && SharedFormIdentity.HumanFor(__0) != null)
+                    SharedFormRuntime.Initialize(__0);
                 __result = __0;
                 Messages.Message("WildShift_AwakenDropFailed".Translate(), __0, MessageTypeDefOf.RejectInput, false);
                 return false;
             }
             __state = new SwapState { oldPawn = __0, kind = __0.kindDef, storage = storage, latent = latent,
-                selected = Find.Selector.IsSelected(__0), drafted = __0.Drafted, genetics = genetics };
+                selected = Find.Selector.IsSelected(__0), drafted = __0.Drafted, releasedRuntime = releasedRuntime,
+                genetics = genetics };
             return true;
         }
 
@@ -88,10 +99,13 @@ namespace WildShift
                     // B&S removed the hediff directly. Restore it without native
                     // add callbacks that can merge it or reset its existing state.
                     hediffSet.hediffs.Add(holding);
+                    TransformUtility.RegisterTransformedComp(oldPawn, storage);
                     hediffSet.DirtyCache();
                     Patch_GameEnder.InvalidateCache();
                     Find.ColonistBar?.MarkColonistsDirty();
                 }
+                if (__state.releasedRuntime && SharedFormIdentity.HumanFor(oldPawn) != null)
+                    SharedFormRuntime.Initialize(oldPawn);
                 return;
             }
             GeneticsCompatibility.Restore(__result, __state.genetics);
@@ -99,6 +113,7 @@ namespace WildShift
             {
                 // B&S migrates the actual hediff; the ThingOwner remains attached
                 // to the same comp, preserving the original pawn and its identity.
+                TransformUtility.RegisterTransformedComp(__result, __state.storage);
                 if (TransformUtility.TryGetTransformedComp(__result) != __state.storage)
                 { Log.Error("[WildShift] B&S did not migrate transformed storage as expected."); return; }
                 SharedFormRuntime.Initialize(__result);

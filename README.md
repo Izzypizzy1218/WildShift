@@ -137,6 +137,10 @@ To build 1.6, supply matching 1.6 game or reference assemblies and `-p:RimWorldV
 
 ## Current version
 
+`v1.4.0-beta.13` — 2026-11-28
+
+Reduce repeated runtime lookups and improve shared gear, abilities and tracker handling. See the [bilingual release notes](Docs/Release-v1.4.0-beta.13.md) for validation and a known compatibility limitation.
+
 `v1.4.0-beta.12` — 2026-11-19
 
 Reduce repeated shared-stat and original-body checks for active animal forms. Retest native save/load in RimWorld 1.6 and 1.7 and measure 50 drafted Wargs in the same uncapped 1.6 save. See the [bilingual release notes](Docs/Release-v1.4.0-beta.12.md) for results and known compatibility issues.

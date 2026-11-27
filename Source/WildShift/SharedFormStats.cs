@@ -185,6 +185,7 @@ namespace WildShift
         {
             public State() { }
 
+            public Hediff ownerCarrier;
             private Pawn original;
             private Pawn activeBody;
             private bool biotech, refreshing, dirty = true;
@@ -220,9 +221,9 @@ namespace WildShift
                     int nextProjectedSystems=0;
                     int nextSystems = human != null
                         ? SharedFormSystems.ModifierVersionForSource(animal, CurrentOwner(animal, marker),
-                            out nextProjectedSystems, checkNativeStatCache, preceptSignature) : 0;
+                            out nextProjectedSystems, checkNativeStatCache, preceptSignature, marker) : 0;
                     int nextAnatomy = human != null
-                        ? SharedFormAnatomy.ModifierVersionForSource(animal, CurrentOwner(animal, marker)) : 0;
+                        ? SharedFormAnatomy.ModifierVersionForSource(animal, CurrentOwner(animal, marker), marker) : 0;
                     bool externalStatsChanged = checkNativeStatCache && systemsVersion != nextSystems;
                     bool systemsProjectionChanged = projectedSystemsVersion != nextProjectedSystems;
                     bool anatomyChanged = anatomyVersion != nextAnatomy;
@@ -314,9 +315,9 @@ namespace WildShift
                 return changed;
             }
 
-            public HediffStage Stage(Hediff carrier, HediffStage baseline)
+            public HediffStage Stage(Hediff carrier, HediffStage baseline, HediffComp_Transformed liveMarker = null)
             {
-                Refresh(carrier);
+                Refresh(carrier, liveMarker);
                 // A modded Gene.Active may itself read this animal's stats.
                 // The incomplete projection must never recursively build itself.
                 if (refreshing) return baseline;
@@ -420,14 +421,19 @@ namespace WildShift
         private static Pawn CurrentOwner(Pawn animal, HediffComp_Transformed marker)
         {
             // Native getters and conditional modifiers can call other mods.
-            // Reuse the marker only when it is still the first physical effect
-            // with its original component, then check the live holder again.
+            // Reuse the marker only when it is still live at its cached index
+            // (or index 0) with its original component, then re-verify holder.
             HediffWithComps carrier = marker?.parent;
             List<Hediff> effects = animal?.health?.hediffSet?.hediffs;
-            if (carrier != null && effects != null && effects.Count > 0 && ReferenceEquals(effects[0], carrier)
+            if (carrier != null && effects != null && effects.Count > 0
                 && carrier.def == WildShiftDefOf.WildShift_Transformed && carrier.comps?.Count == 1
                 && ReferenceEquals(carrier.comps[0], marker))
-                return SharedFormIdentity.GetStoredHumanFromActiveBody(animal, marker);
+            {
+                int idx = marker.cachedHediffIndex;
+                if (((uint)idx < (uint)effects.Count && ReferenceEquals(effects[idx], carrier))
+                    || ReferenceEquals(effects[0], carrier))
+                    return SharedFormIdentity.GetStoredHumanFromActiveBody(animal, marker);
+            }
             return SharedFormIdentity.HumanFor(animal);
         }
 
@@ -570,10 +576,23 @@ namespace WildShift
             return changed;
         }
 
+        private static State GetState(Hediff carrier, HediffComp_Transformed marker)
+        {
+            State state = marker?.statsState as State;
+            if (state != null && ReferenceEquals(state.ownerCarrier, carrier)) return state;
+            if (!states.TryGetValue(carrier, out state)) state = states.GetOrCreateValue(carrier);
+            state.ownerCarrier = carrier;
+            if (marker != null) marker.statsState = state;
+            return state;
+        }
+
         public static HediffStage StageFor(Hediff carrier, HediffStage baseline)
         {
             if (carrier == null || carrier.def != WildShiftDefOf.WildShift_Transformed) return baseline;
-            return states.GetOrCreateValue(carrier).Stage(carrier, baseline);
+            HediffWithComps hwc = carrier as HediffWithComps;
+            HediffComp_Transformed marker = hwc?.comps != null && hwc.comps.Count == 1
+                ? hwc.comps[0] as HediffComp_Transformed : null;
+            return GetState(carrier, marker).Stage(carrier, baseline, marker);
         }
 
         public static void PrepareWorker(StatWorker worker, Thing thing)
@@ -581,13 +600,13 @@ namespace WildShift
             Pawn animal = thing as Pawn;
             if (animal == null) return;
             HediffComp_Transformed marker = TransformUtility.TryGetTransformedComp(animal);
-            if (marker?.parent != null) states.GetOrCreateValue(marker.parent).PrepareWorker(marker, worker);
+            if (marker?.parent != null) GetState(marker.parent, marker).PrepareWorker(marker, worker);
         }
 
         public static void PrepareHealth(Pawn animal)
         {
             HediffComp_Transformed marker = TransformUtility.TryGetTransformedComp(animal);
-            if (marker?.parent != null) states.GetOrCreateValue(marker.parent).PrepareHealth(marker);
+            if (marker?.parent != null) GetState(marker.parent, marker).PrepareHealth(marker);
         }
     }
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.4.0-beta.13 — Runtime optimization and shared-state fixes (2026-11-28)
+
+See [bilingual release notes](Docs/Release-v1.4.0-beta.13.md).
+
+- Reduce repeated transformation, health, gear, gene and ability checks.
+- Restore shared equipment when reusing the same animal body and fix the Helixien equipment-removal exception.
+- Remove duplicate shared ability commands from VE Framework forms while retaining intrinsic commands.
+- Correct active hemogen selection, ability eligibility and caster restoration. Isolate nested aura processing and repair drifted borrowed tracker ownership.
+
 ## v1.4.0-beta.12 — Active form performance (2026-11-19)
 
 See [bilingual release notes](Docs/Release-v1.4.0-beta.12.md).
